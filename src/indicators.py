@@ -1,8 +1,11 @@
 import pandas as pd
 import numpy as np
+from typing import Tuple
 from config.settings import EMA_SHORT, EMA_LONG, RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD
+from .cache import cache_indicators
 
-def ema(series, period):
+@cache_indicators()
+def ema(series: pd.Series, period: int) -> pd.Series:
     """
     Calculate Exponential Moving Average.
     Returns NaN for all values if period > data length.
@@ -11,7 +14,8 @@ def ema(series, period):
         return pd.Series([np.nan] * len(series), index=series.index)
     return series.ewm(span=period, adjust=False).mean()
 
-def rsi(series, period=14):
+@cache_indicators()
+def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     """
     Calculate Relative Strength Index.
     Returns NaN for initial values until enough data is available.
@@ -33,14 +37,16 @@ def rsi(series, period=14):
 
     return rsi
 
-def bb(series, period=20, std_dev=2):
+@cache_indicators()
+def bb(series: pd.Series, period: int = 20, std_dev: float = 2) -> Tuple[pd.Series, pd.Series, pd.Series]:
     sma = series.rolling(window=period).mean()
     std = series.rolling(window=period).std()
     upper = sma + (std * std_dev)
     lower = sma - (std * std_dev)
     return upper, sma, lower
 
-def atr(high, low, close, period=14):
+@cache_indicators()
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     """
     Calculate Average True Range for volatility measurement.
     """

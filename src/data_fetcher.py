@@ -1,14 +1,22 @@
 import ccxt
 import pandas as pd
 from datetime import datetime, timedelta
+from typing import Optional
 from config.settings import EXCHANGE, SYMBOL, TIMEFRAME, LOOKBACK_DAYS
 import os
+import asyncio
+import aiohttp
 from dotenv import load_dotenv
+from .cache import cache_api_call
+from .input_validation import InputValidator, validate_api_inputs
+from .error_handling import error_boundary, NetworkError, DataError
 
 # Load environment variables
 load_dotenv()
 
-def fetch_data(limit=200):
+@error_boundary(operation="fetch_live_data", max_retries=3)
+@cache_api_call(ttl_seconds=30)  # Cache for 30 seconds for live data
+def fetch_data(limit: int = 200) -> pd.DataFrame:
     """
     Fetches recent price data using ccxt.
     For continuous monitoring, fetches only recent candles for efficiency.
@@ -37,16 +45,25 @@ def fetch_data(limit=200):
 
     return df
 
+@error_boundary(operation="fetch_historical_data", max_retries=2)
+@cache_api_call(ttl_seconds=300)  # Cache for 5 minutes for historical data
 def fetch_historical_data(symbol=None, exchange_name=None, timeframe=None, limit=None):
     """
     Fetches historical data with configurable parameters.
     Used for both backtesting and live data fetching.
     """
-    # Use provided parameters or defaults
-    symbol = symbol or SYMBOL
-    exchange_name = exchange_name or EXCHANGE
-    timeframe = timeframe or TIMEFRAME
-    limit = limit or 1000
+    # Validate inputs
+    validated = validate_api_inputs(
+        symbol=symbol or SYMBOL,
+        exchange=exchange_name or EXCHANGE,
+        timeframe=timeframe or TIMEFRAME,
+        limit=limit or 1000
+    )
+
+    symbol = validated['symbol']
+    exchange_name = validated['exchange']
+    timeframe = validated['timeframe']
+    limit = validated['limit']
 
     exchange_class = getattr(ccxt, exchange_name)
 

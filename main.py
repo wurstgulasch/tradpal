@@ -17,6 +17,8 @@ from src.signal_generator import generate_signals, calculate_risk_management
 from src.output import save_signals_to_json, get_latest_signals
 from src.logging_config import logger, log_signal, log_error, log_system_status
 from src.backtester import run_backtest
+from src.cache import clear_all_caches, get_cache_stats
+from src.config_validation import validate_configuration_at_startup
 
 def run_live_monitoring():
     """Run continuous live monitoring mode."""
@@ -190,6 +192,13 @@ def run_single_analysis():
         log_error(f"Single analysis error: {e}")
 
 def main():
+    # Validate configuration at startup
+    print("Validating configuration...")
+    if not validate_configuration_at_startup():
+        print("❌ Configuration validation failed. Please fix the errors above and restart.")
+        sys.exit(1)
+    print("✅ Configuration validation passed.\n")
+
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
     parser.add_argument('--mode', choices=['live', 'backtest', 'analysis'],
                        default='live', help='Operation mode (default: live)')
@@ -197,8 +206,16 @@ def main():
     parser.add_argument('--timeframe', default='1m', help='Timeframe (default: 1m)')
     parser.add_argument('--start-date', help='Backtest start date (YYYY-MM-DD)')
     parser.add_argument('--end-date', help='Backtest end date (YYYY-MM-DD)')
+    parser.add_argument('--clear-cache', action='store_true', help='Clear all caches before running')
 
     args = parser.parse_args()
+
+    # Handle cache clearing
+    if args.clear_cache:
+        print("Clearing all caches...")
+        clear_all_caches()
+        cache_stats = get_cache_stats()
+        print(f"Caches cleared. Stats: {cache_stats}")
 
     if args.mode == 'live':
         run_live_monitoring()

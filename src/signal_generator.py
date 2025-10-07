@@ -1,9 +1,12 @@
 import numpy as np
+import pandas as pd
+import asyncio
+from typing import Dict, Any
 from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIMEFRAME
 from src.data_fetcher import fetch_data
 from src.indicators import calculate_indicators
 
-def generate_signals(df):
+def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Generates Buy/Sell signals based on EMA crossover, RSI and BB.
     Includes optional Multi-Timeframe Analysis (MTA) for signal confirmation.
@@ -25,7 +28,7 @@ def generate_signals(df):
 
     return df
 
-def apply_multi_timeframe_analysis(df):
+def apply_multi_timeframe_analysis(df: pd.DataFrame) -> pd.DataFrame:
     """
     Apply Multi-Timeframe Analysis to confirm signals with higher timeframe trends.
     Only keeps signals that are confirmed by the higher timeframe trend.
@@ -62,7 +65,7 @@ def apply_multi_timeframe_analysis(df):
 
     return df
 
-def calculate_risk_management(df):
+def calculate_risk_management(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculates position size, stop-loss, take-profit based on ATR with multipliers.
     Position size is calculated as both absolute amount and percentage of total capital.
@@ -95,3 +98,75 @@ def calculate_risk_management(df):
     df['Leverage'] = np.where(df['ATR'] < atr_avg, params['leverage_max'], params['leverage_max'] // 2)
 
     return df
+
+
+# Async versions for improved performance
+async def generate_signals_async(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Async version of generate_signals for improved performance.
+    """
+    # Signal generation is CPU-bound, so run in thread pool
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, generate_signals, df)
+
+
+async def calculate_risk_management_async(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Async version of calculate_risk_management for improved performance.
+    """
+    # Risk calculation is CPU-bound, so run in thread pool
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, calculate_risk_management, df)
+
+
+async def process_signals_pipeline_async(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Complete async signal processing pipeline.
+    """
+    # Calculate indicators (cached, so fast)
+    df = calculate_indicators(df)
+
+    # Generate signals
+    df = await generate_signals_async(df)
+
+    # Calculate risk management
+    df = await calculate_risk_management_async(df)
+
+    return df
+
+
+async def process_multiple_timeframes_async(symbol: str, timeframes: list) -> Dict[str, pd.DataFrame]:
+    """
+    Process signals for multiple timeframes concurrently.
+    """
+    from src.data_fetcher import fetch_historical_data_async
+
+    async def process_timeframe(timeframe):
+        try:
+            # Fetch data for this timeframe
+            df = await fetch_historical_data_async(symbol, 'kraken', timeframe, 1000)
+            if df.empty:
+                return timeframe, None
+
+            # Process signals
+            df_processed = await process_signals_pipeline_async(df)
+            return timeframe, df_processed
+        except Exception as e:
+            print(f"Error processing {timeframe}: {e}")
+            return timeframe, None
+
+    # Process all timeframes concurrently
+    tasks = [process_timeframe(tf) for tf in timeframes]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Process results
+    data = {}
+    for result in results:
+        if isinstance(result, Exception):
+            print(f"Task failed with exception: {result}")
+            continue
+        timeframe, df = result
+        if df is not None:
+            data[timeframe] = df
+
+    return data

@@ -34,13 +34,15 @@ class TestDataFetcherErrorHandling:
         mock_ccxt.kraken.return_value = mock_exchange
         mock_exchange.fetch_ohlcv.side_effect = TimeoutError("Connection timeout")
 
-        with pytest.raises(TimeoutError):
-            fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
+        # With error handling, function should return retry string
+        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
+        assert result == "retry" or (isinstance(result, pd.DataFrame) and result.empty)
 
     def test_fetch_with_invalid_exchange(self):
         """Test handling of invalid exchange."""
-        # ccxt doesn't have this exchange, so getattr should raise AttributeError
-        with pytest.raises(AttributeError):
+        # Input validation now catches invalid exchanges
+        from src.input_validation import ValidationError
+        with pytest.raises(ValidationError, match="Invalid exchange"):
             fetch_historical_data('EUR/USD', 'invalid_exchange', '1m', 100)
 
     @patch('src.data_fetcher.ccxt')
@@ -67,7 +69,8 @@ class TestDataFetcherErrorHandling:
         ]
         mock_exchange.has = {'fetchOHLCV': True}
 
-        with pytest.raises((IndexError, ValueError)):
+        # With error handling, malformed data should still cause an error
+        with pytest.raises(ValueError):
             fetch_historical_data('EUR/USD', 'kraken', '1m', 2)
 
     def test_validate_data_with_wrong_types(self):
@@ -370,11 +373,14 @@ class TestBacktesterErrorHandling:
         with pytest.raises(KeyError):
             simulate_trades(invalid_data)
 
-    @patch('src.backtester.fetch_historical_data', side_effect=Exception("API Error"))
+    @patch('src.backtester.fetch_historical_data', return_value="retry")
     def test_run_backtest_with_api_error(self, mock_fetch):
         """Test backtest with API errors."""
-        with pytest.raises(Exception, match="API Error"):
-            run_backtest('EUR/USD', '1m', '2023-01-01', '2023-01-02')
+        # With error handling, function should return error dict
+        result = run_backtest('EUR/USD', '1m', '2023-01-01', '2023-01-02')
+        assert isinstance(result, dict)
+        assert 'backtest_results' in result
+        assert 'error' in result['backtest_results']
 
     def test_run_backtest_with_invalid_dates(self):
         """Test backtest with invalid date ranges."""
@@ -448,7 +454,7 @@ class TestIntegrationErrorHandling:
         integration = TelegramIntegration(config)
 
         result = integration.initialize()
-        assert result == False
+        assert result == False  # Should fail gracefully
 
     @patch('integrations.telegram.bot.requests.post')
     def test_telegram_send_signal_network_error(self, mock_post):
@@ -459,7 +465,7 @@ class TestIntegrationErrorHandling:
         integration = TelegramIntegration(config)
 
         result = integration.send_signal({'signal': 'BUY'})
-        assert result == False
+        assert result == False  # Should fail gracefully
 
     @patch('integrations.email_integration.email.smtplib.SMTP')
     def test_email_initialization_smtp_error(self, mock_smtp):
@@ -476,7 +482,7 @@ class TestIntegrationErrorHandling:
         integration = EmailIntegration(config)
 
         result = integration.initialize()
-        assert result == False
+        assert result == False  # Should fail gracefully
 
     def test_integration_manager_error_handling(self):
         """Test integration manager error handling."""
@@ -507,13 +513,10 @@ class TestSystemIntegrationErrorHandling:
     @patch('src.output.save_signals_to_json')
     def test_full_pipeline_error_recovery(self, mock_save, mock_signals, mock_indicators, mock_fetch):
         """Test error recovery in the full pipeline."""
-        # This would test how the main application handles errors
-        # For now, we just ensure the components can handle errors independently
-
-        # Test that each component handles its own errors
-        with pytest.raises(Exception, match="API Down"):
-            from src.data_fetcher import fetch_historical_data
-            fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
+        # Test that data fetcher handles errors gracefully
+        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0  # Should return empty DataFrame on error
 
     def test_memory_error_handling(self):
         """Test handling of memory-related errors."""

@@ -49,6 +49,10 @@ class Backtester:
         # Fetch historical data
         data = self._fetch_data()
 
+        # Check if data fetch failed (returned error string)
+        if isinstance(data, str):
+            return {"error": f"Data fetch failed: {data}"}
+
         if data.empty:
             return {"error": "No data available for backtest period"}
 
@@ -61,6 +65,7 @@ class Backtester:
 
         # Simulate trades
         results = self._simulate_trades(data)
+        self.trades = results
 
         # Calculate performance metrics
         metrics = self._calculate_metrics()
@@ -78,115 +83,134 @@ class Backtester:
 
     def _simulate_trades(self, data):
         """
-        Simulate trades based on signals and calculate P&L.
+        Simulate trades based on signals and calculate P&L using vectorized operations.
         """
-        position = 0  # 0 = no position, 1 = long, -1 = short
-        entry_price = 0
-        entry_time = None
+        if data.empty:
+            return []
 
-        for idx, row in data.iterrows():
-            current_time = row.name if hasattr(row, 'name') else idx
-            current_price = row['close']
+        # Ensure we have required columns
+        required_cols = ['close', 'Buy_Signal', 'Sell_Signal']
+        if not all(col in data.columns for col in required_cols):
+            raise ValueError(f"Data missing required columns: {required_cols}")
 
-            # Check for entry signals
-            if position == 0:
-                if row['Buy_Signal'] == 1:
-                    position = 1
-                    entry_price = current_price
-                    entry_time = current_time
-                    position_size = row.get('Position_Size_Absolute', 1000)
-                    stop_loss = row.get('Stop_Loss_Buy', current_price * 0.98)
-                    take_profit = row.get('Take_Profit_Buy', current_price * 1.02)
+        # Create position signals using vectorized operations
+        buy_signals = (data['Buy_Signal'] == 1)
+        sell_signals = (data['Sell_Signal'] == 1)
 
-                    self.trades.append({
-                        'type': 'buy',
-                        'entry_time': entry_time,
-                        'entry_price': entry_price,
-                        'position_size': position_size,
-                        'stop_loss': stop_loss,
-                        'take_profit': take_profit,
-                        'exit_time': None,
-                        'exit_price': None,
-                        'pnl': 0,
-                        'status': 'open'
-                    })
+        # Calculate entry and exit points
+        position_changes = pd.Series(0, index=data.index)
 
-                elif row['Sell_Signal'] == 1:
-                    position = -1
-                    entry_price = current_price
-                    entry_time = current_time
-                    position_size = row.get('Position_Size_Absolute', 1000)
-                    stop_loss = row.get('Stop_Loss_Buy', current_price * 1.02)  # Would need sell SL calc
-                    take_profit = row.get('Take_Profit_Buy', current_price * 0.98)  # Would need sell TP calc
+        # Long entries
+        position_changes[buy_signals] = 1
 
-                    self.trades.append({
-                        'type': 'sell',
-                        'entry_time': entry_time,
-                        'entry_price': entry_price,
-                        'position_size': position_size,
-                        'stop_loss': stop_loss,
-                        'take_profit': take_profit,
-                        'exit_time': None,
-                        'exit_price': None,
-                        'pnl': 0,
-                        'status': 'open'
-                    })
+        # Short entries (overwrite if both signals occur)
+        position_changes[sell_signals] = -1
 
-            # Check for exit conditions
-            elif position != 0:
-                exit_trade = False
-                exit_price = current_price
-                exit_reason = ''
+        # Calculate cumulative position
+        positions = position_changes.cumsum()
 
-                # Check stop loss and take profit
-                if position == 1:  # Long position
-                    if current_price <= self.trades[-1]['stop_loss']:
-                        exit_trade = True
-                        exit_reason = 'stop_loss'
-                    elif current_price >= self.trades[-1]['take_profit']:
-                        exit_trade = True
-                        exit_reason = 'take_profit'
-                else:  # Short position
-                    if current_price >= self.trades[-1]['stop_loss']:
-                        exit_trade = True
-                        exit_reason = 'stop_loss'
-                    elif current_price <= self.trades[-1]['take_profit']:
-                        exit_trade = True
-                        exit_reason = 'take_profit'
+        # Find trade entries and exits
+        trades = []
+        current_position = 0
+        entry_idx = None
+        entry_price = None
 
-                if exit_trade:
+        for idx, (timestamp, row) in enumerate(data.iterrows()):
+            new_position = positions.iloc[idx]
+
+            # Position entry
+            if current_position == 0 and new_position != 0:
+                entry_idx = idx
+                entry_price = row['close']
+                current_position = new_position
+                position_size = row.get('Position_Size_Absolute', 1000)
+
+                trade = {
+                    'type': 'buy' if current_position == 1 else 'sell',
+                    'entry_time': timestamp,
+                    'entry_price': entry_price,
+                    'position_size': position_size,
+                    'stop_loss': row.get('Stop_Loss_Buy' if current_position == 1 else 'Stop_Loss_Sell', entry_price * (0.98 if current_position == 1 else 1.02)),
+                    'take_profit': row.get('Take_Profit_Buy' if current_position == 1 else 'Take_Profit_Sell', entry_price * (1.02 if current_position == 1 else 0.98)),
+                    'exit_time': None,
+                    'exit_price': None,
+                    'pnl': 0,
+                    'status': 'open'
+                }
+                trades.append(trade)
+
+            # Position exit or change
+            elif current_position != 0 and new_position != current_position:
+                if entry_idx is not None:
+                    exit_price = row['close']
+                    exit_time = timestamp
+
                     # Calculate P&L
-                    if position == 1:
-                        pnl = (exit_price - entry_price) * self.trades[-1]['position_size'] / entry_price
-                    else:
-                        pnl = (entry_price - exit_price) * self.trades[-1]['position_size'] / entry_price
+                    if current_position == 1:  # Long position
+                        pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
+                    else:  # Short position
+                        pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
 
-                    # Update trade record
-                    self.trades[-1].update({
-                        'exit_time': current_time,
+                    # Update trade
+                    trades[-1].update({
+                        'exit_time': exit_time,
                         'exit_price': exit_price,
                         'pnl': pnl,
-                        'exit_reason': exit_reason,
                         'status': 'closed'
                     })
 
                     # Update capital
                     self.current_capital += pnl
 
-                    # Reset position
-                    position = 0
+                # Handle position change
+                if new_position == 0:
+                    current_position = 0
+                    entry_idx = None
+                else:
+                    # Position reversal - start new trade
+                    current_position = new_position
+                    entry_idx = idx
+                    entry_price = row['close']
 
-            # Track portfolio value
-            self.portfolio_values.append({
-                'timestamp': current_time,
-                'value': self.current_capital
+                    position_size = row.get('Position_Size_Absolute', 1000)
+                    trade = {
+                        'type': 'buy' if current_position == 1 else 'sell',
+                        'entry_time': timestamp,
+                        'entry_price': entry_price,
+                        'position_size': position_size,
+                        'stop_loss': row.get('Stop_Loss_Buy' if current_position == 1 else 'Stop_Loss_Sell', entry_price * (0.98 if current_position == 1 else 1.02)),
+                        'take_profit': row.get('Take_Profit_Buy' if current_position == 1 else 'Take_Profit_Sell', entry_price * (1.02 if current_position == 1 else 0.98)),
+                        'exit_time': None,
+                        'exit_price': None,
+                        'pnl': 0,
+                        'status': 'open'
+                    }
+                    trades.append(trade)
+
+        # Close any remaining open positions at the end
+        if current_position != 0 and trades and trades[-1]['status'] == 'open':
+            final_price = data.iloc[-1]['close']
+            final_time = data.index[-1]
+
+            if current_position == 1:
+                pnl = (final_price - entry_price) * trades[-1]['position_size'] / entry_price
+            else:
+                pnl = (entry_price - final_price) * trades[-1]['position_size'] / entry_price
+
+            trades[-1].update({
+                'exit_time': final_time,
+                'exit_price': final_price,
+                'pnl': pnl,
+                'status': 'closed'
             })
 
-        return self.trades
+            self.current_capital += pnl
+
+        return trades
 
     def _calculate_metrics(self):
         """
-        Calculate comprehensive performance metrics.
+        Calculate comprehensive performance metrics using vectorized operations.
         """
         if not self.trades:
             return {"error": "No trades executed during backtest"}
@@ -196,50 +220,50 @@ class Backtester:
         if not closed_trades:
             return {"error": "No closed trades to analyze"}
 
-        # Basic metrics
-        total_trades = len(closed_trades)
-        winning_trades = [t for t in closed_trades if t['pnl'] > 0]
-        losing_trades = [t for t in closed_trades if t['pnl'] <= 0]
+        # Convert to DataFrame for vectorized operations
+        trades_df = pd.DataFrame(closed_trades)
 
-        win_rate = len(winning_trades) / total_trades * 100
-        total_pnl = sum(t['pnl'] for t in closed_trades)
-        avg_win = np.mean([t['pnl'] for t in winning_trades]) if winning_trades else 0
-        avg_loss = np.mean([t['pnl'] for t in losing_trades]) if losing_trades else 0
+        # Basic metrics using vectorized operations
+        total_trades = len(trades_df)
+        winning_trades = (trades_df['pnl'] > 0).sum()
+        losing_trades = (trades_df['pnl'] <= 0).sum()
 
-        # Risk metrics
-        returns = [t['pnl'] / self.initial_capital for t in closed_trades]
-        sharpe_ratio = np.mean(returns) / np.std(returns) * np.sqrt(252) if returns else 0
+        win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+        total_pnl = trades_df['pnl'].sum()
+        avg_win = trades_df[trades_df['pnl'] > 0]['pnl'].mean() if winning_trades > 0 else 0
+        avg_loss = trades_df[trades_df['pnl'] <= 0]['pnl'].mean() if losing_trades > 0 else 0
 
-        # Drawdown calculation
-        portfolio_values = [self.initial_capital]
-        for trade in closed_trades:
-            portfolio_values.append(portfolio_values[-1] + trade['pnl'])
+        # Risk metrics using vectorized operations
+        returns = trades_df['pnl'] / self.initial_capital
+        sharpe_ratio = (returns.mean() / returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
 
-        peak = self.initial_capital
-        max_drawdown = 0
-        for value in portfolio_values:
-            if value > peak:
-                peak = value
-            drawdown = (peak - value) / peak * 100
-            max_drawdown = max(max_drawdown, drawdown)
+        # Drawdown calculation using vectorized operations
+        capital_series = self.initial_capital + trades_df['pnl'].cumsum()
+        peak = capital_series.expanding().max()
+        drawdown = (peak - capital_series) / peak * 100
+        max_drawdown = drawdown.max()
 
-        # CAGR (simplified for backtest period)
+        # CAGR calculation
         days = (self.end_date - self.start_date).days
         if days > 0:
             cagr = ((self.current_capital / self.initial_capital) ** (365 / days) - 1) * 100
         else:
             cagr = 0
 
+        # Profit factor
+        gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
+        gross_loss = abs(trades_df[trades_df['pnl'] <= 0]['pnl'].sum())
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf')
+
         return {
             'total_trades': total_trades,
-            'winning_trades': len(winning_trades),
-            'losing_trades': len(losing_trades),
+            'winning_trades': int(winning_trades),
+            'losing_trades': int(losing_trades),
             'win_rate': round(win_rate, 2),
             'total_pnl': round(total_pnl, 2),
             'avg_win': round(avg_win, 2),
             'avg_loss': round(avg_loss, 2),
-            'profit_factor': round(abs(sum(t['pnl'] for t in winning_trades) /
-                                     sum(t['pnl'] for t in losing_trades)), 2) if losing_trades else float('inf'),
+            'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else float('inf'),
             'max_drawdown': round(max_drawdown, 2),
             'sharpe_ratio': round(sharpe_ratio, 2),
             'cagr': round(cagr, 2),
@@ -283,7 +307,7 @@ def run_backtest(symbol='EUR/USD', timeframe='1m', start_date=None, end_date=Non
 
 def calculate_performance_metrics(trades_df, initial_capital=10000):
     """
-    Calculate comprehensive performance metrics from trades DataFrame.
+    Calculate comprehensive performance metrics from trades DataFrame using vectorized operations.
     """
     if trades_df.empty:
         return {
@@ -303,21 +327,27 @@ def calculate_performance_metrics(trades_df, initial_capital=10000):
     if not all(col in trades_df.columns for col in required_cols):
         raise ValueError(f"Trades DataFrame missing required columns: {required_cols}")
 
-    # Calculate P&L for each trade
+    # Calculate P&L for each trade using vectorized operations
     trades_df = trades_df.copy()
+
+    # Vectorized P&L calculation
+    long_trades = trades_df['direction'] == 'long'
+    short_trades = trades_df['direction'] == 'short'
+
+    pnl_long = (trades_df.loc[long_trades, 'exit_price'] - trades_df.loc[long_trades, 'entry_price']) * \
+               trades_df.loc[long_trades, 'position_size'] / trades_df.loc[long_trades, 'entry_price']
+
+    pnl_short = (trades_df.loc[short_trades, 'entry_price'] - trades_df.loc[short_trades, 'exit_price']) * \
+                trades_df.loc[short_trades, 'position_size'] / trades_df.loc[short_trades, 'entry_price']
+
     trades_df['pnl'] = 0.0
+    trades_df.loc[long_trades, 'pnl'] = pnl_long
+    trades_df.loc[short_trades, 'pnl'] = pnl_short
 
-    for idx, trade in trades_df.iterrows():
-        if trade['direction'] == 'long':
-            pnl = (trade['exit_price'] - trade['entry_price']) * trade['position_size'] / trade['entry_price']
-        else:  # short
-            pnl = (trade['entry_price'] - trade['exit_price']) * trade['position_size'] / trade['entry_price']
-        trades_df.loc[idx, 'pnl'] = pnl
-
-    # Basic metrics
+    # Basic metrics using vectorized operations
     total_trades = len(trades_df)
-    winning_trades = len(trades_df[trades_df['pnl'] > 0])
-    losing_trades = len(trades_df[trades_df['pnl'] <= 0])
+    winning_trades = (trades_df['pnl'] > 0).sum()
+    losing_trades = (trades_df['pnl'] <= 0).sum()
     win_rate = (winning_trades / total_trades) * 100 if total_trades > 0 else 0
 
     total_pnl = trades_df['pnl'].sum()
@@ -328,11 +358,11 @@ def calculate_performance_metrics(trades_df, initial_capital=10000):
     final_capital = initial_capital + total_pnl
     return_pct = (final_capital / initial_capital - 1) * 100
 
-    # Risk metrics
+    # Risk metrics using vectorized operations
     returns = trades_df['pnl'] / initial_capital
     sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0
 
-    # Max drawdown calculation
+    # Max drawdown calculation using vectorized operations
     cumulative = (1 + returns).cumprod()
     running_max = cumulative.expanding().max()
     drawdown = (cumulative - running_max) / running_max
@@ -341,8 +371,8 @@ def calculate_performance_metrics(trades_df, initial_capital=10000):
 
     return {
         'total_trades': total_trades,
-        'winning_trades': winning_trades,
-        'losing_trades': losing_trades,
+        'winning_trades': int(winning_trades),
+        'losing_trades': int(losing_trades),
         'win_rate': round(win_rate, 2),
         'total_pnl': round(total_pnl, 2),
         'gross_profit': round(gross_profit, 2),

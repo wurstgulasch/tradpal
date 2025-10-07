@@ -1,8 +1,9 @@
 import json
 import pandas as pd
+from typing import List, Dict, Any, Union, Optional
 from config.settings import OUTPUT_FILE
 
-def save_signals_to_json(signals, filename=None):
+def save_signals_to_json(signals: Union[pd.DataFrame, List[Dict[str, Any]]], filename: Optional[str] = None) -> None:
     """
     Saves signals to JSON file. Accepts both DataFrame and list formats.
     """
@@ -26,7 +27,7 @@ def save_signals_to_json(signals, filename=None):
 
     print(f"Signals saved to {output_file}")
 
-def load_signals_from_json(filename=None):
+def load_signals_from_json(filename: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Loads signals from JSON file.
     """
@@ -41,7 +42,7 @@ def load_signals_from_json(filename=None):
     except json.JSONDecodeError as e:
         raise json.JSONDecodeError(f"Invalid JSON: {e}", e.doc, e.pos)
 
-def format_signal_data(df):
+def format_signal_data(df: pd.DataFrame) -> List[Dict[str, Any]]:
     """
     Formats signal data for JSON output.
     """
@@ -105,7 +106,7 @@ def format_signal_data(df):
 
     return signals
 
-def get_latest_signals(df):
+def get_latest_signals(df: pd.DataFrame) -> str:
     """
     Returns the latest signals as JSON.
     """

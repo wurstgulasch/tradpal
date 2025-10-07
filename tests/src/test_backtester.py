@@ -174,28 +174,46 @@ class TestBacktester:
     @patch('src.backtester.calculate_risk_management')
     def test_run_backtest_integration(self, mock_risk, mock_signals, mock_indicators, mock_fetch_data):
         """Test complete backtest integration."""
-        # Mock historical data with signals already included
-        mock_data = pd.DataFrame({
+        # Mock historical data - basic OHLCV only
+        base_data = pd.DataFrame({
             'timestamp': pd.date_range('2023-01-01', periods=100, freq='1min'),
             'open': np.random.randn(100) + 100,
             'high': np.random.randn(100) + 101,
             'low': np.random.randn(100) + 99,
             'close': np.random.randn(100) + 100,
-            'volume': np.random.randint(1000, 10000, 100),
-            'EMA9': np.random.randn(100) + 100.5,
-            'EMA21': np.random.randn(100) + 100.3,
-            'RSI': np.random.uniform(20, 80, 100),
-            'BB_upper': np.random.randn(100) + 101.5,
-            'BB_middle': np.random.randn(100) + 100.5,
-            'BB_lower': np.random.randn(100) + 99.5,
-            'ATR': np.random.uniform(0.1, 2.0, 100),
-            'Buy_Signal': [1] + [0]*98 + [0],  # Buy at start, sell at end
-            'Sell_Signal': [0]*99 + [1],
-            'Position_Size_Absolute': [1000] * 100,
-            'Stop_Loss_Buy': [98] * 100,
-            'Take_Profit_Buy': [102] * 100
+            'volume': np.random.randint(1000, 10000, 100)
         })
-        mock_fetch_data.return_value = mock_data
+        mock_fetch_data.return_value = base_data
+
+        # Mock indicators to add indicator columns
+        def mock_indicators_func(data):
+            return data.assign(
+                EMA9=np.random.randn(len(data)) + 100.5,
+                EMA21=np.random.randn(len(data)) + 100.3,
+                RSI=np.random.uniform(20, 80, len(data)),
+                BB_upper=np.random.randn(len(data)) + 101.5,
+                BB_middle=np.random.randn(len(data)) + 100.5,
+                BB_lower=np.random.randn(len(data)) + 99.5,
+                ATR=np.random.uniform(0.1, 2.0, len(data))
+            )
+        mock_indicators.side_effect = mock_indicators_func
+
+        # Mock signals to add signal columns
+        def mock_signals_func(data):
+            return data.assign(
+                Buy_Signal=[1] + [0]*98 + [0],  # Buy at start
+                Sell_Signal=[0]*99 + [1]        # Sell at end
+            )
+        mock_signals.side_effect = mock_signals_func
+
+        # Mock risk management to add risk columns
+        def mock_risk_func(data):
+            return data.assign(
+                Position_Size_Absolute=[1000] * len(data),
+                Stop_Loss_Buy=[98] * len(data),
+                Take_Profit_Buy=[102] * len(data)
+            )
+        mock_risk.side_effect = mock_risk_func
 
         # Run backtest
         results = run_backtest(
@@ -311,30 +329,30 @@ class TestBacktesterIntegration:
         # Mock indicators to add indicator columns
         def mock_indicators_func(data):
             return data.assign(
-                EMA9=[100 + i*0.1 for i in range(10)],
-                EMA21=[100 + i*0.05 for i in range(10)],
-                RSI=[50 + i for i in range(10)],
-                BB_upper=[105 + i*0.1 for i in range(10)],
-                BB_middle=[100 + i*0.1 for i in range(10)],
-                BB_lower=[95 + i*0.1 for i in range(10)],
-                ATR=[1 + i*0.01 for i in range(10)]
+                EMA9=[100 + i*0.1 for i in range(len(data))],
+                EMA21=[100 + i*0.05 for i in range(len(data))],
+                RSI=[50 + i for i in range(len(data))],
+                BB_upper=[105 + i*0.1 for i in range(len(data))],
+                BB_middle=[100 + i*0.1 for i in range(len(data))],
+                BB_lower=[95 + i*0.1 for i in range(len(data))],
+                ATR=[1 + i*0.01 for i in range(len(data))]
             )
         mock_indicators.side_effect = mock_indicators_func
 
         # Mock signals to add signal columns
         def mock_signals_func(data):
             return data.assign(
-                Buy_Signal=[1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                Sell_Signal=[0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+                Buy_Signal=[1] + [0]*(len(data)-1),  # Buy at start
+                Sell_Signal=[0]*(len(data)-1) + [1]  # Sell at end
             )
         mock_signals.side_effect = mock_signals_func
 
         # Mock risk management to add risk columns
         def mock_risk_func(data):
             return data.assign(
-                Position_Size_Absolute=[1000] * 10,
-                Stop_Loss_Buy=[95 + i*0.1 for i in range(10)],
-                Take_Profit_Buy=[120 + i*0.1 for i in range(10)]
+                Position_Size_Absolute=[1000] * len(data),
+                Stop_Loss_Buy=[98] * len(data),
+                Take_Profit_Buy=[102] * len(data)
             )
         mock_risk.side_effect = mock_risk_func
 

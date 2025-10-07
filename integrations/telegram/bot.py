@@ -27,6 +27,18 @@ class TelegramConfig(IntegrationConfig):
         if not self.chat_id:
             raise ValueError("Telegram chat_id is required")
 
+    @classmethod
+    def from_env(cls) -> 'TelegramConfig':
+        """Create config from environment variables"""
+        return cls(
+            enabled=bool(os.getenv('TELEGRAM_BOT_TOKEN') and os.getenv('TELEGRAM_CHAT_ID')),
+            name="Telegram Notifications",
+            bot_token=os.getenv('TELEGRAM_BOT_TOKEN', ''),
+            chat_id=os.getenv('TELEGRAM_CHAT_ID', ''),
+            check_interval=int(os.getenv('TELEGRAM_CHECK_INTERVAL', '30')),
+            signal_file=os.getenv('TELEGRAM_SIGNAL_FILE', 'output/signals.json')
+        )
+
 class TelegramIntegration(BaseIntegration):
     """Telegram bot integration for sending trading signals"""
 
