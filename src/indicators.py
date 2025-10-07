@@ -3,14 +3,35 @@ import numpy as np
 from config.settings import EMA_SHORT, EMA_LONG, RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD
 
 def ema(series, period):
+    """
+    Calculate Exponential Moving Average.
+    Returns NaN for all values if period > data length.
+    """
+    if len(series) < period:
+        return pd.Series([np.nan] * len(series), index=series.index)
     return series.ewm(span=period, adjust=False).mean()
 
 def rsi(series, period=14):
+    """
+    Calculate Relative Strength Index.
+    Returns NaN for initial values until enough data is available.
+    For constant data, RSI is 50 (neutral).
+    """
+    if len(series) < period + 1:
+        return pd.Series([np.nan] * len(series), index=series.index)
+
     delta = series.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    gain = (delta.where(delta > 0, 0)).ewm(alpha=1/period, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/period, adjust=False).mean()
+
+    # Handle division by zero for constant data
+    rs = gain / loss.replace(0, np.nan)  # Replace 0 with NaN to avoid 0/0
+    rsi = 100 - (100 / (1 + rs))
+
+    # For constant data (no gains/losses), RSI is undefined, so keep as NaN
+    # rsi = rsi.fillna(50.0)  # Removed: constant data should be NaN
+
+    return rsi
 
 def bb(series, period=20, std_dev=2):
     sma = series.rolling(window=period).mean()
@@ -32,7 +53,6 @@ def atr(high, low, close, period=14):
 def adx(high, low, close, period=14):
     """
     Calculate Average Directional Index (ADX) for trend strength.
-    ADX > 25 indicates strong trend, ADX < 20 indicates weak trend.
     Returns: adx, di_plus, di_minus
     """
     # Calculate True Range
@@ -103,24 +123,6 @@ def calculate_indicators(df):
         trend = 'bullish' if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1] else 'bearish'
         df['Fib_161'], df['Fib_262'], df['Fib_424'] = fibonacci_extensions(df['high'], df['low'], df['close'], trend)
 
-    return df
-
-def generate_signals(df):
-    df.dropna(inplace=True)  # Remove NaN
-    df.reset_index(drop=True, inplace=True)  # Reset Index
-    df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
-    buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < 30) & (df['Close'].values > df['BB_lower'].values)
-    df['Buy_Signal'] = buy_condition.astype(int)
-    sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > 70) & (df['Close'].values < df['BB_upper'].values)
-    df['Sell_Signal'] = sell_condition.astype(int)
-    return df
-
-def calculate_risk_management(df, capital=10000, risk_per_trade=0.01):
-    df['Position_Size'] = (capital * risk_per_trade) / df['ATR']
-    df['Stop_Loss_Buy'] = df['Close'] - df['ATR']
-    df['Take_Profit_Buy'] = df['Close'] + 2 * df['ATR']
-    atr_avg = df['ATR'].expanding().mean()
-    df['Leverage'] = np.where(df['ATR'] < atr_avg, 10, 5)
     return df
 
 def plot_indicators(df):

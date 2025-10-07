@@ -365,38 +365,60 @@ Backtest results are saved to `output/signals_backtest.json` with additional per
 
 ### Integration Examples
 
-#### Telegram Bot Integration
-```python
-import json
-import telegram
-import time
+## 🔌 Integration System
 
-def send_signal_alerts():
-    bot = telegram.Bot(token='YOUR_BOT_TOKEN')
-    last_signal_count = 0
+The project includes a modular integration system for sending trading signals to various platforms:
 
-    while True:
-        try:
-            with open('output/signals.json', 'r') as f:
-                signals = json.load(f)
+### Available Integrations
+- **Telegram Bot**: Automatic signal notifications
+- **E-Mail**: Signal notifications via email (planned)
+- **Discord**: Webhook integration for Discord servers (planned)
+- **Webhooks**: Generic HTTP webhook support (planned)
 
-            if len(signals) > last_signal_count:
-                new_signals = signals[last_signal_count:]
-                for signal in new_signals:
-                    if signal['Buy_Signal'] == 1:
-                        message = f"🟢 BUY SIGNAL\nPrice: {signal['close']:.5f}\nRSI: {signal['RSI']:.2f}"
-                        bot.send_message(chat_id='YOUR_CHAT_ID', text=message)
-                    elif signal['Sell_Signal'] == 1:
-                        message = f"🔴 SELL SIGNAL\nPrice: {signal['close']:.5f}\nRSI: {signal['RSI']:.2f}"
-                        bot.send_message(chat_id='YOUR_CHAT_ID', text=message)
+### Setup Integration
 
-                last_signal_count = len(signals)
+```bash
+# Setup Telegram integration
+python scripts/manage_integrations.py --setup
 
-            time.sleep(30)
-        except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(60)
+# Test integrations
+python scripts/test_integrations.py
+
+# Start integrated system (Indicator + Integrations)
+python scripts/run_integrated.py
 ```
+
+### Management Commands
+
+```bash
+# List all integrations
+python scripts/manage_integrations.py --list
+
+# Check status
+python scripts/manage_integrations.py --status
+
+# Test individual integration
+python scripts/manage_integrations.py --test telegram
+```
+
+### Test Environment Safety
+
+The integration system automatically detects test environments and prevents sending real messages:
+
+- **Automatic Detection**: Test environments are detected via `TEST_ENVIRONMENT=true` or pytest execution
+- **Safe Integrations**: All integrations send no real messages during testing
+- **Logging**: Test environment skips are logged for transparency
+- **Mocking**: Comprehensive mock strategies for all external dependencies
+
+```bash
+# Run tests - no real messages are sent
+pytest tests/integrations/ -v
+
+# Normal execution - real integrations work normally
+python main.py --mode live
+```
+
+For more details, see `integrations/README.md`.
 
 #### Webhook Integration
 ```python
@@ -466,6 +488,173 @@ docker-compose logs -f tradpal-indicator
 docker-compose down
 ```
 
+## 🧪 Testing
+
+Das Projekt verwendet pytest für umfassende Tests. Alle Tests sind in `tests/` organisiert und decken Unit-Tests, Integrationstests, Edge-Cases und Performance-Tests ab.
+
+### Test-Struktur
+```
+tests/
+├── src/                    # Unit-Tests für Kernmodule
+├── config/                 # Konfigurationstests
+├── integrations/           # Integrationstests
+├── scripts/                # Skript-Tests
+├── test_error_handling.py  # Error-Handling Tests
+├── test_edge_cases.py      # Edge-Case Tests
+└── test_performance.py     # Performance-Tests
+```
+
+### Tests ausführen
+
+#### Mit pytest (empfohlen)
+```bash
+# Alle Tests ausführen
+pytest
+
+# Mit ausführlicher Ausgabe
+pytest -v
+
+# Mit Coverage-Report
+pytest --cov=src --cov-report=html
+
+# Nur schnelle Tests (ohne langsame Tests)
+pytest -m "not slow"
+
+# Spezifische Test-Datei
+pytest tests/test_edge_cases.py
+
+# Spezifischer Test
+pytest tests/test_edge_cases.py::TestClass::test_method -v
+```
+
+#### Mit Makefile
+```bash
+# Alle Tests
+make test
+
+# Mit Coverage
+make test-coverage
+
+# Nur schnelle Tests
+make test-fast
+
+# Edge-Cases Tests
+make test-edge-cases
+```
+
+#### Alternatives Test-Skript
+```bash
+# Einfacher Wrapper (Legacy)
+python test.py
+
+# Ausführliche Test-Suite (Legacy)
+python run_tests_legacy.py -v
+```
+
+### Test-Konfiguration
+
+Die pytest-Konfiguration ist in `pytest.ini` definiert und beinhaltet automatische Test-Environment-Erkennung:
+
+```ini
+[tool:pytest]
+testpaths = tests
+python_files = test_*.py *_test.py
+python_classes = Test*
+python_functions = test_*
+addopts =
+    --strict-markers
+    --strict-config
+    --disable-warnings
+    --tb=short
+    -ra
+markers =
+    slow: marks tests as slow (deselect with '-m "not slow"')
+    integration: marks tests as integration tests
+    unit: marks tests as unit tests
+    performance: marks tests as performance tests
+env =
+    TEST_ENVIRONMENT=true  # Automatische Test-Environment-Aktivierung
+```
+
+### Test Environment Safety
+
+The system automatically detects test environments and prevents sending real messages during test execution:
+
+- **Automatic Detection**: Test environments are detected via `TEST_ENVIRONMENT=true` or pytest execution
+- **Safe Integrations**: All integrations (Telegram, Discord, Webhook, SMS, Email) send no real messages in tests
+- **Logging**: Test environment skips are logged for transparency
+- **Mocking**: Comprehensive mock strategies for all external dependencies
+
+```bash
+# Run tests - no real messages are sent
+pytest tests/integrations/ -v
+
+# Normal execution - real integrations work normally
+python main.py --mode live
+```
+
+### Test-Entwicklung
+
+#### Neuen Test hinzufügen
+1. Test-Datei in entsprechendem Verzeichnis erstellen
+2. pytest-Konventionen befolgen:
+   - Dateien: `test_*.py`
+   - Klassen: `Test*`
+   - Methoden: `test_*`
+
+```python
+import pytest
+from src.indicators import ema
+
+class TestEMA:
+    def test_ema_basic_calculation(self):
+        data = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = ema(data, 3)
+        assert not result.isna().all()
+        assert len(result) == len(data)
+```
+
+#### Test mit Markern
+```python
+import pytest
+
+@pytest.mark.slow
+def test_slow_operation():
+    # Langsamere Tests mit @pytest.mark.slow markieren
+    pass
+
+@pytest.mark.integration
+def test_full_pipeline():
+    # Integrationstests markieren
+    pass
+```
+
+### CI/CD Integration
+
+Für kontinuierliche Integration können Tests automatisch ausgeführt werden:
+
+```yaml
+# .github/workflows/test.yml
+name: Test Suite
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run tests
+        run: pytest --cov=src --cov-report=xml
+      - name: Upload coverage
+        uses: codecov/codecov-action@v2
+```
+
 ## 🔧 Troubleshooting
 
 ### Common Issues
@@ -504,15 +693,31 @@ Error: No data loaded
 python main.py --mode backtest --start-date 2024-01-01 --end-date 2024-12-31
 ```
 
-#### Test Failures
+#### Test Environment Issues
 ```
-FAILED tests/test_indicators.py::TestIndicators::test_bb_calculation
+Integration sends real messages during tests
 ```
-**Solution**: Ensure all dependencies are installed and environment is activated:
+**Solution**: The system automatically detects test environments. If issues occur:
 ```bash
-conda activate tradpal_env
-pip install -r requirements.txt
-python -m pytest tests/ -v
+# Manually set test environment
+export TEST_ENVIRONMENT=true
+pytest tests/integrations/
+
+# Or use pytest directly (detects automatically)
+pytest tests/integrations/
+```
+
+#### Integration Test Failures
+```
+FAILED tests/integrations/test_integrations.py::TestIntegrationManager::test_send_signal_to_all
+```
+**Solution**: Ensure all integrations are properly mocked:
+```bash
+# Run only integration tests
+pytest tests/integrations/ -v
+
+# With detailed output
+pytest tests/integrations/ -v -s
 ```
 
 #### Permission Errors

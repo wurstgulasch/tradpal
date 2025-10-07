@@ -91,7 +91,9 @@ def get_timeframe_params(timeframe=None):
     """Get parameters for specified timeframe, fallback to current TIMEFRAME"""
     if timeframe is None:
         timeframe = TIMEFRAME
-    return TIMEFRAME_PARAMS.get(timeframe, TIMEFRAME_PARAMS['1m'])
+    elif timeframe not in TIMEFRAME_PARAMS:
+        return None
+    return TIMEFRAME_PARAMS.get(timeframe, None)
 
 # Extract current parameters for backward compatibility
 current_params = get_timeframe_params()
@@ -106,12 +108,26 @@ ATR_PERIOD = current_params['atr_period']
 CAPITAL = 10000
 RISK_PER_TRADE = 0.01
 
+# Risk management parameters
+SL_MULTIPLIER = current_params['atr_sl_multiplier']
+TP_MULTIPLIER = current_params['atr_tp_multiplier']
+MAX_LEVERAGE = current_params['leverage_max']
+LEVERAGE_BASE = current_params['leverage_max']  # Base leverage same as max for simplicity
+LEVERAGE_MIN = 1  # Minimum leverage is 1:1
+LEVERAGE_MAX = current_params['leverage_max']
+
+# RSI thresholds
+RSI_OVERSOLD = current_params['rsi_oversold']
+RSI_OVERBOUGHT = current_params['rsi_overbought']
+
 # Multi-timeframe analysis
 MTA_ENABLED = True
 MTA_HIGHER_TIMEFRAME = '5m'  # Higher timeframe for trend confirmation
+MTA_TIMEFRAMES = ['5m', '15m']  # Available higher timeframes
 
 # Optional indicators
 ADX_ENABLED = False
+ADX_THRESHOLD = current_params['adx_threshold']  # ADX threshold for trend strength
 FIBONACCI_ENABLED = False
 VOLATILITY_FILTER_ENABLED = False
 
@@ -126,5 +142,70 @@ LOG_FILE = 'logs/tradpal_indicator.log'
 
 # Environment variables (for security)
 import os
+from dotenv import load_dotenv
+
+def load_environment():
+    """Load appropriate environment file based on context"""
+    # Check if we're in a test environment
+    if os.getenv('TEST_ENVIRONMENT') == 'true' or 'pytest' in os.sys.argv[0]:
+        env_file = '.env.test'
+    else:
+        env_file = '.env'
+
+    # Load the environment file if it exists
+    if os.path.exists(env_file):
+        load_dotenv(env_file)
+    else:
+        # Fallback to default .env
+        load_dotenv()
+
+# Load environment on import
+load_environment()
+
 API_KEY = os.getenv('TRADPAL_API_KEY', '')
 API_SECRET = os.getenv('TRADPAL_API_SECRET', '')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+
+def validate_timeframe(timeframe):
+    """Validate timeframe string format and logical constraints."""
+    if not isinstance(timeframe, str) or not timeframe:
+        return False
+
+    # Check format: number + unit (s, m, h, d, w, M)
+    import re
+    pattern = r'^(\d+)([smhdwM])$'
+    match = re.match(pattern, timeframe)
+    if not match:
+        return False
+
+    # Extract number and check it's positive
+    number = int(match.group(1))
+    if number <= 0:
+        return False
+
+    # Valid units
+    unit = match.group(2)
+    valid_units = ['s', 'm', 'h', 'd', 'w', 'M']
+    if unit not in valid_units:
+        return False
+
+    return True
+
+def validate_risk_params(params):
+    """Validate risk management parameters."""
+    required_keys = ['capital', 'risk_per_trade', 'sl_multiplier']
+
+    # Check required keys
+    if not all(key in params for key in required_keys):
+        return False
+
+    # Check value ranges
+    if params['capital'] <= 0:
+        return False
+    if not 0 < params['risk_per_trade'] <= 1:  # Risk should be 0-100%
+        return False
+    if params['sl_multiplier'] <= 0:
+        return False
+
+    return True

@@ -8,7 +8,8 @@ def generate_signals(df):
     Generates Buy/Sell signals based on EMA crossover, RSI and BB.
     Includes optional Multi-Timeframe Analysis (MTA) for signal confirmation.
     """
-    df.dropna(inplace=True)  # Remove NaN
+    # Don't drop NaN values here - let indicators handle their own NaN values
+    # df.dropna(inplace=True)  # Remove this line
     df.reset_index(drop=True, inplace=True)  # Reset Index
 
     # Basic signal generation
@@ -65,14 +66,19 @@ def calculate_risk_management(df):
     """
     Calculates position size, stop-loss, take-profit based on ATR with multipliers.
     Position size is calculated as both absolute amount and percentage of total capital.
+    Requires Buy_Signal and Sell_Signal columns.
     """
     from config.settings import get_timeframe_params, TIMEFRAME
+
+    # Check for required signal columns
+    if 'Buy_Signal' not in df.columns or 'Sell_Signal' not in df.columns:
+        raise KeyError("DataFrame must contain 'Buy_Signal' and 'Sell_Signal' columns")
 
     # Get timeframe-specific parameters
     params = get_timeframe_params(TIMEFRAME)
 
     # Calculate absolute position size with ATR multiplier
-    atr_multiplier = getattr(params, 'atr_sl_multiplier', 1.0)
+    atr_multiplier = params.get('atr_sl_multiplier', 1.0)
     df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (df['ATR'] * atr_multiplier)
 
     # Calculate the actual percentage of capital that would be at risk
