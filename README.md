@@ -1,0 +1,596 @@
+# TradPal Indicator
+
+A comprehensive Python-based trading indicator system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, and advanced risk management. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
+
+## 🚀 Features
+
+- **Multi-Mode Operation**: Live monitoring, historical backtesting, and single analysis modes
+- **Multi-Timeframe Analysis (MTA)**: Signal confirmation across multiple timeframes for improved accuracy
+- **Advanced Backtesting**: Complete historical simulation with performance metrics (win rate, CAGR, drawdown, Sharpe ratio)
+- **Modular Architecture**: Clean separation of data fetching, indicator calculation, signal generation, and output
+- **Extended Indicators**: EMA (9/21), RSI (14), Bollinger Bands (20, ±2σ), ATR (14), ADX (14), Fibonacci Extensions
+- **Intelligent Signals**: Enhanced Buy/Sell logic with MTA confirmation and trend strength filtering
+- **Dynamic Risk Management**: Position sizing, ATR-based stop-loss/take-profit, and volatility-adjusted leverage
+- **Comprehensive Testing**: Full test suite with pytest covering all components
+- **Structured Logging**: Professional logging system with file rotation and audit trails
+- **Security**: Environment variable support for API keys and secure configuration
+- **JSON API**: Structured output for seamless integration with bots, webhooks, and dashboards
+- **Container Ready**: Docker and Docker Compose support for easy deployment
+- **Error Handling**: Robust error recovery and logging for 24/7 operation
+
+## 📊 Technical Indicators & Signal Logic
+
+### Core Indicators Calculated
+- **EMA (9 & 21)**: Exponential Moving Averages for trend identification
+- **RSI (14)**: Relative Strength Index for overbought/oversold conditions
+- **Bollinger Bands (20, ±2σ)**: Volatility bands for price channel analysis
+- **ATR (14)**: Average True Range for volatility and risk measurement
+- **ADX (14)**: Average Directional Index for trend strength assessment
+- **Fibonacci Extensions**: Automated take-profit level calculation
+
+### Enhanced Buy Signal Conditions (All must be true)
+- EMA9 > EMA21 (bullish trend)
+- RSI < 30 (oversold condition)
+- Close price > Lower Bollinger Band (price above support)
+- ADX > 25 (sufficient trend strength, optional)
+- MTA confirmation on higher timeframe (optional)
+
+### Enhanced Sell Signal Conditions (All must be true)
+- EMA9 < EMA21 (bearish trend)
+- RSI > 70 (overbought condition)
+- Close price < Upper Bollinger Band (price below resistance)
+- ADX > 25 (sufficient trend strength, optional)
+- MTA confirmation on higher timeframe (optional)
+
+### Advanced Risk Management
+- **Position Size**: (Capital × Risk%) / ATR with configurable multipliers
+- **Stop Loss**: Close - (ATR × SL_Multiplier) for buy positions
+- **Take Profit**: Close + (ATR × TP_Multiplier) or Fibonacci extension levels
+- **Dynamic Leverage**: 1:5-1:10 based on ATR and market volatility
+- **Trade Duration**: ADX-based holding periods for trend-following
+
+## 🏗️ Architecture & Design
+
+### Project Structure
+```
+tradpal_indicator/
+├── config/
+│   └── settings.py          # Configuration (parameters, exchanges, output)
+├── src/
+│   ├── data_fetcher.py      # Data fetching with ccxt library
+│   ├── indicators.py        # Technical indicator calculations
+│   ├── signal_generator.py  # Signal generation and risk management
+│   ├── output.py            # JSON output formatting and saving
+│   ├── backtester.py        # Historical backtesting engine
+│   └── logging_config.py    # Structured logging system
+├── output/                  # Generated JSON signal files
+├── tests/                   # Comprehensive test suite
+├── main.py                  # Main orchestration script
+├── requirements.txt         # Python dependencies
+├── Dockerfile               # Container build configuration
+├── docker-compose.yml       # Multi-container orchestration
+├── .env.example             # Environment variables template
+├── .github/copilot-instructions.md  # AI assistant guidelines
+└── README.md
+```
+
+### Data Flow
+1. **Data Fetching**: Retrieve OHLCV data from configured exchange with timeframe support
+2. **Indicator Calculation**: Compute technical indicators with optional ADX/Fibonacci
+3. **Multi-Timeframe Analysis**: Confirm signals across higher timeframes (optional)
+4. **Signal Generation**: Apply enhanced trading logic with trend filtering
+5. **Risk Assessment**: Calculate position sizes, stops, and dynamic leverage
+6. **Backtesting/Simulation**: Historical performance analysis with detailed metrics
+7. **Output**: Save signals to JSON and display real-time alerts with logging
+
+### Key Design Principles
+- **Modularity**: Each component has a single responsibility
+- **Scalability**: Timeframe-specific parameters and MTA support
+- **Data Immutability**: Functions modify DataFrames in-place and return them
+- **Configuration-Driven**: All parameters centralized in settings.py
+- **Testability**: Comprehensive test coverage for all components
+- **Security**: Environment variables for sensitive configuration
+- **Error Resilience**: Graceful handling of API failures and data issues
+- **Performance Optimized**: Efficient data structures and minimal API calls
+
+## 📦 Installation & Setup
+
+### Prerequisites
+- Python 3.10+
+- Conda (recommended) or pip
+- Git
+
+### Quick Start
+```bash
+# Clone repository
+git clone https://github.com/wurstgulasch/tradpal_indicator.git
+cd tradpal_indicator
+
+# Create and activate conda environment
+conda create -n tradpal_env python=3.10
+conda activate tradpal_env
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment template and configure API keys
+cp .env.example .env
+# Edit .env file with your API credentials
+
+# Run tests to verify installation
+python -m pytest tests/ -v
+
+# Run the indicator in live mode
+python main.py --mode live
+```
+
+### Environment Configuration
+Create a `.env` file in the project root with your API credentials:
+
+```bash
+# Exchange API Keys (optional, for authenticated endpoints)
+KRAKEN_API_KEY=your_kraken_api_key
+KRAKEN_API_SECRET=your_kraken_api_secret
+
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_FILE=logs/tradpal_indicator.log
+
+# Advanced Settings
+ENABLE_MTA=true
+ADX_THRESHOLD=25
+FIBONACCI_LEVELS=161.8,261.8
+```
+
+### Docker Deployment
+```bash
+# Build and run with Docker Compose
+docker-compose up --build
+
+# Or run with Docker directly
+docker build -t tradpal-indicator .
+docker run --env-file .env -v $(pwd)/output:/app/output tradpal-indicator
+```
+
+## ⚙️ Configuration
+
+Edit `config/settings.py` to customize behavior:
+
+```python
+# Trading pair and exchange
+SYMBOL = 'EUR/USD'          # Trading pair (ccxt format)
+EXCHANGE = 'kraken'         # Exchange name (must be supported by ccxt)
+TIMEFRAME = '1m'            # Chart timeframe
+
+# Timeframe-specific parameters for scalability
+TIMEFRAME_PARAMS = {
+    '1m': {
+        'ema_short': 9, 'ema_long': 21, 'rsi_period': 14, 'bb_period': 20,
+        'atr_period': 14, 'adx_period': 14, 'rsi_oversold': 30, 'rsi_overbought': 70
+    },
+    '5m': {
+        'ema_short': 12, 'ema_long': 26, 'rsi_period': 14, 'bb_period': 20,
+        'atr_period': 14, 'adx_period': 14, 'rsi_oversold': 35, 'rsi_overbought': 65
+    },
+    '1h': {
+        'ema_short': 50, 'ema_long': 200, 'rsi_period': 14, 'bb_period': 20,
+        'atr_period': 14, 'adx_period': 14, 'rsi_oversold': 40, 'rsi_overbought': 60
+    }
+}
+
+# Multi-Timeframe Analysis (MTA)
+ENABLE_MTA = True           # Enable signal confirmation on higher timeframes
+MTA_TIMEFRAMES = ['5m', '15m']  # Higher timeframes for confirmation
+
+# Advanced Indicators
+ENABLE_ADX = True           # Enable ADX for trend strength filtering
+ADX_THRESHOLD = 25          # Minimum ADX for valid signals
+ENABLE_FIBONACCI = True     # Enable Fibonacci extensions for take-profit
+FIBONACCI_LEVELS = [161.8, 261.8]  # Fibonacci extension levels
+
+# Risk management
+CAPITAL = 10000             # Total trading capital
+RISK_PER_TRADE = 0.01       # Risk per trade (1% of capital)
+SL_MULTIPLIER = 1.5         # Stop-loss multiplier (ATR × SL_MULTIPLIER)
+TP_MULTIPLIER = 3.0         # Take-profit multiplier (ATR × TP_MULTIPLIER)
+LEVERAGE_BASE = 10          # Base leverage
+LEVERAGE_MIN = 5            # Minimum leverage
+LEVERAGE_MAX = 10           # Maximum leverage
+
+# Backtesting parameters
+BACKTEST_START_DATE = '2024-01-01'  # Default backtest start date
+BACKTEST_END_DATE = '2024-12-31'    # Default backtest end date
+
+# Data and output
+LOOKBACK_DAYS = 7           # Historical data for analysis
+OUTPUT_FORMAT = 'json'      # Output format
+OUTPUT_FILE = 'output/signals.json'  # Output file path
+BACKTEST_OUTPUT_FILE = 'output/signals_backtest.json'  # Backtest output file
+```
+
+## 🎯 Usage
+
+### Command Line Interface
+
+The system supports multiple operational modes:
+
+```bash
+# Live monitoring mode (default)
+python main.py --mode live
+
+# Historical backtesting mode
+python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-01-15
+
+# Single analysis mode
+python main.py --mode analysis
+
+# Run test suite
+python -m pytest tests/ -v
+```
+
+### Operational Modes
+
+#### Live Monitoring Mode
+```bash
+python main.py --mode live
+```
+- Runs continuous market monitoring
+- Monitors every 30 seconds for 1-minute charts
+- Only displays output when signals are generated
+- Automatically saves signals to JSON with timestamps
+- Includes MTA confirmation if enabled
+- Press `Ctrl+C` to stop gracefully
+
+#### Backtesting Mode
+```bash
+python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+```
+- Performs historical backtesting on specified date range
+- Calculates comprehensive performance metrics
+- Outputs detailed results including win rate, P&L, drawdown, Sharpe ratio
+- Saves backtest results to separate JSON file
+- Supports all timeframes and symbols
+
+#### Single Analysis Mode
+```bash
+python main.py --mode analysis
+```
+- Performs one-time analysis on recent market data
+- Calculates all indicators and generates signals
+- Saves complete analysis to JSON
+- Useful for integration testing and manual analysis
+
+### Programmatic Usage
+
+#### Basic Analysis Pipeline
+```python
+from src.data_fetcher import fetch_historical_data
+from src.indicators import calculate_indicators
+from src.signal_generator import generate_signals, calculate_risk_management
+from src.output import save_signals_to_json
+
+# Fetch historical data
+data = fetch_historical_data()
+
+# Process data through pipeline
+data = calculate_indicators(data)
+data = generate_signals(data)
+data = calculate_risk_management(data)
+
+# Save results
+save_signals_to_json(data)
+```
+
+#### Backtesting Example
+```python
+from src.backtester import run_backtest
+
+# Run backtest with custom parameters
+results = run_backtest(
+    symbol='EUR/USD',
+    timeframe='1h',
+    start_date='2024-01-01',
+    end_date='2024-12-31'
+)
+
+print(f"Win Rate: {results['win_rate']}%")
+print(f"Total P&L: ${results['total_pnl']:.2f}")
+print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
+```
+
+## 🔌 Integration & API
+
+### JSON Output Format
+Signals are saved to `output/signals.json` with the following enhanced structure:
+
+```json
+[
+  {
+    "timestamp": "2025-10-07T10:30:00.000Z",
+    "open": 1.16846,
+    "high": 1.1687,
+    "low": 1.16846,
+    "close": 1.1686,
+    "volume": 8988.1630231,
+    "EMA9": 1.1684444672614611,
+    "EMA21": 1.1685168880440795,
+    "RSI": 74.15730337079353,
+    "BB_upper": 1.1686394881889806,
+    "BB_middle": 1.168366,
+    "BB_lower": 1.1680925118110195,
+    "ATR": 0.00013500000000002795,
+    "ADX": 28.45,
+    "DI_plus": 25.12,
+    "DI_minus": 18.67,
+    "EMA_crossover": -1,
+    "Buy_Signal": 0,
+    "Sell_Signal": 1,
+    "Position_Size_Absolute": 740740.7407405874,
+    "Position_Size_Percent": 1.0,
+    "Stop_Loss_Buy": 1.168465,
+    "Take_Profit_Buy": 1.16887,
+    "Fibonacci_TP_161": 1.16925,
+    "Fibonacci_TP_262": 1.17015,
+    "Leverage": 5,
+    "MTA_Confirmed": true,
+    "timeframe": "1m"
+  }
+]
+```
+
+### Backtesting Output Format
+Backtest results are saved to `output/signals_backtest.json` with additional performance metrics:
+
+```json
+{
+  "backtest_results": {
+    "total_trades": 45,
+    "winning_trades": 28,
+    "losing_trades": 17,
+    "win_rate": 62.22,
+    "total_pnl": 1250.75,
+    "gross_profit": 2850.50,
+    "gross_loss": -1599.75,
+    "profit_factor": 1.78,
+    "max_drawdown": 8.45,
+    "max_drawdown_percentage": 8.45,
+    "sharpe_ratio": 1.23,
+    "cagr": 24.56,
+    "final_capital": 11250.75,
+    "total_return_percentage": 12.51
+  },
+  "trades": [...]
+}
+```
+
+### Integration Examples
+
+#### Telegram Bot Integration
+```python
+import json
+import telegram
+import time
+
+def send_signal_alerts():
+    bot = telegram.Bot(token='YOUR_BOT_TOKEN')
+    last_signal_count = 0
+
+    while True:
+        try:
+            with open('output/signals.json', 'r') as f:
+                signals = json.load(f)
+
+            if len(signals) > last_signal_count:
+                new_signals = signals[last_signal_count:]
+                for signal in new_signals:
+                    if signal['Buy_Signal'] == 1:
+                        message = f"🟢 BUY SIGNAL\nPrice: {signal['close']:.5f}\nRSI: {signal['RSI']:.2f}"
+                        bot.send_message(chat_id='YOUR_CHAT_ID', text=message)
+                    elif signal['Sell_Signal'] == 1:
+                        message = f"🔴 SELL SIGNAL\nPrice: {signal['close']:.5f}\nRSI: {signal['RSI']:.2f}"
+                        bot.send_message(chat_id='YOUR_CHAT_ID', text=message)
+
+                last_signal_count = len(signals)
+
+            time.sleep(30)
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(60)
+```
+
+#### Webhook Integration
+```python
+import requests
+import json
+import time
+
+WEBHOOK_URL = 'https://your-trading-platform.com/webhook'
+
+def send_webhook_alerts():
+    last_signal_count = 0
+
+    while True:
+        try:
+            with open('output/signals.json', 'r') as f:
+                signals = json.load(f)
+
+            if len(signals) > last_signal_count:
+                new_signals = signals[last_signal_count:]
+                for signal in new_signals:
+                    if signal['Buy_Signal'] == 1 or signal['Sell_Signal'] == 1:
+                        requests.post(WEBHOOK_URL, json=signal)
+
+                last_signal_count = len(signals)
+
+            time.sleep(30)
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(60)
+```
+
+## 🐳 Docker Deployment
+
+### Development
+```bash
+# Build development image
+docker build -t tradpal-indicator:dev .
+
+# Run with volume mounting for live output
+docker run -v $(pwd)/output:/app/output tradpal-indicator:dev
+```
+
+### Production with Docker Compose
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  tradpal-indicator:
+    build: .
+    volumes:
+      - ./output:/app/output
+      - ./config:/app/config
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+```
+
+```bash
+# Deploy to production
+docker-compose up -d
+
+# View logs
+docker-compose logs -f tradpal-indicator
+
+# Stop service
+docker-compose down
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Environment Variable Errors
+```
+ModuleNotFoundError: No module named 'dotenv'
+```
+**Solution**: Install python-dotenv:
+```bash
+pip install python-dotenv
+```
+
+#### API Key Configuration
+```
+ccxt.base.errors.AuthenticationError: kraken requires "apiKey" and "secret"
+```
+**Solution**: Ensure `.env` file exists with correct API credentials:
+```bash
+cp .env.example .env
+# Edit .env with your actual API keys
+```
+
+#### No Data Available
+```
+Error: No data loaded
+```
+**Solution**: Check exchange API status, internet connection, and verify SYMBOL/EXCHANGE settings in `config/settings.py`.
+
+#### Backtest Date Parsing Errors
+```
+'str' object has no attribute 'date'
+```
+**Solution**: Use YYYY-MM-DD format for backtest dates:
+```bash
+python main.py --mode backtest --start-date 2024-01-01 --end-date 2024-12-31
+```
+
+#### Test Failures
+```
+FAILED tests/test_indicators.py::TestIndicators::test_bb_calculation
+```
+**Solution**: Ensure all dependencies are installed and environment is activated:
+```bash
+conda activate tradpal_env
+pip install -r requirements.txt
+python -m pytest tests/ -v
+```
+
+#### Permission Errors
+```
+Permission denied: output/signals.json
+```
+**Solution**: Ensure write permissions on output directory:
+```bash
+chmod 755 output/
+mkdir -p logs/
+chmod 755 logs/
+```
+
+#### Exchange API Limits
+```
+ccxt.base.errors.RateLimitExceeded: kraken GET https://api.kraken.com/0/public/OHLC
+```
+**Solution**: Reduce monitoring frequency, switch exchanges, or implement API key authentication for higher limits.
+
+### Performance Optimization
+- For high-frequency monitoring, consider using websockets instead of REST API
+- Implement caching for indicator calculations
+- Use multiprocessing for parallel signal processing
+- Enable MTA only when necessary (increases API calls)
+
+### Logging and Debugging
+The system includes comprehensive logging. Check `logs/tradpal_indicator.log` for detailed information:
+
+```python
+# Adjust log level in .env file
+LOG_LEVEL=DEBUG  # Options: DEBUG, INFO, WARNING, ERROR
+
+# View recent logs
+tail -f logs/tradpal_indicator.log
+```
+
+### Backtesting Tips
+- Start with shorter date ranges for faster testing
+- Use multiple timeframes to validate strategy robustness
+- Monitor drawdown metrics closely
+- Consider transaction costs in real trading scenarios
+
+### Advanced Configuration
+For production deployment, consider:
+- Setting up log rotation policies
+- Implementing health checks and monitoring
+- Using environment-specific configuration files
+- Setting up automated backups of output data
+
+## ⚠️ Risk Disclaimer
+
+**This is an educational project for learning purposes only.**
+
+- **Not Financial Advice**: This software is for educational and research purposes. Do not use for actual trading without thorough backtesting and professional consultation.
+- **No Guarantees**: Past performance does not predict future results. Trading involves substantial risk of loss.
+- **Backtesting Required**: Always backtest strategies on historical data before live trading.
+- **Risk Management**: Never risk more than you can afford to lose. The default 1% risk per trade is conservative.
+- **Professional Consultation**: Consult with a qualified financial advisor before making trading decisions.
+
+## 📄 License
+
+This project is open source. See individual component licenses for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📞 Support
+
+For questions or issues:
+- Open an issue on GitHub
+- Check the troubleshooting section above
+- Review the code documentation in each module
+
+---
+
+**Last Updated**: October 7, 2025

@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  tradpal-indicator:
+    build: .
+    volumes:
+      - ./output:/app/output
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped

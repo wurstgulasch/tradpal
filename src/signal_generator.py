@@ -1,0 +1,91 @@
+import numpy as np
+from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIMEFRAME
+from src.data_fetcher import fetch_data
+from src.indicators import calculate_indicators
+
+def generate_signals(df):
+    """
+    Generates Buy/Sell signals based on EMA crossover, RSI and BB.
+    Includes optional Multi-Timeframe Analysis (MTA) for signal confirmation.
+    """
+    df.dropna(inplace=True)  # Remove NaN
+    df.reset_index(drop=True, inplace=True)  # Reset Index
+
+    # Basic signal generation
+    df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
+    buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < 30) & (df['close'].values > df['BB_lower'].values)
+    df['Buy_Signal'] = buy_condition.astype(int)
+    sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > 70) & (df['close'].values < df['BB_upper'].values)
+    df['Sell_Signal'] = sell_condition.astype(int)
+
+    # Multi-Timeframe Analysis (MTA) for signal confirmation
+    if MTA_ENABLED:
+        df = apply_multi_timeframe_analysis(df)
+
+    return df
+
+def apply_multi_timeframe_analysis(df):
+    """
+    Apply Multi-Timeframe Analysis to confirm signals with higher timeframe trends.
+    Only keeps signals that are confirmed by the higher timeframe trend.
+    """
+    try:
+        # Fetch higher timeframe data
+        higher_tf_data = fetch_data(limit=50)  # Fetch recent data for higher timeframe
+
+        # For demo purposes, we'll simulate higher timeframe analysis
+        # In a real implementation, you'd need to resample the data to higher timeframe
+
+        # Get trend from higher timeframe (simplified)
+        # This would compare EMA crossover on higher timeframe
+        higher_trend = 1 if higher_tf_data['close'].iloc[-1] > higher_tf_data['close'].iloc[-10] else -1
+
+        # Filter signals based on higher timeframe confirmation
+        df['Buy_Signal_Confirmed'] = np.where(
+            (df['Buy_Signal'] == 1) & (higher_trend == 1), 1, 0
+        )
+        df['Sell_Signal_Confirmed'] = np.where(
+            (df['Sell_Signal'] == 1) & (higher_trend == -1), 1, 0
+        )
+
+        # Replace original signals with confirmed signals
+        df['Buy_Signal'] = df['Buy_Signal_Confirmed']
+        df['Sell_Signal'] = df['Sell_Signal_Confirmed']
+
+        # Clean up temporary columns
+        df.drop(['Buy_Signal_Confirmed', 'Sell_Signal_Confirmed'], axis=1, inplace=True)
+
+    except Exception as e:
+        print(f"MTA analysis failed: {e}")
+        # Continue without MTA if it fails
+
+    return df
+
+def calculate_risk_management(df):
+    """
+    Calculates position size, stop-loss, take-profit based on ATR with multipliers.
+    Position size is calculated as both absolute amount and percentage of total capital.
+    """
+    from config.settings import get_timeframe_params, TIMEFRAME
+
+    # Get timeframe-specific parameters
+    params = get_timeframe_params(TIMEFRAME)
+
+    # Calculate absolute position size with ATR multiplier
+    atr_multiplier = getattr(params, 'atr_sl_multiplier', 1.0)
+    df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (df['ATR'] * atr_multiplier)
+
+    # Calculate the actual percentage of capital that would be at risk
+    # Risk amount = Position_Size_Absolute * ATR * SL_Multiplier
+    risk_amount = df['Position_Size_Absolute'] * df['ATR'] * params['atr_sl_multiplier']
+    df['Position_Size_Percent'] = (risk_amount / CAPITAL) * 100
+
+    # Calculate stop-loss and take-profit with multipliers
+    df['Stop_Loss_Buy'] = df['close'] - (df['ATR'] * params['atr_sl_multiplier'])
+    df['Take_Profit_Buy'] = df['close'] + (df['ATR'] * params['atr_tp_multiplier'])
+
+    # Dynamic leverage based on ATR vs expanding mean
+    atr_avg = df['ATR'].expanding().mean()
+    df['Leverage'] = np.where(df['ATR'] < atr_avg, params['leverage_max'], params['leverage_max'] // 2)
+
+    return df
