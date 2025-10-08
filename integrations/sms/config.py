@@ -1,9 +1,43 @@
 """
-SMS Integration Configuration Utilities
+SMS Integration Configuration
 """
 
 import os
-from .sms import SMSConfig, SMSIntegration
+from typing import List
+from integrations.base import IntegrationConfig
+
+
+class SMSConfig(IntegrationConfig):
+    """Configuration for SMS integration"""
+
+    def __init__(self,
+                 enabled: bool = True,
+                 name: str = "SMS Notifications",
+                 account_sid: str = "",
+                 auth_token: str = "",
+                 from_number: str = "",
+                 to_numbers: List[str] = None):
+        super().__init__(enabled=enabled, name=name)
+        self.account_sid = account_sid
+        self.auth_token = auth_token
+        self.from_number = from_number
+        self.to_numbers = to_numbers or []
+
+    @classmethod
+    def from_env(cls) -> 'SMSConfig':
+        """Create config from environment variables"""
+        to_numbers = []
+        if os.getenv('SMS_TO_NUMBERS'):
+            to_numbers = [num.strip() for num in os.getenv('SMS_TO_NUMBERS', '').split(',') if num.strip()]
+
+        return cls(
+            enabled=bool(os.getenv('TWILIO_ACCOUNT_SID') and os.getenv('TWILIO_AUTH_TOKEN') and to_numbers),
+            name="SMS Notifications",
+            account_sid=os.getenv('TWILIO_ACCOUNT_SID', ''),
+            auth_token=os.getenv('TWILIO_AUTH_TOKEN', ''),
+            from_number=os.getenv('TWILIO_FROM_NUMBER', ''),
+            to_numbers=to_numbers
+        )
 
 
 def setup_sms_integration():
@@ -65,6 +99,8 @@ def setup_sms_integration():
 
 def test_sms_integration(config: SMSConfig) -> bool:
     """Test SMS integration with a test message"""
+    from .sms import SMSIntegration
+
     print("🧪 Testing SMS integration...")
 
     integration = SMSIntegration(config)

@@ -1,85 +1,85 @@
 # TradPal Integration System
 
-Das modulare Integrationssystem ermöglicht es, Trading-Signale an verschiedene Plattformen und Dienste zu senden, wie Telegram-Bots, E-Mail, Discord, Webhooks, SMS und mehr.
+The modular integration system allows sending trading signals to various platforms and services, such as Telegram bots, email, Discord, webhooks, SMS, and more.
 
-## Architektur
+## Architecture
 
-Das System basiert auf einer Plugin-Architektur mit folgenden Komponenten:
+The system is based on a plugin architecture with the following components:
 
-- **`integrations/base.py`**: Basis-Klassen und Integration-Manager
-- **`integrations/[name]/`**: Spezifische Integration-Module
-- **`integrations/example.py`**: Beispiel für die Verwendung aller Integrationen
+- **`integrations/base.py`**: Base classes and integration manager
+- **`integrations/[name]/`**: Specific integration modules
+- **`integrations/example.py`**: Example for using all integrations
 
-## Verfügbare Integrationen
+## Available Integrations
 
 ### ✅ Telegram Bot
-- **Modul**: `integrations.telegram`
-- **Funktionen**: Senden von Trading-Signalen als formatierte Nachrichten
-- **Konfiguration**: Bot-Token und Chat-ID erforderlich
-- **Status**: Vollständig implementiert
+- **Module**: `integrations.telegram`
+- **Features**: Send trading signals as formatted messages
+- **Configuration**: Bot token and chat ID required
+- **Status**: Fully implemented
 
-### ✅ E-Mail-Benachrichtigungen
-- **Modul**: `integrations.email`
-- **Funktionen**: Senden von Trading-Signalen als HTML-E-Mails
-- **Konfiguration**: SMTP-Server, Benutzername, Passwort und Empfänger erforderlich
-- **Status**: Vollständig implementiert
+### ✅ Email Notifications
+- **Module**: `integrations.email`
+- **Features**: Send trading signals as HTML emails
+- **Configuration**: SMTP server, username, password, and recipients required
+- **Status**: Fully implemented
 
 ### ✅ Discord Webhook
-- **Modul**: `integrations.discord`
-- **Funktionen**: Senden von Signalen an Discord-Kanäle via Webhooks mit Embeds
-- **Konfiguration**: Webhook-URL erforderlich
-- **Status**: Vollständig implementiert
+- **Module**: `integrations.discord`
+- **Features**: Send signals to Discord channels via webhooks with embeds
+- **Configuration**: Webhook URL required
+- **Status**: Fully implemented
 
 ### ✅ Generic Webhook
-- **Modul**: `integrations.webhook`
-- **Funktionen**: Senden von Signalen an beliebige HTTP-Endpunkte
-- **Konfiguration**: HTTP-URLs, optionale Authentifizierung
-- **Status**: Vollständig implementiert
+- **Module**: `integrations.webhook`
+- **Features**: Send signals to any HTTP endpoints
+- **Configuration**: HTTP URLs, optional authentication
+- **Status**: Fully implemented
 
 ### ✅ SMS (Twilio)
-- **Modul**: `integrations.sms`
-- **Funktionen**: Senden von Trading-Signalen als SMS
-- **Konfiguration**: Twilio Account SID, Auth Token, Telefonnummern
-- **Status**: Vollständig implementiert (erfordert `pip install twilio`)
+- **Module**: `integrations.sms`
+- **Features**: Send trading signals as SMS
+- **Configuration**: Twilio Account SID, Auth Token, phone numbers
+- **Status**: Fully implemented (requires `pip install twilio`)
 
-## Schnellstart
+## Quick Start
 
-### 1. Umgebung einrichten
+### 1. Set Up Environment
 
 ```bash
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -r requirements.txt
 
-# Optionale SMS-Integration
+# Optional SMS integration
 pip install twilio
 
-# .env-Datei erstellen
+# Create .env file
 cp .env.example .env
 ```
 
-### 2. Integrationen konfigurieren
+### 2. Configure Integrations
 
 ```bash
-# Beispiel für alle Integrationen
+# Example for all integrations
 python integrations/example.py
 
-# Hilfe für Konfiguration
+# Help for configuration
 python integrations/example.py --help
 ```
 
-### 3. Einzelne Integrationen einrichten
+### 3. Set Up Individual Integrations
 
 #### Telegram
 ```bash
-# Bot bei @BotFather erstellen
-# Token und Chat-ID in .env eintragen
+# Create bot with @BotFather
+# Add token and chat ID to .env
 TELEGRAM_BOT_TOKEN=your_token
 TELEGRAM_CHAT_ID=your_chat_id
 ```
 
-#### E-Mail
+#### Email
 ```bash
-# SMTP-Konfiguration in .env
+# SMTP configuration in .env
 EMAIL_USERNAME=your-email@gmail.com
 EMAIL_PASSWORD=your-app-password
 EMAIL_RECIPIENTS=recipient1@example.com,recipient2@example.com
@@ -87,34 +87,34 @@ EMAIL_RECIPIENTS=recipient1@example.com,recipient2@example.com
 
 #### Discord
 ```bash
-# Webhook in Discord-Server erstellen
+# Create webhook in Discord server
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN
 ```
 
 #### Webhook
 ```bash
-# HTTP-Endpunkte konfigurieren
+# Configure HTTP endpoints
 WEBHOOK_URLS=https://api.example.com/webhook,https://webhook.site/test
 WEBHOOK_AUTH_TOKEN=your-bearer-token
 ```
 
 #### SMS (Twilio)
 ```bash
-# Twilio-Konto erstellen
+# Create Twilio account
 TWILIO_ACCOUNT_SID=your_account_sid
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_FROM_NUMBER=+1234567890
 SMS_TO_NUMBERS=+0987654321,+0987654322
 ```
 
-## Beispiel-Verwendung
+## Example Usage
 
 ```python
 from integrations.base import integration_manager
 from integrations.telegram.bot import TelegramIntegration, TelegramConfig
 from integrations.email_integration.email import EmailIntegration, EmailConfig
 
-# Integrationen registrieren
+# Register integrations
 telegram_config = TelegramConfig.from_env()
 telegram = TelegramIntegration(telegram_config)
 integration_manager.register_integration("telegram", telegram)
@@ -123,10 +123,10 @@ email_config = EmailConfig.from_env()
 email = EmailIntegration(email_config)
 integration_manager.register_integration("email", email)
 
-# Alle Integrationen initialisieren
+# Initialize all integrations
 integration_manager.initialize_all()
 
-# Signal senden
+# Send signal
 signal = {
     "timestamp": "2024-01-15T10:30:00Z",
     "symbol": "EUR/USD",
@@ -140,9 +140,9 @@ signal = {
 integration_manager.send_signal_to_all(signal)
 ```
 
-## Neue Integration hinzufügen
+## Adding New Integration
 
-1. **Neues Modul erstellen**:
+1. **Create new module**:
    ```bash
    mkdir -p integrations/[name]
    touch integrations/[name]/__init__.py
@@ -150,7 +150,7 @@ integration_manager.send_signal_to_all(signal)
    touch integrations/[name]/config.py
    ```
 
-2. **Basis-Klasse implementieren**:
+2. **Implement base class**:
    ```python
    from integrations.base import BaseIntegration, IntegrationConfig
 
@@ -173,11 +173,11 @@ integration_manager.send_signal_to_all(signal)
            return True
    ```
 
-3. **In `integrations/example.py` hinzufügen** für automatische Tests.
+3. **Add to `integrations/example.py`** for automatic tests.
 
-## Signal-Format
+## Signal Format
 
-Alle Integrationen erhalten Signale im standardisierten Format:
+All integrations receive signals in standardized format:
 
 ```json
 {
@@ -207,12 +207,12 @@ Alle Integrationen erhalten Signale im standardisierten Format:
 }
 ```
 
-## Konfiguration
+## Configuration
 
-Integrationen werden über Umgebungsvariablen konfiguriert:
+Integrations are configured via environment variables:
 
 ```bash
-# .env-Datei
+# .env file
 # Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
@@ -236,58 +236,58 @@ TWILIO_FROM_NUMBER=+1234567890
 SMS_TO_NUMBERS=+0987654321
 ```
 
-## Testumgebung
+## Test Environment
 
-Für Tests wird automatisch `.env.test` verwendet (keine echten Benachrichtigungen):
+For tests, `.env.test` is automatically used (no real notifications):
 
 ```bash
 # .env.test
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 EMAIL_USERNAME=
-# ... alle anderen leer lassen
+# ... leave all others empty
 ```
 
-## Fehlerbehebung
+## Troubleshooting
 
-### Integration funktioniert nicht
+### Integration not working
 
-1. **Konfiguration prüfen**:
+1. **Check configuration**:
    ```bash
    python integrations/example.py
    ```
 
-2. **Logs aktivieren**:
+2. **Enable logs**:
    ```python
    import logging
    logging.basicConfig(level=logging.DEBUG)
    ```
 
-3. **Verbindung testen**:
+3. **Test connection**:
    ```python
    integration.test_connection()
    ```
 
-### Import-Fehler
+### Import Errors
 
-- Stellen Sie sicher, dass optionale Pakete installiert sind
-- SMS-Integration erfordert: `pip install twilio`
+- Ensure optional packages are installed
+- SMS integration requires: `pip install twilio`
 
-## Erweiterte Funktionen
+## Advanced Features
 
-- **Multi-Channel**: Gleichzeitiges Senden an mehrere Kanäle
-- **Retry-Mechanismen**: Automatische Wiederholung bei Fehlern
-- **Rate Limiting**: Respektiert API-Limits verschiedener Dienste
-- **Template-System**: Anpassbare Nachrichtenformate
-- **Async Support**: Nicht-blockierende Signal-Übertragung
+- **Multi-Channel**: Simultaneous sending to multiple channels
+- **Retry Mechanisms**: Automatic retry on errors
+- **Rate Limiting**: Respects API limits of different services
+- **Template System**: Customizable message formats
+- **Async Support**: Non-blocking signal transmission
 
 ## Roadmap
 
-- [x] Telegram Bot-Integration
-- [x] E-Mail-Integration
-- [x] Discord Webhook-Integration
-- [x] Generic Webhook-Integration
-- [x] SMS-Integration (Twilio)
-- [ ] Push-Notification-Integration
-- [ ] Slack-Integration
-- [ ] TradingView Webhook-Integration
+- [x] Telegram Bot Integration
+- [x] Email Integration
+- [x] Discord Webhook Integration
+- [x] Generic Webhook Integration
+- [x] SMS Integration (Twilio)
+- [ ] Push Notification Integration
+- [ ] Slack Integration
+- [ ] TradingView Webhook Integration

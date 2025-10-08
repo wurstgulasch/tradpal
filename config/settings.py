@@ -1,7 +1,7 @@
 # Configuration for TradPal Indicator
 
 # Trading pair and exchange
-SYMBOL = 'EUR/USD'  # For ccxt
+SYMBOL = 'BTC/USDT'  # For ccxt
 EXCHANGE = 'kraken'  # Example exchange
 
 # Timeframe

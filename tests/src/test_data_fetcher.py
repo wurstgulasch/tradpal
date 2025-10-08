@@ -52,9 +52,34 @@ class TestDataFetcher:
         mock_ccxt.kraken.return_value = mock_exchange
         mock_exchange.fetch_ohlcv.side_effect = Exception("Exchange API error")
 
-        # With error handling, function should return empty DataFrame or retry string
+        # With error handling, function should return "retry" on exchange errors
         result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert result == "retry" or (isinstance(result, pd.DataFrame) and result.empty)
+        assert isinstance(result, str) and result == "retry"
+
+    @patch('src.data_fetcher.ccxt')
+    def test_fetch_historical_data_rate_limiting(self, mock_ccxt):
+        """Test handling of rate limiting."""
+        mock_exchange = MagicMock()
+        mock_ccxt.kraken.return_value = mock_exchange
+
+        # Simulate rate limiting error
+        from ccxt import RateLimitExceeded
+        mock_exchange.fetch_ohlcv.side_effect = RateLimitExceeded("Rate limit exceeded")
+
+        # With error handling, function should return retry string
+        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
+        assert isinstance(result, str) and result == "retry"
+
+    @patch('src.data_fetcher.ccxt')
+    def test_fetch_historical_data_network_error(self, mock_ccxt):
+        """Test handling of network errors."""
+        mock_exchange = MagicMock()
+        mock_ccxt.kraken.return_value = mock_exchange
+        mock_exchange.fetch_ohlcv.side_effect = ConnectionError("Network error")
+
+        # With error handling, function should return retry string
+        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
+        assert isinstance(result, str) and result == "retry"
 
     @patch('src.data_fetcher.ccxt')
     def test_fetch_historical_data_invalid_symbol(self, mock_ccxt):
@@ -151,31 +176,6 @@ class TestDataFetcher:
             result = fetch_historical_data('EUR/USD', 'kraken', timeframe, 1)
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
-
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_rate_limiting(self, mock_ccxt):
-        """Test handling of rate limiting."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-
-        # Simulate rate limiting error
-        from ccxt import RateLimitExceeded
-        mock_exchange.fetch_ohlcv.side_effect = RateLimitExceeded("Rate limit exceeded")
-
-        # With error handling, function should return retry string
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert result == "retry" or (isinstance(result, pd.DataFrame) and result.empty)
-
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_network_error(self, mock_ccxt):
-        """Test handling of network errors."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.side_effect = ConnectionError("Network error")
-
-        # With error handling, function should return retry string
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert result == "retry" or (isinstance(result, pd.DataFrame) and result.empty)
 
 
 class TestDataFetcherIntegration:

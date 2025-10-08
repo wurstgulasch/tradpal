@@ -2,125 +2,125 @@
 
 ## 📁 Test Structure
 
-Die Test-Suite spiegelt die Projektstruktur wider und ist wie folgt organisiert:
+The test suite mirrors the project structure and is organized as follows:
 
 ```
 tests/
-├── config/                    # Tests für Konfiguration
+├── config/                    # Configuration tests
 │   └── test_config.py
-├── src/                       # Tests für Kernmodule
+├── src/                       # Core module tests
 │   ├── test_data_fetcher.py
 │   ├── test_indicators.py
 │   ├── test_output.py
 │   └── test_backtester.py
-├── integrations/              # Tests für Integrationen
+├── integrations/              # Integration tests
 │   └── test_integrations.py
-├── scripts/                   # Tests für Skripte
+├── scripts/                   # Script tests
 │   └── test_scripts.py
-├── test_error_handling.py     # Umfassende Fehlerbehandlungstests
-├── test_edge_cases.py         # Grenzfälle und spezielle Szenarien
-├── test_performance.py        # Performance- und Lasttests
+├── test_error_handling.py     # Comprehensive error handling tests
+├── test_edge_cases.py         # Edge cases and special scenarios
+├── test_performance.py        # Performance and load tests
 └── __init__.py
 ```
 
-## 🧪 Test-Kategorien
+## 🧪 Test Categories
 
 ### Unit Tests
-- **data_fetcher**: Datenabruf und Validierung von Exchanges
-- **indicators**: Technische Indikatoren (EMA, RSI, BB, ATR, ADX)
-- **output**: JSON-Formatierung und Dateioperationen
-- **backtester**: Historische Backtest-Funktionalität
-- **config**: Konfigurationsparameter und Validierung
+- **data_fetcher**: Data retrieval and exchange validation
+- **indicators**: Technical indicators (EMA, RSI, BB, ATR, ADX)
+- **output**: JSON formatting and file operations
+- **backtester**: Historical backtesting functionality
+- **config**: Configuration parameters and validation
 
 ### Integration Tests
-- **integrations**: Telegram/Email-Benachrichtigungen
-- **scripts**: CLI-Tools und Automatisierungsskripte
+- **integrations**: Telegram/Email notifications
+- **scripts**: CLI tools and automation scripts
 
-### Spezielle Tests
-- **error_handling**: Umfassende Fehlerbehandlung für alle Module
-- **edge_cases**: Grenzfälle und ungewöhnliche Szenarien
-- **performance**: Performance-Benchmarks und Lasttests
+### Special Tests
+- **error_handling**: Comprehensive error handling for all modules
+- **edge_cases**: Edge cases and unusual scenarios
+- **performance**: Performance benchmarks and load tests
 
-## 🚀 Tests Ausführen
+## 🚀 Running Tests
 
-### Alle Tests
+### All Tests
 ```bash
 python run_tests.py
 ```
 
-### Mit ausführlicher Ausgabe
+### With Verbose Output
 ```bash
 python run_tests.py --verbose
 ```
 
-### Mit Coverage-Report
+### With Coverage Report
 ```bash
 python run_tests.py --coverage
 ```
 
-### Spezifische Testdateien
+### Specific Test Files
 ```bash
 python run_tests.py --test-files tests/src/test_data_fetcher.py tests/src/test_indicators.py
 ```
 
-### Einzelne Test-Module
+### Individual Test Modules
 ```bash
-# Nur Data Fetcher Tests
+# Only Data Fetcher Tests
 python -m pytest tests/src/test_data_fetcher.py -v
 
-# Nur Performance Tests
+# Only Performance Tests
 python -m pytest tests/test_performance.py -v
 ```
 
-## 📊 Test-Abdeckung
+## 📊 Test Coverage
 
-Die Test-Suite bietet umfassende Abdeckung für:
+The test suite provides comprehensive coverage for:
 
-- ✅ **120+ individuelle Tests**
-- ✅ Unit Tests für alle Kernfunktionen
-- ✅ Integration Tests für externe Services
-- ✅ Error Handling für alle Fehlerszenarien
-- ✅ Edge Cases für Grenzfälle
-- ✅ Performance Benchmarks
-- ✅ Mock-basierte Tests für APIs
+- ✅ **120+ individual tests**
+- ✅ Unit tests for all core functions
+- ✅ Integration tests for external services
+- ✅ Error handling for all error scenarios
+- ✅ Edge cases for boundary conditions
+- ✅ Performance benchmarks
+- ✅ Mock-based tests for APIs
 
-## 🛠️ Test-Framework
+## 🛠️ Test Framework
 
-- **pytest**: Moderne Test-Framework mit umfangreichen Features
-- **unittest.mock**: Mocking für externe APIs und Services
-- **pandas/numpy**: Datenverarbeitung in Tests
-- **tempfile**: Temporäre Dateien für I/O-Tests
+- **pytest**: Modern test framework with extensive features
+- **unittest.mock**: Mocking for external APIs and services
+- **pandas/numpy**: Data processing in tests
+- **tempfile**: Temporary files for I/O tests
 
-## 📈 Qualitätsmetriken
+## 📈 Quality Metrics
 
-- **Zero Failures**: Alle Tests müssen bestehen
-- **High Coverage**: >90% Code-Abdeckung angestrebt
-- **Fast Execution**: Tests laufen in <30 Sekunden
-- **Reliable**: Deterministische, nicht-flaky Tests
+- **Zero Failures**: All tests must pass
+- **High Coverage**: >90% code coverage targeted
+- **Fast Execution**: Tests run in <30 seconds
+- **Reliable**: Deterministic, non-flaky tests
 
-## 🔧 Test-Entwicklung
+## 🔧 Test Development
 
-### Neue Tests hinzufügen:
-1. Testdatei im entsprechenden Unterordner erstellen
-2. pytest-Konventionen folgen (test_*.py)
-3. Umfassende Docstrings und Kommentare
-4. Mock externe Dependencies
+### Adding New Tests:
+1. Create test file in appropriate subdirectory
+2. Follow pytest conventions (test_*.py)
+3. Include comprehensive docstrings and comments
+4. Mock external dependencies
 
-### Test-Namenskonventionen:
-- `test_function_name()`: Unit Tests
-- `test_feature_scenario()`: Integration Tests
-- `TestClassName`: Test-Klassen
-- `test_method_name()`: Methoden in Test-Klassen
+### Test Naming Conventions:
+- `test_function_name()`: Unit tests
+- `test_feature_scenario()`: Integration tests
+- `TestClassName`: Test classes
+- `test_method_name()`: Methods in test classes
 
 ## 📋 CI/CD Integration
 
-Die Tests sind für automatische Ausführung in CI/CD-Pipelines optimiert:
+The tests are optimized for automatic execution in CI/CD pipelines:
 
-- Parallele Ausführung möglich
-- JUnit/XML Output für Berichterstattung
-- Coverage-Reports für Qualitätsmetriken
-- Fail-Fast bei kritischen Fehlern
+- Parallel execution possible
+- JUnit/XML output for reporting
+- Coverage reports for quality metrics
+- Fail-fast on critical errors
 
 ---
 
-*Automatisch generiert für TradPal Indicator v2.0*
+*Automatically generated for TradPal Indicator v2.0*

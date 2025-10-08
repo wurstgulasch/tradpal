@@ -36,7 +36,7 @@ class TestDataFetcherErrorHandling:
 
         # With error handling, function should return retry string
         result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert result == "retry" or (isinstance(result, pd.DataFrame) and result.empty)
+        assert isinstance(result, str) and result == "retry"
 
     def test_fetch_with_invalid_exchange(self):
         """Test handling of invalid exchange."""
@@ -545,32 +545,47 @@ class TestSystemIntegrationErrorHandling:
         """Test handling of concurrent access to shared resources."""
         # Test file access concurrency
         import threading
+        import tempfile
+        import os
 
         results = []
         errors = []
 
-        def write_file():
+        # Create a temporary file path for the test
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix='_concurrent_test.json', delete=False, dir=tempfile.gettempdir()) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            def write_file():
+                try:
+                    test_data = [{'test': f'thread_{threading.current_thread().name}'}]
+                    save_signals_to_json(test_data, temp_path)
+                    results.append(True)
+                except Exception as e:
+                    errors.append(e)
+
+            # Start multiple threads trying to write to the same file
+            threads = []
+            for i in range(5):
+                t = threading.Thread(target=write_file)
+                threads.append(t)
+                t.start()
+
+            # Wait for all threads
+            for t in threads:
+                t.join()
+
+            # Should have some successful writes and possibly some errors
+            assert len(results) >= 1  # At least one should succeed
+            # Errors are acceptable due to concurrent access
+
+        finally:
+            # Clean up the temporary file
             try:
-                test_data = [{'test': f'thread_{threading.current_thread().name}'}]
-                save_signals_to_json(test_data, 'concurrent_test.json')
-                results.append(True)
-            except Exception as e:
-                errors.append(e)
-
-        # Start multiple threads trying to write to the same file
-        threads = []
-        for i in range(5):
-            t = threading.Thread(target=write_file)
-            threads.append(t)
-            t.start()
-
-        # Wait for all threads
-        for t in threads:
-            t.join()
-
-        # Should have some successful writes and possibly some errors
-        assert len(results) >= 1  # At least one should succeed
-        # Errors are acceptable due to concurrent access
+                os.unlink(temp_path)
+            except OSError:
+                pass  # File may have been deleted by another process
 
 
 if __name__ == "__main__":

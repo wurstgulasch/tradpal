@@ -2,7 +2,8 @@
 
 # Default test command
 test:
-	pytest
+	rm -rf cache/api/*
+	pytest tests/ -v
 
 # Verbose testing
 test-verbose:

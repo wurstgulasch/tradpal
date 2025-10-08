@@ -1,67 +1,37 @@
 """
 SMS Integration for TradPal Indicator
-Sends trading signals via SMS using Twilio
+Sends trading signals via SMS             except Exception as e:
+                # Log error sending SMS
+                self.logger.error(f"Error sending SMS to {to_number}: {e}")io
 """
 
-import os
-from typing import Dict, Any, List
-from integrations.base import BaseIntegration, IntegrationConfig
-
-try:
-    from twilio.rest import Client
-    from twilio.base.exceptions import TwilioException
-    TWILIO_AVAILABLE = True
-except ImportError:
-    TWILIO_AVAILABLE = False
-    Client = None
-    TwilioException = Exception
-
-
-class SMSConfig(IntegrationConfig):
-    """Configuration for SMS integration"""
-
-    def __init__(self,
-                 enabled: bool = True,
-                 name: str = "SMS Notifications",
-                 account_sid: str = "",
-                 auth_token: str = "",
-                 from_number: str = "",
-                 to_numbers: List[str] = None):
-        super().__init__(enabled=enabled, name=name)
-        self.account_sid = account_sid
-        self.auth_token = auth_token
-        self.from_number = from_number
-        self.to_numbers = to_numbers or []
-
-    @classmethod
-    def from_env(cls) -> 'SMSConfig':
-        """Create config from environment variables"""
-        to_numbers = []
-        if os.getenv('SMS_TO_NUMBERS'):
-            to_numbers = [num.strip() for num in os.getenv('SMS_TO_NUMBERS', '').split(',') if num.strip()]
-
-        return cls(
-            enabled=bool(os.getenv('TWILIO_ACCOUNT_SID') and os.getenv('TWILIO_AUTH_TOKEN') and to_numbers),
-            name="SMS Notifications",
-            account_sid=os.getenv('TWILIO_ACCOUNT_SID', ''),
-            auth_token=os.getenv('TWILIO_AUTH_TOKEN', ''),
-            from_number=os.getenv('TWILIO_FROM_NUMBER', ''),
-            to_numbers=to_numbers
-        )
+from integrations.base import BaseIntegration
 
 
 class SMSIntegration(BaseIntegration):
     """SMS integration for sending trading signals via Twilio"""
 
-    def __init__(self, config: SMSConfig):
+    def __init__(self, config):
         super().__init__(config)
-        self.config: SMSConfig = config
+        self.config = config
         self.client = None
+        self._twilio_available = None
+
+    @property
+    def twilio_available(self):
+        """Check if twilio is available"""
+        if self._twilio_available is None:
+            try:
+                import twilio  # noqa: F401
+                self._twilio_available = True
+            except ImportError:
+                self._twilio_available = False
+        return self._twilio_available
 
     def initialize(self) -> bool:
         """Initialize SMS integration"""
         try:
-            if not TWILIO_AVAILABLE:
+            if not self.twilio_available:
                 self.logger.error("Twilio package not installed. Install with: pip install twilio")
                 return False
 
@@ -69,6 +39,8 @@ class SMSIntegration(BaseIntegration):
                 self.logger.error("SMS configuration incomplete: account_sid, auth_token, from_number, and to_numbers required")
                 return False
 
+            # Import twilio components here
+            from twilio.rest import Client
             # Initialize Twilio client
             self.client = Client(self.config.account_sid, self.config.auth_token)
 
@@ -100,9 +72,8 @@ class SMSIntegration(BaseIntegration):
                 self.logger.info(f"SMS sent successfully to {to_number} (SID: {message.sid})")
                 success_count += 1
 
-            except TwilioException as e:
-                self.logger.error(f"Twilio error sending SMS to {to_number}: {e}")
             except Exception as e:
+                # Log error sending SMS
                 self.logger.error(f"Error sending SMS to {to_number}: {e}")
 
         # Return True if at least one SMS was sent successfully
@@ -136,7 +107,7 @@ class SMSIntegration(BaseIntegration):
         else:
             emoji = '⚪'
 
-        message = f"{emoji} {signal_type.upper()} {symbol} @ {price:.4f}"
+        message = f"{emoji} {signal_type.upper()} {symbol} @ {price:.5f}"
 
         # Add risk info if available
         risk = signal_data.get('risk_management', {})
@@ -144,7 +115,7 @@ class SMSIntegration(BaseIntegration):
             sl = risk.get('stop_loss_buy') or risk.get('stop_loss_sell', 0)
             tp = risk.get('take_profit_buy') or risk.get('take_profit_sell', 0)
             if sl and tp:
-                risk_part = f" | SL:{sl:.4f} TP:{tp:.4f}"
+                risk_part = f" | SL:{sl:.3f} TP:{tp:.3f}"
                 if len(message + risk_part) <= 160:
                     message += risk_part
 

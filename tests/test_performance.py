@@ -309,8 +309,8 @@ class TestBacktesterPerformance:
             'exit_price': np.random.uniform(95, 105, n_trades),
             'position_size': np.random.uniform(100, 1000, n_trades),
             'direction': np.random.choice(['long', 'short'], n_trades),
-            'entry_time': pd.date_range('2023-01-01', periods=n_trades, freq='1H'),
-            'exit_time': pd.date_range('2023-01-01 01:00:00', periods=n_trades, freq='1H')
+            'entry_time': pd.date_range('2023-01-01', periods=n_trades, freq='1h'),
+            'exit_time': pd.date_range('2023-01-01 01:00:00', periods=n_trades, freq='1h')
         })
 
         start_time = time.time()

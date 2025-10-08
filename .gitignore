@@ -133,6 +133,8 @@ dmypy.json
 logs/
 output/signals.json
 output/signals_backtest.json
+output/*concurrent_test.json
+cache/
 *.log
 
 # IDE
