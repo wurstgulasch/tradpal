@@ -1,6 +1,23 @@
 # Configuration for TradPal Indicator
 
-# Trading pair and exchange
+import os
+import json
+from typing import Dict, Any
+from dotenv import load_dotenv
+
+# Constants for hardcoded values
+DEFAULT_DATA_LIMIT = 200  # Default limit for data fetching
+HISTORICAL_DATA_LIMIT = 1000  # Default limit for historical data
+MTA_DATA_LIMIT = 50  # Limit for multi-timeframe analysis data
+VOLATILITY_WINDOW = 14  # Window for volatility calculations
+TREND_LOOKBACK = 10  # Lookback period for trend analysis
+MAX_RETRIES_LIVE = 3  # Max retries for live data fetching
+MAX_RETRIES_HISTORICAL = 2  # Max retries for historical data fetching
+CACHE_TTL_LIVE = 30  # Cache TTL for live data (seconds)
+CACHE_TTL_HISTORICAL = 300  # Cache TTL for historical data (seconds)
+KRAKEN_MAX_PER_REQUEST = 720  # Kraken's max candles per request for 1m timeframe
+DEFAULT_HISTORICAL_DAYS = 365  # Default historical data period in days
+JSON_INDENT = 4  # JSON output indentation
 SYMBOL = 'BTC/USDT'  # For ccxt
 EXCHANGE = 'kraken'  # Example exchange
 
@@ -105,8 +122,8 @@ BB_STD_DEV = current_params['bb_std_dev']
 ATR_PERIOD = current_params['atr_period']
 
 # Risk management
-CAPITAL = 10000000  # Increased by 1000x for better P&L readability
-RISK_PER_TRADE = 0.01  # 1% risk per trade
+CAPITAL = 10000  # Realistic starting capital for trading
+RISK_PER_TRADE = 0.01  # 1% risk per trade (conservative risk management)
 
 # Risk management parameters
 SL_MULTIPLIER = current_params['atr_sl_multiplier']
@@ -134,15 +151,93 @@ VOLATILITY_FILTER_ENABLED = False
 # Signal generation mode
 STRICT_SIGNALS_ENABLED = True  # If False, use only EMA crossover for signals (for backtesting)
 
-# Default indicator configuration for modular indicators
-DEFAULT_INDICATOR_CONFIG = {
+# Configuration Mode
+CONFIG_MODE = 'conservative'  # 'conservative' or 'discovery'
+
+# Conservative Configuration (fixed parameters)
+CONSERVATIVE_CONFIG = {
     'ema': {'enabled': True, 'periods': [9, 21]},
-    'rsi': {'enabled': True, 'period': 14},
-    'bb': {'enabled': True, 'period': 20, 'std_dev': 2},
+    'rsi': {'enabled': True, 'period': 14, 'oversold': 30, 'overbought': 70},
+    'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0},
     'atr': {'enabled': True, 'period': 14},
     'adx': {'enabled': False, 'period': 14},
     'fibonacci': {'enabled': False}
 }
+
+# Discovery Configuration (adaptive parameters)
+DISCOVERY_CONFIG = {
+    'ema': {'enabled': True, 'periods': [9, 21]},  # Initial values, will be optimized
+    'rsi': {'enabled': True, 'period': 14, 'oversold': 30, 'overbought': 70},
+    'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0},
+    'atr': {'enabled': True, 'period': 14},
+    'adx': {'enabled': False, 'period': 14},
+    'fibonacci': {'enabled': False}
+}
+
+# Discovery Mode Parameters
+DISCOVERY_POPULATION_SIZE = 100  # Population size for GA optimization
+DISCOVERY_GENERATIONS = 20  # Number of generations
+DISCOVERY_MUTATION_RATE = 0.2  # Mutation probability
+DISCOVERY_CROSSOVER_RATE = 0.8  # Crossover probability
+DISCOVERY_LOOKBACK_DAYS = 30  # Historical data period for optimization
+
+# Adaptive optimization settings (for discovery mode)
+ADAPTIVE_OPTIMIZATION_ENABLED = True  # Enable/disable periodic discovery optimization
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 24  # How often to run discovery (in hours)
+ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply best configuration found
+ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 0.5  # Minimum fitness score to consider applying
+ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
+
+# Adaptive optimization settings (for live mode)
+ADAPTIVE_OPTIMIZATION_ENABLED = True  # Enable/disable periodic discovery optimization
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 1  # How often to run discovery (in hours)
+ADAPTIVE_OPTIMIZATION_POPULATION = 1000  # Smaller population for live optimization
+ADAPTIVE_OPTIMIZATION_GENERATIONS = 50  # Fewer generations for faster results
+ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = 30  # Historical data period for optimization
+ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply best configuration found
+ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 1  # Minimum fitness score to consider applying
+ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
+
+# Machine Learning settings
+ML_ENABLED = True  # Enable/disable ML signal enhancement
+ML_MODEL_DIR = 'cache/ml_models'  # Directory to store trained ML models
+ML_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for ML signal override
+ML_TRAINING_HORIZON = 5  # Prediction horizon for training labels (periods ahead)
+ML_RETRAINING_INTERVAL_HOURS = 24  # How often to retrain models (hours)
+ML_MIN_TRAINING_SAMPLES = 1000  # Minimum samples required for training
+ML_TEST_SIZE = 0.2  # Fraction of data for testing
+ML_CV_FOLDS = 5  # Number of cross-validation folds
+ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
+
+def get_current_indicator_config() -> Dict[str, Any]:
+    """
+    Get the current indicator configuration based on the selected mode.
+
+    Returns:
+        Dictionary containing the current indicator configuration
+    """
+    if CONFIG_MODE == 'conservative':
+        return CONSERVATIVE_CONFIG.copy()
+    elif CONFIG_MODE == 'discovery':
+        # Try to load optimized config first
+        try:
+            if os.path.exists(ADAPTIVE_CONFIG_FILE):
+                with open(ADAPTIVE_CONFIG_FILE, 'r') as f:
+                    data = json.load(f)
+                if 'best_configuration' in data:
+                    config = data['best_configuration']
+                    print(f"Loaded optimized discovery configuration (fitness: {data.get('fitness_score', 'N/A')})")
+                    return config
+        except Exception as e:
+            print(f"Warning: Could not load optimized config: {e}")
+
+        # Fallback to default discovery config
+        return DISCOVERY_CONFIG.copy()
+    else:
+        return CONSERVATIVE_CONFIG.copy()
+
+# Set DEFAULT_INDICATOR_CONFIG based on mode
+DEFAULT_INDICATOR_CONFIG = get_current_indicator_config()
 
 # Data and output
 LOOKBACK_DAYS = 365  # Increased for longer backtest periods
@@ -154,8 +249,6 @@ LOG_LEVEL = 'INFO'
 LOG_FILE = 'logs/tradpal_indicator.log'
 
 # Environment variables (for security)
-import os
-from dotenv import load_dotenv
 
 def load_environment():
     """Load appropriate environment file based on context"""
@@ -222,13 +315,3 @@ def validate_risk_params(params):
         return False
 
     return True
-
-# Adaptive optimization settings (for live mode)
-ADAPTIVE_OPTIMIZATION_ENABLED = True  # Enable/disable periodic discovery optimization
-ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 1  # How often to run discovery (in hours)
-ADAPTIVE_OPTIMIZATION_POPULATION = 100000  # Smaller population for live optimization
-ADAPTIVE_OPTIMIZATION_GENERATIONS = 100  # Fewer generations for faster results
-ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = 30  # Historical data period for optimization
-ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply best configuration found
-ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 1  # Minimum fitness score to consider applying
-ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config

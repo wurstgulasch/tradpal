@@ -131,3 +131,59 @@ class SMSIntegration(BaseIntegration):
             message = message[:157] + "..."
 
         return message
+
+    def send_startup_message(self) -> bool:
+        """Send a startup message with current configuration"""
+        if self.is_test_environment():
+            self.logger.info(f"TEST ENVIRONMENT: Skipping startup message for {self.__class__.__name__}")
+            return True
+
+        try:
+            # Import configuration
+            from config.settings import (
+                SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_INDICATOR_CONFIG
+            )
+
+            # Format indicator configuration (keep it short for SMS)
+            indicators = []
+            if DEFAULT_INDICATOR_CONFIG.get('ema', {}).get('enabled'):
+                indicators.append("EMA")
+            if DEFAULT_INDICATOR_CONFIG.get('rsi', {}).get('enabled'):
+                indicators.append("RSI")
+            if DEFAULT_INDICATOR_CONFIG.get('bb', {}).get('enabled'):
+                indicators.append("BB")
+            if DEFAULT_INDICATOR_CONFIG.get('atr', {}).get('enabled'):
+                indicators.append("ATR")
+            if DEFAULT_INDICATOR_CONFIG.get('adx', {}).get('enabled'):
+                indicators.append("ADX")
+
+            indicators_str = '+'.join(indicators) if indicators else 'None'
+
+            message = f"🤖 TradPal SMS Bot Started | {SYMBOL} {TIMEFRAME} | Indicators: {indicators_str} | Status: Active"
+
+            # Ensure message fits in SMS limit
+            if len(message) > 160:
+                message = message[:157] + "..."
+
+            success_count = 0
+            for to_number in self.config.to_numbers:
+                try:
+                    sms_message = self.client.messages.create(
+                        body=message,
+                        from_=self.config.from_number,
+                        to=to_number
+                    )
+                    self.logger.info(f"Startup SMS sent to {to_number} (SID: {sms_message.sid})")
+                    success_count += 1
+                except Exception as e:
+                    self.logger.error(f"Error sending startup SMS to {to_number}: {e}")
+
+            return success_count > 0
+
+        except Exception as e:
+            self.logger.error(f"Failed to send startup SMS: {e}")
+            return False
+
+    def _send_startup_message(self) -> bool:
+        """Internal method for sending startup message - override in subclasses"""
+        return self.send_startup_message()

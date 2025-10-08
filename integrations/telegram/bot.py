@@ -146,12 +146,67 @@ class TelegramIntegration(BaseIntegration):
             return False
 
     def send_startup_message(self) -> bool:
-        """Send a startup message"""
+        """Send a startup message with current configuration"""
         if self.is_test_environment():
             self.logger.info(f"TEST ENVIRONMENT: Skipping startup message for {self.__class__.__name__}")
             return True
 
-        startup_msg = f"""
+        # Import configuration
+        try:
+            from config.settings import (
+                SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_INDICATOR_CONFIG,
+                RISK_PER_TRADE, SL_MULTIPLIER, TP_MULTIPLIER, LEVERAGE_BASE,
+                MTA_ENABLED, ADX_ENABLED, ADX_THRESHOLD, FIBONACCI_ENABLED
+            )
+
+            # Format indicator configuration
+            indicators = []
+            if DEFAULT_INDICATOR_CONFIG.get('ema', {}).get('enabled'):
+                periods = DEFAULT_INDICATOR_CONFIG['ema'].get('periods', [9, 21])
+                indicators.append(f"EMA{periods}")
+            if DEFAULT_INDICATOR_CONFIG.get('rsi', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['rsi'].get('period', 14)
+                indicators.append(f"RSI({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('bb', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['bb'].get('period', 20)
+                indicators.append(f"BB({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('atr', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['atr'].get('period', 14)
+                indicators.append(f"ATR({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('adx', {}).get('enabled'):
+                indicators.append("ADX")
+
+            indicators_str = ', '.join(indicators) if indicators else 'None'
+
+            startup_msg = f"""
+🤖 *TradPal Telegram Bot Started*
+
+✅ Bot is now monitoring for trading signals
+
+📊 *Current Configuration:*
+• *Symbol:* {SYMBOL}
+• *Exchange:* {EXCHANGE}
+• *Timeframe:* {TIMEFRAME}
+• *Indicators:* {indicators_str}
+• *Risk per Trade:* {RISK_PER_TRADE*100:.1f}%
+• *Stop Loss Multiplier:* {SL_MULTIPLIER}x ATR
+• *Take Profit Multiplier:* {TP_MULTIPLIER}x ATR
+• *Base Leverage:* {LEVERAGE_BASE}x
+• *MTA Enabled:* {'Yes' if MTA_ENABLED else 'No'}
+• *ADX Enabled:* {'Yes' if ADX_ENABLED else 'No'}
+• *Fibonacci TP:* {'Yes' if FIBONACCI_ENABLED else 'No'}
+
+🔔 You will receive notifications when:
+• New BUY signals are generated
+• New SELL signals are generated
+
+⏱️ Check interval: {self.config.check_interval} seconds
+📱 Bot Status: Active
+            """.strip()
+
+        except ImportError:
+            # Fallback if config import fails
+            startup_msg = f"""
 🤖 *TradPal Telegram Bot Started*
 
 ✅ Bot is now monitoring for trading signals
@@ -163,7 +218,7 @@ class TelegramIntegration(BaseIntegration):
 • New SELL signals are generated
 
 📱 Bot Status: Active
-        """.strip()
+            """.strip()
 
         return self.send_message(startup_msg)
 

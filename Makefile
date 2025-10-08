@@ -1,9 +1,21 @@
-.PHONY: test test-verbose test-coverage test-fast test-integration test-unit clean help
+.PHONY: test test-verbose test-coverage test-fast test-integration test-unit clean help format lint type-check quality-check
 
 # Default test command
 test:
 	rm -rf cache/api/*
 	pytest tests/ -v
+
+# Code quality commands
+format:
+	black src/ config/ integrations/ scripts/ tests/
+
+lint:
+	flake8 src/ config/ integrations/ scripts/ tests/
+
+type-check:
+	mypy src/ config/ integrations/ scripts/
+
+quality-check: format lint type-check
 
 # Verbose testing
 test-verbose:
@@ -52,6 +64,10 @@ help:
 	@echo "  test-unit         - Run unit tests only"
 	@echo "  test-edge-cases   - Run edge case tests"
 	@echo "  test-performance  - Run performance tests"
+	@echo "  format            - Format code with black"
+	@echo "  lint              - Lint code with flake8"
+	@echo "  type-check        - Type check with mypy"
+	@echo "  quality-check     - Run all code quality checks (format, lint, type-check)"
 	@echo "  clean             - Clean test artifacts"
 	@echo "  help              - Show this help"
 	@echo ""

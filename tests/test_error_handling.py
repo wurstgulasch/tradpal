@@ -156,9 +156,12 @@ class TestIndicatorsErrorHandling:
         data = pd.Series([100.0] * 20)  # No price movement
         result = rsi(data, 14)
 
-        # RSI should be NaN for constant data
+        # RSI should be NaN for initial values (until period+1), then 0 for constant data
         assert len(result) == len(data)
-        assert result.isna().all()
+        # First 14 values should be NaN (not enough data)
+        assert result.iloc[:14].isna().all()
+        # Remaining values should be 0 (constant data)
+        assert (result.iloc[14:] == 0.0).all()
 
     def test_bb_with_zero_std_dev(self):
         """Test Bollinger Bands with zero standard deviation."""

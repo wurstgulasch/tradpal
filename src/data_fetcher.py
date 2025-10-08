@@ -2,7 +2,7 @@ import ccxt
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
-from config.settings import EXCHANGE, SYMBOL, TIMEFRAME, LOOKBACK_DAYS
+from config.settings import SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_DATA_LIMIT, HISTORICAL_DATA_LIMIT, MAX_RETRIES_LIVE, MAX_RETRIES_HISTORICAL, CACHE_TTL_LIVE, CACHE_TTL_HISTORICAL, KRAKEN_MAX_PER_REQUEST, DEFAULT_HISTORICAL_DAYS, LOOKBACK_DAYS
 import os
 import asyncio
 import aiohttp
@@ -14,9 +14,9 @@ from .error_handling import error_boundary, NetworkError, DataError
 # Load environment variables
 load_dotenv()
 
-@error_boundary(operation="fetch_live_data", max_retries=3)
-@cache_api_call(ttl_seconds=30)  # Cache for 30 seconds for live data
-def fetch_data(limit: int = 200) -> pd.DataFrame:
+@error_boundary(operation="fetch_live_data", max_retries=MAX_RETRIES_LIVE)
+@cache_api_call(ttl_seconds=CACHE_TTL_LIVE)  # Cache for live data
+def fetch_data(limit: int = DEFAULT_DATA_LIMIT) -> pd.DataFrame:
     """
     Fetches recent price data using ccxt.
     For continuous monitoring, fetches only recent candles for efficiency.
@@ -45,9 +45,9 @@ def fetch_data(limit: int = 200) -> pd.DataFrame:
 
     return df
 
-@error_boundary(operation="fetch_historical_data", max_retries=2)
-@cache_api_call(ttl_seconds=300)  # Cache for 5 minutes for historical data
-def fetch_historical_data(symbol='EUR/USD', exchange_name='kraken', timeframe='1m', limit=1000, start_date=None):
+@error_boundary(operation="fetch_historical_data", max_retries=MAX_RETRIES_HISTORICAL)
+@cache_api_call(ttl_seconds=CACHE_TTL_HISTORICAL)  # Cache for historical data
+def fetch_historical_data(symbol=SYMBOL, exchange_name=EXCHANGE, timeframe=TIMEFRAME, limit=HISTORICAL_DATA_LIMIT, start_date=None):
     """
     Fetches historical OHLCV data from specified exchange using ccxt.
     Supports pagination for large datasets.
@@ -67,12 +67,12 @@ def fetch_historical_data(symbol='EUR/USD', exchange_name='kraken', timeframe='1
     if start_date:
         since = exchange.parse8601(start_date.isoformat())
     else:
-        since = exchange.parse8601((datetime.now() - timedelta(days=365)).isoformat())  # Default 1 year
+        since = exchange.parse8601((datetime.now() - timedelta(days=DEFAULT_HISTORICAL_DAYS)).isoformat())  # Default historical period
 
     # For backtesting, fetch historical data with pagination if needed
     all_ohlcv = []
     remaining_limit = limit
-    max_per_request = 720  # Kraken's limit for 1m timeframe
+    max_per_request = KRAKEN_MAX_PER_REQUEST  # Kraken's limit for 1m timeframe
 
     while remaining_limit > 0:
         fetch_limit = min(remaining_limit, max_per_request)

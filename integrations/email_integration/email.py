@@ -117,6 +117,127 @@ class EmailIntegration(BaseIntegration):
             self.logger.error(f"Email connection test failed: {e}")
             return False
 
+    def send_startup_message(self) -> bool:
+        """Send a startup message with current configuration"""
+        if self.is_test_environment():
+            self.logger.info(f"TEST ENVIRONMENT: Skipping startup message for {self.__class__.__name__}")
+            return True
+
+        try:
+            # Import configuration
+            from config.settings import (
+                SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_INDICATOR_CONFIG,
+                RISK_PER_TRADE, SL_MULTIPLIER, TP_MULTIPLIER, LEVERAGE_BASE,
+                MTA_ENABLED, ADX_ENABLED, ADX_THRESHOLD, FIBONACCI_ENABLED
+            )
+
+            # Format indicator configuration
+            indicators = []
+            if DEFAULT_INDICATOR_CONFIG.get('ema', {}).get('enabled'):
+                periods = DEFAULT_INDICATOR_CONFIG['ema'].get('periods', [9, 21])
+                indicators.append(f"EMA{periods}")
+            if DEFAULT_INDICATOR_CONFIG.get('rsi', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['rsi'].get('period', 14)
+                indicators.append(f"RSI({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('bb', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['bb'].get('period', 20)
+                indicators.append(f"BB({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('atr', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['atr'].get('period', 14)
+                indicators.append(f"ATR({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('adx', {}).get('enabled'):
+                indicators.append("ADX")
+
+            indicators_str = ', '.join(indicators) if indicators else 'None'
+
+            subject = "🤖 TradPal Email Bot Started - Configuration Summary"
+
+            html_body = f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    .config-box {{ border: 2px solid #28a745; padding: 15px; border-radius: 5px; margin: 10px 0; background-color: #f8f9fa; }}
+                    .config-header {{ font-size: 18px; font-weight: bold; color: #28a745; }}
+                    .section {{ margin: 15px 0; }}
+                    .section h3 {{ color: #333; border-bottom: 1px solid #ddd; padding-bottom: 5px; }}
+                    ul {{ list-style-type: none; padding: 0; }}
+                    li {{ margin: 5px 0; }}
+                </style>
+            </head>
+            <body>
+                <div class="config-box">
+                    <div class="config-header">
+                        🤖 TradPal Email Bot Started
+                    </div>
+                    <p>✅ Bot is now monitoring for trading signals</p>
+                </div>
+
+                <div class="section">
+                    <h3>📊 Current Configuration</h3>
+                    <ul>
+                        <li><strong>Symbol:</strong> {SYMBOL}</li>
+                        <li><strong>Exchange:</strong> {EXCHANGE}</li>
+                        <li><strong>Timeframe:</strong> {TIMEFRAME}</li>
+                        <li><strong>Indicators:</strong> {indicators_str}</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>⚙️ Risk Settings</h3>
+                    <ul>
+                        <li><strong>Risk per Trade:</strong> {RISK_PER_TRADE*100:.1f}%</li>
+                        <li><strong>Stop Loss Multiplier:</strong> {SL_MULTIPLIER}x ATR</li>
+                        <li><strong>Take Profit Multiplier:</strong> {TP_MULTIPLIER}x ATR</li>
+                        <li><strong>Base Leverage:</strong> {LEVERAGE_BASE}x</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>🔧 Advanced Features</h3>
+                    <ul>
+                        <li><strong>Multi-Timeframe Analysis:</strong> {'Enabled' if MTA_ENABLED else 'Disabled'}</li>
+                        <li><strong>ADX Trend Filter:</strong> {'Enabled' if ADX_ENABLED else 'Disabled'}</li>
+                        <li><strong>Fibonacci Take Profit:</strong> {'Enabled' if FIBONACCI_ENABLED else 'Disabled'}</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>🔔 Notifications</h3>
+                    <p>You will receive email notifications when:</p>
+                    <ul>
+                        <li>• New BUY signals are generated</li>
+                        <li>• New SELL signals are generated</li>
+                    </ul>
+                </div>
+
+                <hr>
+                <p style="color: #666; font-size: 12px;">
+                    TradPal Indicator - Email Bot Status: Active
+                </p>
+            </body>
+            </html>
+            """
+
+            msg = MIMEMultipart()
+            msg['From'] = self.config.username
+            msg['To'] = ', '.join(self.config.recipients)
+            msg['Subject'] = subject
+
+            msg.attach(MIMEText(html_body, 'html'))
+
+            if self.server:
+                self.server.send_message(msg)
+                self.logger.info("Startup configuration email sent")
+                return True
+            else:
+                self.logger.error("Email server not initialized")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Failed to send startup email: {e}")
+            return False
+
     def _create_subject(self, signal_data: dict) -> str:
         """Create email subject line"""
         signal_type = signal_data.get('signal_type', 'UNKNOWN')

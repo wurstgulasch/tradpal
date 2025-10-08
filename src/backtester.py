@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import json
-from config.settings import CAPITAL, RISK_PER_TRADE, OUTPUT_FILE
+from config.settings import CAPITAL, RISK_PER_TRADE, OUTPUT_FILE, SYMBOL, EXCHANGE, TIMEFRAME
 from src.data_fetcher import fetch_historical_data
 from src.indicators import calculate_indicators
 from src.signal_generator import generate_signals, calculate_risk_management
@@ -13,7 +13,7 @@ class Backtester:
     Calculates performance metrics like win rate, CAGR, drawdown, etc.
     """
 
-    def __init__(self, symbol='EUR/USD', exchange='kraken', timeframe='1m',
+    def __init__(self, symbol=SYMBOL, exchange=EXCHANGE, timeframe=TIMEFRAME,
                  start_date=None, end_date=None, initial_capital=10000):
         self.symbol = symbol
         self.exchange = exchange
@@ -322,7 +322,7 @@ class Backtester:
 
         print(f"Backtest results saved to {output_file}")
 
-def run_backtest(symbol='EUR/USD', timeframe='1m', start_date=None, end_date=None):
+def run_backtest(symbol=SYMBOL, timeframe=TIMEFRAME, start_date=None, end_date=None):
     """
     Convenience function to run a backtest.
     """

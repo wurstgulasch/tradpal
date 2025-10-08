@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 from typing import List, Dict, Any, Union, Optional
-from config.settings import OUTPUT_FILE
+from config.settings import OUTPUT_FORMAT, OUTPUT_FILE, LOG_LEVEL, LOG_FILE, JSON_INDENT
 
 def save_signals_to_json(signals: Union[pd.DataFrame, List[Dict[str, Any]]], filename: Optional[str] = None) -> None:
     """
@@ -23,7 +23,7 @@ def save_signals_to_json(signals: Union[pd.DataFrame, List[Dict[str, Any]]], fil
 
     # Save JSON with explicit encoding
     with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(signals_dict, f, indent=4, default=str)
+        json.dump(signals_dict, f, indent=JSON_INDENT, default=str)
 
     print(f"Signals saved to {output_file}")
 

@@ -5,9 +5,12 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 ## 🚀 Latest Features & Improvements
 
 ### Version Highlights (October 2025)
+- **TA-Lib Integration**: Optimized technical analysis with automatic fallback to pandas implementations
+- **Enhanced Audit Logging**: Comprehensive JSON-structured logging with rotation for compliance and debugging
+- **Modular ML Extensions**: Advanced signal enhancement using scikit-learn with confidence scoring
 - **Modular Indicator System**: Configurable technical indicators with custom parameters
 - **Enhanced Error Handling**: Robust exception handling with retry mechanisms for API failures
-- **Comprehensive Testing**: 284+ test cases covering all components with 100% pass rate
+- **Comprehensive Testing**: 324+ test cases covering all components with 100% pass rate
 - **Modular Integration System**: Telegram, Discord, Email, SMS, and Webhook integrations
 - **Advanced Backtesting Engine**: Complete historical simulation with detailed performance metrics
 - **Multi-Timeframe Analysis**: Signal confirmation across multiple timeframes for improved accuracy
@@ -17,6 +20,9 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Adaptive Optimization System**: Self-learning GA optimization during live trading with configurable intervals
 
 ### Recent Optimizations
+- **TA-Lib Integration**: High-performance technical analysis library with automatic fallback for maximum compatibility
+- **Enhanced Audit Logging**: Structured JSON logging with file rotation, event categorization, and compliance-ready audit trails
+- **Modular ML Extensions**: Machine learning signal enhancement with feature engineering, model training, and confidence-based decision making
 - **Modular Indicators**: Configurable indicator combinations with custom parameters
 - **Performance**: Vectorized operations for 10x faster indicator calculations
 - **Reliability**: Comprehensive error boundaries and recovery strategies
@@ -55,6 +61,30 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Dynamic Leverage**: 1:5-1:10 based on ATR and market volatility
 - **Trade Duration**: ADX-based holding periods for trend-following
 
+### TA-Lib Integration & Performance Optimization
+- **High-Performance Calculations**: TA-Lib library for optimized EMA, RSI, BB, ATR, and ADX calculations
+- **Automatic Fallback**: Seamless fallback to pandas implementations when TA-Lib is unavailable
+- **Zero Configuration**: Automatic detection and switching between implementations
+- **Performance Boost**: Up to 10x faster indicator calculations with TA-Lib
+- **Compatibility**: Works on all platforms with optional TA-Lib installation
+
+### Enhanced Audit Logging System
+- **Structured JSON Logging**: All events logged in machine-readable JSON format
+- **Event Categorization**: Signal decisions, risk assessments, system events, and errors
+- **File Rotation**: Automatic log rotation with configurable retention policies
+- **Compliance Ready**: Complete audit trails for regulatory requirements
+- **Performance Monitoring**: Detailed timing and performance metrics
+- **Error Tracking**: Comprehensive error logging with context and recovery information
+
+### Modular ML Signal Enhancement
+- **Machine Learning Integration**: scikit-learn based signal prediction and enhancement
+- **Feature Engineering**: Automated creation of technical indicators as ML features
+- **Model Training**: Historical data training with cross-validation and performance metrics
+- **Confidence Scoring**: ML predictions with confidence levels for risk management
+- **Signal Enhancement**: Override traditional signals based on ML confidence thresholds
+- **Model Persistence**: Save and load trained models for production use
+- **Training Scripts**: Automated model training and evaluation pipelines
+
 ### Genetic Algorithm Discovery Mode 🧬
 - **GA Optimization**: Evolutionary algorithm to find optimal indicator combinations
 - **Parameter Tuning**: Automatic optimization of EMA periods, RSI thresholds, BB settings
@@ -77,7 +107,7 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Architecture**: Modular microservices design with clean separation of concerns
 - **Data Processing**: Vectorized operations using pandas/numpy for optimal performance
 - **Error Handling**: Comprehensive error boundary decorators with recovery strategies
-- **Testing**: 284+ unit and integration tests with 100% pass rate
+- **Testing**: 324+ unit and integration tests with 100% pass rate
 - **Performance**: Sub-second analysis for 1-minute charts, optimized for high-frequency data
 - **Memory Usage**: Efficient DataFrame operations with minimal memory footprint
 - **API Compatibility**: ccxt library support for 100+ cryptocurrency and forex exchanges
@@ -149,6 +179,8 @@ tradpal_indicator/
 - Python 3.10+
 - Conda (recommended) or pip
 - Git
+- **Optional**: TA-Lib (for performance optimization)
+- **Optional**: scikit-learn (for ML signal enhancement)
 
 ### Quick Start
 ```bash
@@ -163,6 +195,12 @@ conda activate tradpal_env
 # Install dependencies
 pip install -r requirements.txt
 
+# Optional: Install TA-Lib for performance optimization
+pip install TA-Lib
+
+# Optional: Install scikit-learn for ML signal enhancement
+pip install scikit-learn joblib
+
 # Copy environment template and configure API keys
 cp .env.example .env
 # Edit .env file with your API credentials
@@ -172,6 +210,9 @@ python -m pytest tests/ -v
 
 # Run the indicator in live mode
 python main.py --mode live
+
+# Train ML model for signal enhancement
+python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
 ```
 
 ### Environment Configuration
@@ -267,15 +308,16 @@ OUTPUT_FORMAT = 'json'      # Output format
 OUTPUT_FILE = 'output/signals.json'  # Output file path
 BACKTEST_OUTPUT_FILE = 'output/signals_backtest.json'  # Backtest output file
 
-# Adaptive optimization settings (for live mode)
-ADAPTIVE_OPTIMIZATION_ENABLED = False  # Enable/disable periodic discovery optimization
-ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 24  # How often to run discovery (in hours)
-ADAPTIVE_OPTIMIZATION_POPULATION = 30  # Smaller population for live optimization
-ADAPTIVE_OPTIMIZATION_GENERATIONS = 10  # Fewer generations for faster results
-ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = 30  # Historical data period for optimization
-ADAPTIVE_AUTO_APPLY_BEST = False  # Automatically apply best configuration found
-ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 0.5  # Minimum fitness score to consider applying
-ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
+# Machine Learning settings
+ML_ENABLED = True  # Enable/disable ML signal enhancement
+ML_MODEL_DIR = 'cache/ml_models'  # Directory to store trained ML models
+ML_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for ML signal override
+ML_TRAINING_HORIZON = 5  # Prediction horizon for training labels (periods ahead)
+ML_RETRAINING_INTERVAL_HOURS = 24  # How often to retrain models (hours)
+ML_MIN_TRAINING_SAMPLES = 1000  # Minimum samples required for training
+ML_TEST_SIZE = 0.2  # Fraction of data for testing
+ML_CV_FOLDS = 5  # Number of cross-validation folds
+ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
 ```
 
 ## 🎯 Usage
@@ -312,6 +354,8 @@ python main.py --mode live
 - Only displays output when signals are generated
 - Automatically saves signals to JSON with timestamps
 - Includes MTA confirmation if enabled
+- **New**: Enhanced audit logging for all signal decisions and system events
+- **New**: ML signal enhancement if enabled and model is trained
 - Press `Ctrl+C` to stop gracefully
 
 #### Backtesting Mode
@@ -395,14 +439,24 @@ Starting TradPal Indicator - Continuous Monitoring Mode...
 🔄 Applied new optimized configuration (fitness: 75.23)
 🟢 BUY SIGNAL at 14:30:15...
 ```
-#### Single Analysis Mode
+#### ML Model Training Mode
 ```bash
-python main.py --mode analysis
+python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
 ```
-- Performs one-time analysis on recent market data
-- Calculates all indicators and generates signals
-- Saves complete analysis to JSON
-- Useful for integration testing and manual analysis
+- Trains machine learning models for signal enhancement using historical data
+- Uses technical indicators as features to predict future price movements
+- Performs cross-validation and evaluates model performance
+- Saves trained models to cache/ml_models/ for use in live trading
+- Supports multiple algorithms (Random Forest, Gradient Boosting, Neural Networks)
+- Outputs detailed performance metrics and feature importance
+
+**ML Training Parameters:**
+- `--symbol`: Trading pair to train on
+- `--timeframe`: Chart timeframe for training data
+- `--start-date`/`--end-date`: Historical data period
+- `--algorithm`: ML algorithm to use (rf, gb, nn)
+- `--test-size`: Fraction of data for testing (default: 0.2)
+- `--cv-folds`: Number of cross-validation folds (default: 5)
 
 ### Programmatic Usage
 

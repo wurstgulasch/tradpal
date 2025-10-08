@@ -131,11 +131,16 @@ dmypy.json
 
 # Project specific
 logs/
-output/signals.json
-output/signals_backtest.json
-output/*concurrent_test.json
+output/*.json
 cache/
 *.log
+
+# Adaptive optimization
+config/adaptive_config.json
+
+# Local environment files
+.env.local
+.env.*.local
 
 # IDE
 .vscode/

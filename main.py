@@ -19,6 +19,8 @@ from src.logging_config import logger, log_signal, log_error, log_system_status
 from src.backtester import run_backtest
 from src.cache import clear_all_caches, get_cache_stats
 from src.config_validation import validate_configuration_at_startup
+from src.audit_logger import audit_logger
+from config.settings import SYMBOL
 
 # Optional imports for discovery functionality
 try:
@@ -51,7 +53,8 @@ class AdaptiveOptimizer:
             ADAPTIVE_AUTO_APPLY_BEST,
             ADAPTIVE_MIN_PERFORMANCE_THRESHOLD,
             SYMBOL,
-            TIMEFRAME
+            TIMEFRAME,
+            get_current_indicator_config
         )
 
         self.enabled = ADAPTIVE_OPTIMIZATION_ENABLED
@@ -65,7 +68,7 @@ class AdaptiveOptimizer:
         self.timeframe = TIMEFRAME
 
         self.last_optimization = 0
-        self.current_config = None
+        self.current_config = get_current_indicator_config()  # Use current config function
 
         # Load existing adaptive config if available
         self.load_existing_config()
@@ -74,8 +77,11 @@ class AdaptiveOptimizer:
 
     def load_existing_config(self):
         """Load existing adaptive configuration."""
-        from config.settings import ADAPTIVE_CONFIG_FILE
+        from config.settings import ADAPTIVE_CONFIG_FILE, get_current_indicator_config
         self.current_config = load_adaptive_config(ADAPTIVE_CONFIG_FILE)
+        if self.current_config is None:
+            # Fallback to current indicator config
+            self.current_config = get_current_indicator_config()
 
     def should_run_optimization(self) -> bool:
         """Check if optimization should be run based on time interval."""
@@ -409,10 +415,21 @@ def main():
         sys.exit(1)
     print("✅ Configuration validation passed.\n")
 
+    # Log system startup
+    audit_logger.log_system_event(
+        event_type="SYSTEM_STARTUP",
+        message="TradPal Indicator System started",
+        details={
+            "version": "2.0.0",
+            "mode": "initialization",
+            "config_validated": True
+        }
+    )
+
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
     parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery'],
                        default='live', help='Operation mode (default: live)')
-    parser.add_argument('--symbol', default='EUR/USD', help='Trading symbol (default: EUR/USD)')
+    parser.add_argument('--symbol', default=SYMBOL, help=f'Trading symbol (default: {SYMBOL})')
     parser.add_argument('--timeframe', default='1m', help='Timeframe (default: 1m)')
     parser.add_argument('--start-date', help='Backtest start date (YYYY-MM-DD)')
     parser.add_argument('--end-date', help='Backtest end date (YYYY-MM-DD)')
@@ -439,6 +456,17 @@ def main():
         run_discovery_mode(args)
     else:
         print(f"Unknown mode: {args.mode}")
+
+    # Log system shutdown
+    audit_logger.log_system_event(
+        event_type="SYSTEM_SHUTDOWN",
+        message="TradPal Indicator System shutdown",
+        details={
+            "mode": args.mode,
+            "shutdown_reason": "normal_exit"
+        }
+    )
+    audit_logger.log_performance_metrics()
 
 if __name__ == "__main__":
     main()

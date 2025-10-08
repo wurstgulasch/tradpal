@@ -4,26 +4,59 @@ from typing import Tuple
 from config.settings import EMA_SHORT, EMA_LONG, RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD
 from .cache import cache_indicators
 
+# Check if TA-Lib is available
+try:
+    import talib
+    TALIB_AVAILABLE = True
+except ImportError:
+    TALIB_AVAILABLE = False
+    talib = None
+
 @cache_indicators()
 def ema(series: pd.Series, period: int) -> pd.Series:
     """
     Calculate Exponential Moving Average.
+    Uses TA-Lib if available, otherwise pandas implementation.
     Returns NaN for all values if period > data length.
     """
     if len(series) < period:
         return pd.Series([np.nan] * len(series), index=series.index)
+
+    if TALIB_AVAILABLE:
+        try:
+            # TA-Lib EMA expects numpy array
+            values = series.values.astype(float)
+            ema_values = talib.EMA(values, timeperiod=period)
+            return pd.Series(ema_values, index=series.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
     return series.ewm(span=period, adjust=False).mean()
 
 @cache_indicators()
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     """
     Calculate Relative Strength Index.
+    Uses TA-Lib if available, otherwise pandas implementation.
     Returns NaN for initial values until enough data is available.
     For constant data, RSI is 50 (neutral).
     """
     if len(series) < period + 1:
         return pd.Series([np.nan] * len(series), index=series.index)
 
+    if TALIB_AVAILABLE:
+        try:
+            # TA-Lib RSI expects numpy array
+            values = series.values.astype(float)
+            rsi_values = talib.RSI(values, timeperiod=period)
+            return pd.Series(rsi_values, index=series.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).ewm(alpha=1/period, adjust=False).mean()
     loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/period, adjust=False).mean()
@@ -32,8 +65,8 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rs = gain / loss.replace(0, np.nan)  # Replace 0 with NaN to avoid 0/0
     rsi = 100 - (100 / (1 + rs))
 
-    # For constant data (no gains/losses), RSI is undefined, so keep as NaN
-    # rsi = rsi.fillna(50.0)  # Removed: constant data should be NaN
+    # For constant data (no gains/losses), RSI is undefined, so set to NaN
+    rsi = rsi.where(loss != 0, np.nan)
 
     return rsi
 
@@ -49,7 +82,21 @@ def bb(series: pd.Series, period: int = 20, std_dev: float = 2) -> Tuple[pd.Seri
 def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     """
     Calculate Average True Range for volatility measurement.
+    Uses TA-Lib if available, otherwise pandas implementation.
     """
+    if TALIB_AVAILABLE:
+        try:
+            # TA-Lib ATR expects numpy arrays
+            high_values = high.values.astype(float)
+            low_values = low.values.astype(float)
+            close_values = close.values.astype(float)
+            atr_values = talib.ATR(high_values, low_values, close_values, timeperiod=period)
+            return pd.Series(atr_values, index=high.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
     tr1 = high - low
     tr2 = abs(high - close.shift(1))
     tr3 = abs(low - close.shift(1))
@@ -59,8 +106,24 @@ def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> 
 def adx(high, low, close, period=14):
     """
     Calculate Average Directional Index (ADX) for trend strength.
+    Uses TA-Lib if available, otherwise pandas implementation.
     Returns: adx, di_plus, di_minus
     """
+    if TALIB_AVAILABLE:
+        try:
+            # TA-Lib ADX expects numpy arrays
+            high_values = high.values.astype(float)
+            low_values = low.values.astype(float)
+            close_values = close.values.astype(float)
+            adx_values = talib.ADX(high_values, low_values, close_values, timeperiod=period)
+            di_plus_values = talib.PLUS_DI(high_values, low_values, close_values, timeperiod=period)
+            di_minus_values = talib.MINUS_DI(high_values, low_values, close_values, timeperiod=period)
+            return pd.Series(adx_values, index=high.index), pd.Series(di_plus_values, index=high.index), pd.Series(di_minus_values, index=high.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
     # Calculate True Range
     tr1 = high - low
     tr2 = abs(high - close.shift(1))

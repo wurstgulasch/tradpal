@@ -4,7 +4,30 @@ services:
   tradpal-indicator:
     build: .
     volumes:
-      - ./output:/app/output
+      - ./output:/app/output:rw
+      - ./config:/app/config:ro
+      - ./logs:/app/logs:rw
+      - ./cache:/app/cache:rw
     environment:
       - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - TRADPAL_API_KEY=${TRADPAL_API_KEY:-}
+      - TRADPAL_API_SECRET=${TRADPAL_API_SECRET:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - TEST_ENVIRONMENT=false
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'

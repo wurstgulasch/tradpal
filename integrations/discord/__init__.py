@@ -127,6 +127,105 @@ class DiscordIntegration(BaseIntegration):
             self.logger.error(f"Discord connection test failed: {e}")
             return False
 
+    def send_startup_message(self) -> bool:
+        """Send a startup message with current configuration"""
+        if self.is_test_environment():
+            self.logger.info(f"TEST ENVIRONMENT: Skipping startup message for {self.__class__.__name__}")
+            return True
+
+        # Import configuration
+        try:
+            from config.settings import (
+                SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_INDICATOR_CONFIG,
+                RISK_PER_TRADE, SL_MULTIPLIER, TP_MULTIPLIER, LEVERAGE_BASE,
+                MTA_ENABLED, ADX_ENABLED, ADX_THRESHOLD, FIBONACCI_ENABLED
+            )
+
+            # Format indicator configuration
+            indicators = []
+            if DEFAULT_INDICATOR_CONFIG.get('ema', {}).get('enabled'):
+                periods = DEFAULT_INDICATOR_CONFIG['ema'].get('periods', [9, 21])
+                indicators.append(f"EMA{periods}")
+            if DEFAULT_INDICATOR_CONFIG.get('rsi', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['rsi'].get('period', 14)
+                indicators.append(f"RSI({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('bb', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['bb'].get('period', 20)
+                indicators.append(f"BB({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('atr', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['atr'].get('period', 14)
+                indicators.append(f"ATR({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('adx', {}).get('enabled'):
+                indicators.append("ADX")
+
+            indicators_str = ', '.join(indicators) if indicators else 'None'
+
+            embed = {
+                "title": "🤖 TradPal Discord Bot Started",
+                "description": "✅ Bot is now monitoring for trading signals",
+                "color": 0x28a745,  # Green
+                "fields": [
+                    {
+                        "name": "📊 Current Configuration",
+                        "value": f"**Symbol:** {SYMBOL}\n**Exchange:** {EXCHANGE}\n**Timeframe:** {TIMEFRAME}\n**Indicators:** {indicators_str}",
+                        "inline": False
+                    },
+                    {
+                        "name": "⚙️ Risk Settings",
+                        "value": f"**Risk per Trade:** {RISK_PER_TRADE*100:.1f}%\n**SL Multiplier:** {SL_MULTIPLIER}x ATR\n**TP Multiplier:** {TP_MULTIPLIER}x ATR\n**Base Leverage:** {LEVERAGE_BASE}x",
+                        "inline": True
+                    },
+                    {
+                        "name": "🔧 Advanced Features",
+                        "value": f"**MTA:** {'Enabled' if MTA_ENABLED else 'Disabled'}\n**ADX:** {'Enabled' if ADX_ENABLED else 'Disabled'}\n**Fibonacci TP:** {'Enabled' if FIBONACCI_ENABLED else 'Disabled'}",
+                        "inline": True
+                    }
+                ],
+                "footer": {
+                    "text": "TradPal Indicator - Bot Status: Active"
+                }
+            }
+
+            payload = {
+                "username": self.config.username,
+                "embeds": [embed]
+            }
+
+            if self.config.avatar_url:
+                payload["avatar_url"] = self.config.avatar_url
+
+            response = requests.post(
+                self.config.webhook_url,
+                json=payload,
+                timeout=self.config.timeout
+            )
+
+            return response.status_code == 204
+
+        except ImportError:
+            # Fallback if config import fails
+            embed = {
+                "title": "🤖 TradPal Discord Bot Started",
+                "description": "✅ Bot is now monitoring for trading signals",
+                "color": 0x28a745,
+                "footer": {
+                    "text": "TradPal Indicator - Bot Status: Active"
+                }
+            }
+
+            payload = {
+                "username": self.config.username,
+                "embeds": [embed]
+            }
+
+            response = requests.post(
+                self.config.webhook_url,
+                json=payload,
+                timeout=self.config.timeout
+            )
+
+            return response.status_code == 204
+
     def _create_embed(self, signal_data: dict) -> Dict[str, Any]:
         """Create Discord embed for signal"""
         signal_type = signal_data.get('signal_type', 'UNKNOWN')
@@ -201,3 +300,7 @@ class DiscordIntegration(BaseIntegration):
         }
 
         return embed
+
+    def _send_startup_message(self) -> bool:
+        """Internal method for sending startup message - override in subclasses"""
+        return self.send_startup_message()

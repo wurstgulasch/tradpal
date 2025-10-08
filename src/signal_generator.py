@@ -2,19 +2,24 @@ import numpy as np
 import pandas as pd
 import asyncio
 from typing import Dict, Any
-from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIMEFRAME
+from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIMEFRAME, MTA_DATA_LIMIT, VOLATILITY_WINDOW, TREND_LOOKBACK
 from src.data_fetcher import fetch_data
 from src.indicators import calculate_indicators
+from src.audit_logger import audit_logger, log_signal_buy, log_signal_sell, SignalDecision, RiskAssessment
+from src.ml_predictor import get_ml_predictor, is_ml_available
 
 def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Generates Buy/Sell signals based on EMA crossover, RSI and BB.
     Includes optional Multi-Timeframe Analysis (MTA) for signal confirmation.
     """
-    from config.settings import STRICT_SIGNALS_ENABLED, get_timeframe_params, TIMEFRAME
+    from config.settings import STRICT_SIGNALS_ENABLED, get_timeframe_params, TIMEFRAME, get_current_indicator_config
     # Don't drop NaN values here - let indicators handle their own NaN values
     # df.dropna(inplace=True)  # Remove this line
     df.reset_index(drop=True, inplace=True)  # Reset Index
+
+    # Get current indicator configuration
+    config = get_current_indicator_config()
 
     # Get timeframe-specific parameters
     params = get_timeframe_params(TIMEFRAME)
@@ -36,6 +41,12 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     if MTA_ENABLED:
         df = apply_multi_timeframe_analysis(df)
 
+    # ML Signal Enhancement
+    df = apply_ml_signal_enhancement(df)
+
+    # Audit logging for signal decisions
+    _log_signal_decisions(df, config, params)
+
     return df
 
 def apply_multi_timeframe_analysis(df: pd.DataFrame) -> pd.DataFrame:
@@ -45,14 +56,14 @@ def apply_multi_timeframe_analysis(df: pd.DataFrame) -> pd.DataFrame:
     """
     try:
         # Fetch higher timeframe data
-        higher_tf_data = fetch_data(limit=50)  # Fetch recent data for higher timeframe
+        higher_tf_data = fetch_data(limit=MTA_DATA_LIMIT)  # Fetch recent data for higher timeframe
 
         # For demo purposes, we'll simulate higher timeframe analysis
         # In a real implementation, you'd need to resample the data to higher timeframe
 
         # Get trend from higher timeframe (simplified)
         # This would compare EMA crossover on higher timeframe
-        higher_trend = 1 if higher_tf_data['close'].iloc[-1] > higher_tf_data['close'].iloc[-10] else -1
+        higher_trend = 1 if higher_tf_data['close'].iloc[-1] > higher_tf_data['close'].iloc[-TREND_LOOKBACK] else -1
 
         # Filter signals based on higher timeframe confirmation
         df['Buy_Signal_Confirmed'] = np.where(
@@ -81,31 +92,50 @@ def calculate_risk_management(df: pd.DataFrame) -> pd.DataFrame:
     Position size is calculated as both absolute amount and percentage of total capital.
     Requires Buy_Signal and Sell_Signal columns.
     """
-    from config.settings import get_timeframe_params, TIMEFRAME
+    from config.settings import get_timeframe_params, TIMEFRAME, get_current_indicator_config
 
     # Check for required signal columns
     if 'Buy_Signal' not in df.columns or 'Sell_Signal' not in df.columns:
         raise KeyError("DataFrame must contain 'Buy_Signal' and 'Sell_Signal' columns")
+
+    # Get current indicator configuration
+    config = get_current_indicator_config()
 
     # Get timeframe-specific parameters
     params = get_timeframe_params(TIMEFRAME)
 
     # Calculate absolute position size with ATR multiplier
     atr_multiplier = params.get('atr_sl_multiplier', 1.0)
-    df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (df['ATR'] * atr_multiplier)
+    
+    # Check if ATR is available, otherwise use a default volatility measure
+    if 'ATR' in df.columns and not df['ATR'].isna().all():
+        df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (df['ATR'] * atr_multiplier)
+        atr_for_risk = df['ATR']
+    else:
+        # Fallback: use a simple volatility measure based on price changes
+        price_volatility = df['close'].pct_change().rolling(window=VOLATILITY_WINDOW).std() * df['close']
+        df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (price_volatility * atr_multiplier)
+        atr_for_risk = price_volatility
+        print("Warning: ATR not available, using price volatility fallback")
 
     # Calculate the actual percentage of capital that would be at risk
     # Risk amount = Position_Size_Absolute * ATR * SL_Multiplier
-    risk_amount = df['Position_Size_Absolute'] * df['ATR'] * params['atr_sl_multiplier']
+    risk_amount = df['Position_Size_Absolute'] * atr_for_risk * params['atr_sl_multiplier']
     df['Position_Size_Percent'] = (risk_amount / CAPITAL) * 100
 
     # Calculate stop-loss and take-profit with multipliers
-    df['Stop_Loss_Buy'] = df['close'] - (df['ATR'] * params['atr_sl_multiplier'])
-    df['Take_Profit_Buy'] = df['close'] + (df['ATR'] * params['atr_tp_multiplier'])
+    df['Stop_Loss_Buy'] = df['close'] - (atr_for_risk * params['atr_sl_multiplier'])
+    df['Take_Profit_Buy'] = df['close'] + (atr_for_risk * params['atr_tp_multiplier'])
 
     # Dynamic leverage based on ATR vs expanding mean
-    atr_avg = df['ATR'].expanding().mean()
-    df['Leverage'] = np.where(df['ATR'] < atr_avg, params['leverage_max'], params['leverage_max'] // 2)
+    if 'ATR' in df.columns and not df['ATR'].isna().all():
+        atr_avg = df['ATR'].expanding().mean()
+    else:
+        atr_avg = atr_for_risk.expanding().mean()
+    df['Leverage'] = np.where(atr_for_risk < atr_avg, params['leverage_max'], params['leverage_max'] // 2)
+
+    # Audit logging for risk assessments
+    _log_risk_assessments(df, params)
 
     return df
 
@@ -180,3 +210,231 @@ async def process_multiple_timeframes_async(symbol: str, timeframes: list) -> Di
             data[timeframe] = df
 
     return data
+
+
+def _log_signal_decisions(df: pd.DataFrame, config: Dict[str, Any], params: Dict[str, Any]):
+    """
+    Log signal decisions for audit trail.
+    Only logs the most recent signals to avoid log spam.
+    """
+    from config.settings import TIMEFRAME, SYMBOL
+    import datetime
+
+    try:
+        # Get the last row for current signal state
+        if df.empty:
+            return
+
+        last_row = df.iloc[-1]
+
+        # Extract technical indicators
+        indicators = {}
+        for indicator in ['EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_lower', 'ATR', 'ADX']:
+            if indicator in last_row and not pd.isna(last_row[indicator]):
+                indicators[indicator] = float(last_row[indicator])
+
+        # Extract risk metrics
+        risk_metrics = {}
+        for metric in ['Position_Size_Absolute', 'Position_Size_Percent', 'Stop_Loss_Buy',
+                      'Take_Profit_Buy', 'Leverage']:
+            if metric in last_row and not pd.isna(last_row[metric]):
+                risk_metrics[metric] = float(last_row[metric])
+
+        # Log buy signal if present
+        if 'Buy_Signal' in last_row and last_row['Buy_Signal'] == 1:
+            reasoning = f"EMA9({indicators.get('EMA9', 'N/A')}) > EMA21({indicators.get('EMA21', 'N/A')})"
+            if 'RSI' in indicators:
+                reasoning += f", RSI({indicators['RSI']:.2f}) < oversold({params['rsi_oversold']})"
+            if 'BB_lower' in indicators:
+                reasoning += f", close({last_row['close']:.4f}) > BB_lower({indicators['BB_lower']:.4f})"
+
+            log_signal_buy(
+                symbol=SYMBOL,
+                timeframe=TIMEFRAME,
+                confidence=0.8,  # Default confidence, could be calculated based on signal strength
+                indicators=indicators,
+                risk_metrics=risk_metrics,
+                reasoning=reasoning
+            )
+
+        # Log sell signal if present
+        elif 'Sell_Signal' in last_row and last_row['Sell_Signal'] == 1:
+            reasoning = f"EMA9({indicators.get('EMA9', 'N/A')}) < EMA21({indicators.get('EMA21', 'N/A')})"
+            if 'RSI' in indicators:
+                reasoning += f", RSI({indicators['RSI']:.2f}) > overbought({params['rsi_overbought']})"
+            if 'BB_upper' in indicators:
+                reasoning += f", close({last_row['close']:.4f}) < BB_upper({indicators['BB_upper']:.4f})"
+
+            log_signal_sell(
+                symbol=SYMBOL,
+                timeframe=TIMEFRAME,
+                confidence=0.8,  # Default confidence, could be calculated based on signal strength
+                indicators=indicators,
+                risk_metrics=risk_metrics,
+                reasoning=reasoning
+            )
+
+    except Exception as e:
+        audit_logger.log_error(
+            error_type="SIGNAL_LOGGING_ERROR",
+            message=f"Failed to log signal decisions: {str(e)}",
+            context={"config": config, "params": params}
+        )
+
+
+def _log_risk_assessments(df: pd.DataFrame, params: Dict[str, Any]):
+    """
+    Log risk assessments for audit trail.
+    Logs risk calculations for positions with signals.
+    """
+    from config.settings import TIMEFRAME, SYMBOL, CAPITAL, RISK_PER_TRADE
+    import datetime
+
+    try:
+        # Only log for rows with signals to avoid spam
+        signal_rows = df[(df['Buy_Signal'] == 1) | (df['Sell_Signal'] == 1)]
+
+        for idx, row in signal_rows.iterrows():
+            try:
+                # Extract ATR value for risk calculation
+                atr_value = row.get('ATR', row.get('Position_Size_Absolute', 0) / (CAPITAL * RISK_PER_TRADE) if row.get('Position_Size_Absolute', 0) > 0 else 0)
+
+                # Determine assessment result based on risk limits
+                position_size_percent = row.get('Position_Size_Percent', 0)
+                max_risk_limit = RISK_PER_TRADE * 100  # Convert to percentage
+
+                if position_size_percent > max_risk_limit * 1.5:  # Too risky
+                    assessment_result = "REJECTED"
+                elif position_size_percent > max_risk_limit * 1.2:  # High risk but acceptable
+                    assessment_result = "MODIFIED"
+                else:
+                    assessment_result = "APPROVED"
+
+                assessment = RiskAssessment(
+                    timestamp=datetime.datetime.now().isoformat(),
+                    symbol=SYMBOL,
+                    timeframe=TIMEFRAME,
+                    capital=CAPITAL,
+                    risk_per_trade=RISK_PER_TRADE,
+                    position_size=row.get('Position_Size_Absolute', 0),
+                    atr_value=atr_value,
+                    leverage=row.get('Leverage', 1),
+                    max_drawdown_limit=params.get('max_drawdown_limit', 0.1),
+                    assessment_result=assessment_result
+                )
+
+                audit_logger.log_risk_assessment(assessment)
+
+            except Exception as e:
+                audit_logger.log_error(
+                    error_type="RISK_ASSESSMENT_LOGGING_ERROR",
+                    message=f"Failed to log risk assessment for row {idx}: {str(e)}",
+                    context={"row_data": row.to_dict()}
+                )
+
+    except Exception as e:
+        audit_logger.log_error(
+            error_type="RISK_LOGGING_ERROR",
+            message=f"Failed to log risk assessments: {str(e)}",
+            context={"params": params}
+        )
+
+
+def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply ML signal enhancement to traditional trading signals.
+
+    Uses trained ML models to enhance or override traditional signals
+    based on confidence thresholds and historical performance.
+    """
+    from config.settings import ML_ENABLED, ML_CONFIDENCE_THRESHOLD
+    from src.ml_predictor import get_ml_predictor, is_ml_available
+
+    # Check if ML is enabled and available
+    if not ML_ENABLED or not is_ml_available():
+        return df
+
+    try:
+        # Get ML predictor
+        ml_predictor = get_ml_predictor()
+        if ml_predictor is None or not ml_predictor.is_trained:
+            return df
+
+        # Add ML signal columns
+        df['ML_Signal'] = 'HOLD'
+        df['ML_Confidence'] = 0.0
+        df['ML_Reason'] = ''
+        df['Enhanced_Signal'] = 'HOLD'
+        df['Signal_Source'] = 'TRADITIONAL'
+
+        # Process each row for ML prediction
+        for idx, row in df.iterrows():
+            try:
+                # Create single-row DataFrame for prediction
+                row_df = pd.DataFrame([row])
+
+                # Get ML prediction
+                ml_prediction = ml_predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
+
+                # Determine traditional signal
+                traditional_signal = 'HOLD'
+                if row.get('Buy_Signal', 0) == 1:
+                    traditional_signal = 'BUY'
+                elif row.get('Sell_Signal', 0) == 1:
+                    traditional_signal = 'SELL'
+
+                # Enhance signal with ML
+                enhanced = ml_predictor.enhance_signal(
+                    traditional_signal,
+                    ml_prediction,
+                    confidence_threshold=ML_CONFIDENCE_THRESHOLD
+                )
+
+                # Update DataFrame
+                df.at[idx, 'ML_Signal'] = ml_prediction['signal']
+                df.at[idx, 'ML_Confidence'] = ml_prediction['confidence']
+                df.at[idx, 'ML_Reason'] = ml_prediction.get('reason', '')
+                df.at[idx, 'Enhanced_Signal'] = enhanced['signal']
+                df.at[idx, 'Signal_Source'] = enhanced['source']
+
+                # Override original signals if enhanced
+                if enhanced['source'] == 'ML_ENHANCED':
+                    if enhanced['signal'] == 'BUY':
+                        df.at[idx, 'Buy_Signal'] = 1
+                        df.at[idx, 'Sell_Signal'] = 0
+                    elif enhanced['signal'] == 'SELL':
+                        df.at[idx, 'Buy_Signal'] = 0
+                        df.at[idx, 'Sell_Signal'] = 1
+                    else:
+                        df.at[idx, 'Buy_Signal'] = 0
+                        df.at[idx, 'Sell_Signal'] = 0
+
+            except Exception as e:
+                # Log error but continue processing
+                audit_logger.log_error(
+                    error_type="ML_SIGNAL_ENHANCEMENT_ERROR",
+                    message=f"Failed to enhance signal for row {idx}: {str(e)}",
+                    context={"row_data": row.to_dict()}
+                )
+                continue
+
+        # Log ML enhancement completion
+        ml_signals_count = (df['Signal_Source'] != 'TRADITIONAL').sum()
+        audit_logger.log_system_event(
+            event_type="ML_SIGNAL_ENHANCEMENT_COMPLETED",
+            message=f"ML signal enhancement completed: {ml_signals_count} signals enhanced",
+            details={
+                'total_signals': len(df),
+                'enhanced_signals': int(ml_signals_count),
+                'ml_available': True
+            }
+        )
+
+    except Exception as e:
+        audit_logger.log_error(
+            error_type="ML_ENHANCEMENT_ERROR",
+            message=f"ML signal enhancement failed: {str(e)}",
+            context={'ml_enabled': ML_ENABLED, 'ml_available': is_ml_available()}
+        )
+
+    return df

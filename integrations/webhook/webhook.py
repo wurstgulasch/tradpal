@@ -172,3 +172,95 @@ class WebhookIntegration(BaseIntegration):
             payload['timestamp'] = payload['timestamp'].isoformat()
 
         return payload
+
+    def send_startup_message(self) -> bool:
+        """Send a startup message with current configuration"""
+        if self.is_test_environment():
+            self.logger.info(f"TEST ENVIRONMENT: Skipping startup message for {self.__class__.__name__}")
+            return True
+
+        try:
+            # Import configuration
+            from config.settings import (
+                SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_INDICATOR_CONFIG,
+                RISK_PER_TRADE, SL_MULTIPLIER, TP_MULTIPLIER, LEVERAGE_BASE,
+                MTA_ENABLED, ADX_ENABLED, ADX_THRESHOLD, FIBONACCI_ENABLED
+            )
+
+            # Format indicator configuration
+            indicators = []
+            if DEFAULT_INDICATOR_CONFIG.get('ema', {}).get('enabled'):
+                periods = DEFAULT_INDICATOR_CONFIG['ema'].get('periods', [9, 21])
+                indicators.append(f"EMA{periods}")
+            if DEFAULT_INDICATOR_CONFIG.get('rsi', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['rsi'].get('period', 14)
+                indicators.append(f"RSI({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('bb', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['bb'].get('period', 20)
+                indicators.append(f"BB({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('atr', {}).get('enabled'):
+                period = DEFAULT_INDICATOR_CONFIG['atr'].get('period', 14)
+                indicators.append(f"ATR({period})")
+            if DEFAULT_INDICATOR_CONFIG.get('adx', {}).get('enabled'):
+                indicators.append("ADX")
+
+            indicators_str = ', '.join(indicators) if indicators else 'None'
+
+            # Prepare startup payload
+            startup_payload = {
+                "event": "bot_started",
+                "message": "TradPal Indicator Bot Started",
+                "configuration": {
+                    "symbol": SYMBOL,
+                    "exchange": EXCHANGE,
+                    "timeframe": TIMEFRAME,
+                    "indicators": indicators_str,
+                    "risk_per_trade": f"{RISK_PER_TRADE*100:.1f}%",
+                    "stop_loss_multiplier": f"{SL_MULTIPLIER}x ATR",
+                    "take_profit_multiplier": f"{TP_MULTIPLIER}x ATR",
+                    "base_leverage": f"{LEVERAGE_BASE}x",
+                    "multi_timeframe_analysis": MTA_ENABLED,
+                    "adx_enabled": ADX_ENABLED,
+                    "fibonacci_tp": FIBONACCI_ENABLED
+                },
+                "status": "active",
+                "source": "TradPal Indicator",
+                "version": "1.0",
+                "timestamp": "2024-01-01T00:00:00Z"  # Will be overridden by datetime
+            }
+
+            success_count = 0
+
+            for url in self.config.webhook_urls:
+                try:
+                    # Add current timestamp
+                    payload = startup_payload.copy()
+                    from datetime import datetime
+                    payload['timestamp'] = datetime.now().isoformat()
+
+                    response = requests.request(
+                        method=self.config.method,
+                        url=url,
+                        json=payload,
+                        headers=self.config.headers,
+                        timeout=self.config.timeout
+                    )
+
+                    if response.status_code in [200, 201, 202, 204]:
+                        self.logger.info(f"Startup webhook sent successfully to {url}")
+                        success_count += 1
+                    else:
+                        self.logger.error(f"Startup webhook failed for {url}: {response.status_code} - {response.text}")
+
+                except Exception as e:
+                    self.logger.error(f"Error sending startup webhook to {url}: {e}")
+
+            return success_count > 0
+
+        except Exception as e:
+            self.logger.error(f"Failed to send startup webhook: {e}")
+            return False
+
+    def _send_startup_message(self) -> bool:
+        """Internal method for sending startup message - override in subclasses"""
+        return self.send_startup_message()

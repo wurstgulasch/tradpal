@@ -85,6 +85,7 @@ def run_integrated_system():
 
         if successful_integrations:
             print(f"✅ Initialized: {', '.join(successful_integrations)}")
+            print("📤 Startup messages sent automatically during initialization")
         if failed_integrations:
             print(f"❌ Failed: {', '.join(failed_integrations)}")
 
