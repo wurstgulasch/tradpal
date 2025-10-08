@@ -1,0 +1,395 @@
+"""
+Test walk-forward optimizer functionality for trading strategy evaluation.
+Tests time-series cross-validation, parameter optimization, and robustness analysis.
+"""
+
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+import pytest
+import pandas as pd
+import numpy as np
+
+from src.walk_forward_optimizer import (
+    WalkForwardOptimizer, get_walk_forward_optimizer, walk_forward_optimizer
+)
+
+
+class TestWalkForwardOptimizer:
+    """Test WalkForwardOptimizer class functionality."""
+
+    def setup_method(self):
+        """Set up test environment."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.optimizer = WalkForwardOptimizer(
+            symbol="BTC/USD",
+            timeframe="1h",
+            results_dir=self.temp_dir
+        )
+
+    def teardown_method(self):
+        """Clean up test environment."""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_optimizer_initialization(self):
+        """Test optimizer initialization."""
+        assert self.optimizer.symbol == "BTC/USD"
+        assert self.optimizer.timeframe == "1h"
+        assert isinstance(self.optimizer.results_dir, Path)
+        assert self.optimizer.optimization_results == {}
+        assert self.optimizer.walk_forward_windows == []
+
+    def test_create_walk_forward_windows_sufficient_data(self):
+        """Test creating walk-forward windows with sufficient data."""
+        # Create test data with 2000 rows
+        dates = pd.date_range('2024-01-01', periods=2000, freq='1H')
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'open': np.random.randn(2000) + 50000,
+            'high': np.random.randn(2000) + 50100,
+            'low': np.random.randn(2000) + 49900,
+            'close': np.random.randn(2000) + 50000,
+            'volume': np.random.randint(100, 1000, 2000)
+        })
+
+        windows = self.optimizer.create_walk_forward_windows(
+            df, initial_train_size=1000, test_size=200, step_size=100, min_samples=500
+        )
+
+        assert len(windows) > 0
+        assert all('window_id' in w for w in windows)
+        assert all('train_start' in w for w in windows)
+        assert all('train_end' in w for w in windows)
+        assert all('test_start' in w for w in windows)
+        assert all('test_end' in w for w in windows)
+
+        # Check first window
+        first_window = windows[0]
+        assert first_window['train_start'] == 0
+        assert first_window['train_end'] == 1000
+        assert first_window['test_start'] == 1000
+        assert first_window['test_end'] == 1200
+
+    def test_create_walk_forward_windows_insufficient_data(self):
+        """Test creating walk-forward windows with insufficient data."""
+        # Create test data with only 100 rows
+        df = pd.DataFrame({
+            'close': np.random.randn(100) + 50000,
+            'volume': np.random.randint(100, 1000, 100)
+        })
+
+        with pytest.raises(ValueError, match="Insufficient data"):
+            self.optimizer.create_walk_forward_windows(df, min_samples=500)
+
+    def test_generate_parameter_combinations(self):
+        """Test generating parameter combinations."""
+        parameter_grid = {
+            'ema_short': [5, 9, 12],
+            'ema_long': [21, 26],
+            'rsi_period': [14, 21]
+        }
+
+        combinations = self.optimizer._generate_parameter_combinations(parameter_grid)
+
+        assert len(combinations) == 3 * 2 * 2  # 12 combinations
+        assert all('ema_short' in combo for combo in combinations)
+        assert all('ema_long' in combo for combo in combinations)
+        assert all('rsi_period' in combo for combo in combinations)
+
+        # Check specific combinations exist
+        expected_combos = [
+            {'ema_short': 5, 'ema_long': 21, 'rsi_period': 14},
+            {'ema_short': 9, 'ema_long': 26, 'rsi_period': 21}
+        ]
+
+        for expected in expected_combos:
+            assert expected in combinations
+
+    def test_calculate_rsi(self):
+        """Test RSI calculation."""
+        # Create test price data
+        prices = pd.Series([100, 102, 98, 105, 103, 107, 104, 108, 106, 110,
+                           109, 111, 108, 112, 110, 114, 112, 116, 114, 118])
+
+        rsi = self.optimizer._calculate_rsi(prices, period=14)
+
+        assert len(rsi) == len(prices)
+        assert not rsi.isna().all()  # Should have some valid values
+        # RSI should be between 0 and 100
+        valid_rsi = rsi.dropna()
+        assert all(0 <= r <= 100 for r in valid_rsi)
+
+    def test_calculate_atr(self):
+        """Test ATR calculation."""
+        # Create test OHLC data
+        df = pd.DataFrame({
+            'high': [105, 107, 106, 108, 109, 111, 110, 112, 113, 115],
+            'low': [103, 104, 102, 105, 106, 107, 105, 109, 110, 112],
+            'close': [104, 106, 105, 107, 108, 110, 109, 111, 112, 114]
+        })
+
+        atr = self.optimizer._calculate_atr(df, period=5)
+
+        assert len(atr) == len(df)
+        assert not atr.isna().all()
+        # ATR should be positive
+        valid_atr = atr.dropna()
+        assert all(a > 0 for a in valid_atr)
+
+    def test_apply_strategy_parameters(self):
+        """Test applying strategy parameters to generate signals."""
+        # Create test data with indicators
+        df = pd.DataFrame({
+            'close': [100, 102, 98, 105, 103],
+            'EMA9': [99.5, 100.2, 99.8, 101.5, 101.2],
+            'EMA21': [98.0, 98.5, 98.2, 99.0, 99.2],
+            'RSI': [25, 35, 45, 75, 65],
+            'ATR14': [2.0, 2.1, 1.9, 2.2, 2.0]
+        })
+
+        params = {
+            'ema_short': 9,
+            'ema_long': 21,
+            'rsi_period': 14,
+            'rsi_overbought': 70,
+            'rsi_oversold': 30,
+            'atr_period': 14,
+            'risk_per_trade': 0.01
+        }
+
+        result_df = self.optimizer._apply_strategy_parameters(df, params)
+
+        assert 'Buy_Signal' in result_df.columns
+        assert 'Sell_Signal' in result_df.columns
+        assert len(result_df) == len(df)
+
+    def test_calculate_performance_metrics_sufficient_trades(self):
+        """Test performance metrics calculation with sufficient trades."""
+        # Create test data with signals
+        df = pd.DataFrame({
+            'close': [100, 102, 98, 105, 103, 107, 104, 108, 106, 110],
+            'Buy_Signal': [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            'Sell_Signal': [0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+        })
+
+        metrics = self.optimizer._calculate_performance_metrics(df, min_trades=1)
+
+        assert metrics['valid'] is True
+        assert 'total_trades' in metrics
+        assert 'win_rate' in metrics
+        assert 'profit_factor' in metrics
+        assert 'sharpe_ratio' in metrics
+        assert 'max_drawdown' in metrics
+        assert 'total_return' in metrics
+
+    def test_calculate_performance_metrics_insufficient_trades(self):
+        """Test performance metrics calculation with insufficient trades."""
+        # Create test data with no signals
+        df = pd.DataFrame({
+            'close': [100, 102, 98, 105, 103],
+            'Buy_Signal': [0, 0, 0, 0, 0],
+            'Sell_Signal': [0, 0, 0, 0, 0]
+        })
+
+        metrics = self.optimizer._calculate_performance_metrics(df, min_trades=5)
+
+        assert metrics['valid'] is False
+        assert metrics['total_trades'] == 0
+
+    def test_evaluate_parameters(self):
+        """Test parameter evaluation."""
+        # Create test data
+        df = pd.DataFrame({
+            'close': [100, 102, 98, 105, 103, 107, 104, 108, 106, 110],
+            'EMA9': [99.5, 100.2, 99.8, 101.5, 101.2, 102.1, 102.5, 103.2, 103.8, 104.5],
+            'EMA21': [98.0, 98.5, 98.2, 99.0, 99.2, 99.8, 100.1, 100.5, 100.8, 101.2],
+            'RSI': [25, 35, 45, 75, 65, 55, 60, 70, 65, 75],
+            'ATR14': [2.0, 2.1, 1.9, 2.2, 2.0, 2.3, 2.1, 2.4, 2.2, 2.5]
+        })
+
+        params = {
+            'ema_short': 9,
+            'ema_long': 21,
+            'rsi_period': 14,
+            'rsi_overbought': 70,
+            'rsi_oversold': 30
+        }
+
+        performance = self.optimizer._evaluate_parameters(df, params, min_trades=1)
+
+        assert isinstance(performance, dict)
+        assert 'valid' in performance
+        assert 'total_trades' in performance
+
+    def test_analyze_walk_forward_results(self):
+        """Test analysis of walk-forward results."""
+        window_results = [
+            {
+                'window_id': 0,
+                'best_parameters': {'ema_short': 9, 'ema_long': 21},
+                'in_sample_score': 1.5,
+                'out_of_sample_performance': {
+                    'valid': True,
+                    'sharpe_ratio': 1.2,
+                    'win_rate': 0.6
+                }
+            },
+            {
+                'window_id': 1,
+                'best_parameters': {'ema_short': 12, 'ema_long': 26},
+                'in_sample_score': 1.8,
+                'out_of_sample_performance': {
+                    'valid': True,
+                    'sharpe_ratio': 0.8,
+                    'win_rate': 0.55
+                }
+            }
+        ]
+
+        analysis = self.optimizer._analyze_walk_forward_results(window_results, 'sharpe_ratio')
+
+        assert 'total_windows' in analysis
+        assert 'valid_windows' in analysis
+        assert 'average_oos_performance' in analysis
+        assert 'performance_decay' in analysis
+        assert 'robustness' in analysis
+
+        assert analysis['total_windows'] == 2
+        assert analysis['valid_windows'] == 2
+        assert analysis['performance_decay'] is not None
+
+    def test_get_optimization_summary_no_results(self):
+        """Test getting optimization summary when no results exist."""
+        summary = self.optimizer.get_optimization_summary()
+
+        assert summary['status'] == 'no_results'
+
+    def test_get_optimization_summary_with_results(self):
+        """Test getting optimization summary with results."""
+        # Mock optimization results
+        self.optimizer.optimization_results = {
+            'analysis': {
+                'total_windows': 5,
+                'valid_windows': 4,
+                'average_oos_performance': 1.2,
+                'performance_decay': 0.3,
+                'robustness': {'positive_ratio': 0.8}
+            }
+        }
+
+        summary = self.optimizer.get_optimization_summary()
+
+        assert summary['status'] == 'completed'
+        assert summary['total_windows'] == 5
+        assert summary['valid_windows'] == 4
+        assert summary['average_oos_performance'] == 1.2
+
+
+class TestWalkForwardGlobalFunctions:
+    """Test global walk-forward optimizer functions."""
+
+    def test_get_walk_forward_optimizer(self):
+        """Test getting walk-forward optimizer instance."""
+        optimizer = get_walk_forward_optimizer("EUR/USD", "1h")
+
+        assert isinstance(optimizer, WalkForwardOptimizer)
+        assert optimizer.symbol == "EUR/USD"
+        assert optimizer.timeframe == "1h"
+
+    def test_get_walk_forward_optimizer_singleton(self):
+        """Test that get_walk_forward_optimizer returns singleton."""
+        # Reset global state for this test
+        import src.walk_forward_optimizer
+        src.walk_forward_optimizer.walk_forward_optimizer = None
+
+        optimizer1 = get_walk_forward_optimizer("BTC/USD", "1h")
+        optimizer2 = get_walk_forward_optimizer("BTC/USD", "1h")  # Same parameters
+
+        # Should return the same instance
+        assert optimizer1 is optimizer2
+        assert optimizer1.symbol == "BTC/USD"
+
+
+class TestWalkForwardIntegration:
+    """Test walk-forward optimizer integration."""
+
+    def setup_method(self):
+        """Set up test environment."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.optimizer = WalkForwardOptimizer(results_dir=self.temp_dir)
+
+    def teardown_method(self):
+        """Clean up test environment."""
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @patch('src.walk_forward_optimizer.WalkForwardOptimizer._evaluate_parameters')
+    def test_optimize_strategy_parameters_no_windows(self, mock_evaluate):
+        """Test optimization without walk-forward windows."""
+        df = pd.DataFrame({'close': [100, 101, 102]})
+
+        with pytest.raises(ValueError, match="Walk-forward windows not created"):
+            self.optimizer.optimize_strategy_parameters(df, {})
+
+    @patch('src.walk_forward_optimizer.WalkForwardOptimizer._evaluate_parameters')
+    def test_optimize_strategy_parameters_with_windows(self, mock_evaluate):
+        """Test optimization with walk-forward windows."""
+        # Mock evaluation to return valid performance
+        mock_evaluate.return_value = {
+            'valid': True,
+            'sharpe_ratio': 1.5,
+            'win_rate': 0.6,
+            'total_trades': 10
+        }
+
+        # Create test data and windows
+        df = pd.DataFrame({
+            'close': list(range(2000)),  # 2000 data points
+            'volume': [1000] * 2000
+        })
+
+        self.optimizer.create_walk_forward_windows(df, initial_train_size=1000, test_size=200, step_size=500)
+
+        parameter_grid = {
+            'ema_short': [9, 12],
+            'ema_long': [21, 26]
+        }
+
+        results = self.optimizer.optimize_strategy_parameters(df, parameter_grid, min_trades=1)
+
+        assert 'optimization_summary' in results
+        assert 'window_results' in results
+        assert 'analysis' in results
+        assert results['optimization_summary']['total_windows'] > 0
+
+    def test_optimize_window_parameters(self):
+        """Test optimizing parameters for a single window."""
+        # Create test data
+        df = pd.DataFrame({
+            'close': list(range(100)),
+            'EMA9': list(range(100)),
+            'EMA21': list(range(100)),
+            'RSI': [50] * 100,
+            'ATR14': [2.0] * 100
+        })
+
+        param_combinations = [
+            {'ema_short': 9, 'ema_long': 21, 'rsi_overbought': 70, 'rsi_oversold': 30},
+            {'ema_short': 12, 'ema_long': 26, 'rsi_overbought': 75, 'rsi_oversold': 25}
+        ]
+
+        with patch.object(self.optimizer, '_evaluate_parameters') as mock_eval:
+            mock_eval.return_value = {
+                'valid': True,
+                'sharpe_ratio': 1.5,
+                'total_trades': 5
+            }
+
+            best_params, best_score = self.optimizer._optimize_window_parameters(
+                df, param_combinations, 'sharpe_ratio', 1
+            )
+
+            assert best_params in param_combinations
+            assert best_score == 1.5

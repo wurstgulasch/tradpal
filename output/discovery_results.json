@@ -1,51 +1,51 @@
 {
   "optimization_summary": {
-    "symbol": "BTC/USDT",
+    "symbol": "EUR/USD",
     "exchange": "kraken",
-    "timeframe": "1m",
+    "timeframe": "1h",
     "start_date": "2024-01-01",
-    "end_date": "2024-01-15",
+    "end_date": "2024-03-01",
     "population_size": 10,
     "generations": 3,
-    "total_configurations_tested": 38,
+    "total_configurations_tested": 30,
     "unique_top_configurations": 10
   },
   "top_configurations": [
     {
       "rank": 1,
-      "fitness_score": 1.1442155993469063,
-      "total_pnl_percent": 1.143311739029614,
-      "win_rate": 0.6,
-      "sharpe_ratio": 2.5386031729232066,
+      "fitness_score": 0.16595840837476175,
+      "total_pnl_percent": 0.16539538158614656,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.43026788615207356,
       "max_drawdown": 0,
-      "total_trades": 5,
-      "evaluation_time_seconds": 0.013876914978027344,
-      "avg_daily_performance": 0.001585730567308757,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.01450204849243164,
+      "avg_daily_performance": 0.00022939720053557081,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            85
+            49,
+            145
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 6,
+          "enabled": true,
+          "period": 29,
           "oversold": 37,
-          "overbought": 71
+          "overbought": 64
         },
         "bb": {
           "enabled": false,
-          "period": 48,
-          "std_dev": 2.7379829399603124
+          "period": 25,
+          "std_dev": 2.8292625279950814
         },
         "atr": {
           "enabled": false,
-          "period": 21
+          "period": 13
         },
         "adx": {
-          "enabled": true,
+          "enabled": false,
           "period": 14
         },
         "fibonacci": {
@@ -55,36 +55,36 @@
     },
     {
       "rank": 2,
-      "fitness_score": 1.1442155993469063,
-      "total_pnl_percent": 1.143311739029614,
-      "win_rate": 0.6,
-      "sharpe_ratio": 2.5386031729232066,
+      "fitness_score": 0.16595840837476175,
+      "total_pnl_percent": 0.16539538158614656,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.43026788615207356,
       "max_drawdown": 0,
-      "total_trades": 5,
-      "evaluation_time_seconds": 0.012285232543945312,
-      "avg_daily_performance": 0.001585730567308757,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.014365196228027344,
+      "avg_daily_performance": 0.00022939720053557081,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            85
+            49,
+            145
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 6,
+          "enabled": true,
+          "period": 29,
           "oversold": 37,
-          "overbought": 72
+          "overbought": 64
         },
         "bb": {
           "enabled": false,
-          "period": 39,
-          "std_dev": 2.7379829399603124
+          "period": 43,
+          "std_dev": 2.8292625279950814
         },
         "atr": {
-          "enabled": true,
-          "period": 16
+          "enabled": false,
+          "period": 13
         },
         "adx": {
           "enabled": false,
@@ -97,36 +97,36 @@
     },
     {
       "rank": 3,
-      "fitness_score": 1.1442155993469063,
-      "total_pnl_percent": 1.143311739029614,
-      "win_rate": 0.6,
-      "sharpe_ratio": 2.5386031729232066,
+      "fitness_score": 0.16595840837476175,
+      "total_pnl_percent": 0.16539538158614656,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.43026788615207356,
       "max_drawdown": 0,
-      "total_trades": 5,
-      "evaluation_time_seconds": 0.012041807174682617,
-      "avg_daily_performance": 0.001585730567308757,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.013790369033813477,
+      "avg_daily_performance": 0.00022939720053557081,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            85
+            49,
+            145
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 6,
+          "enabled": true,
+          "period": 29,
           "oversold": 37,
-          "overbought": 72
+          "overbought": 64
         },
         "bb": {
           "enabled": false,
-          "period": 39,
-          "std_dev": 2.7379829399603124
+          "period": 46,
+          "std_dev": 2.8292625279950814
         },
         "atr": {
-          "enabled": true,
-          "period": 18
+          "enabled": false,
+          "period": 13
         },
         "adx": {
           "enabled": false,
@@ -139,36 +139,36 @@
     },
     {
       "rank": 4,
-      "fitness_score": 1.1442155993469063,
-      "total_pnl_percent": 1.143311739029614,
-      "win_rate": 0.6,
-      "sharpe_ratio": 2.5386031729232066,
+      "fitness_score": 0.16595840837476175,
+      "total_pnl_percent": 0.16539538158614656,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.43026788615207356,
       "max_drawdown": 0,
-      "total_trades": 5,
-      "evaluation_time_seconds": 0.012418031692504883,
-      "avg_daily_performance": 0.001585730567308757,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.013871192932128906,
+      "avg_daily_performance": 0.00022939720053557081,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            85
+            49,
+            145
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 30,
-          "oversold": 25,
-          "overbought": 63
+          "enabled": true,
+          "period": 29,
+          "oversold": 37,
+          "overbought": 64
         },
         "bb": {
           "enabled": false,
-          "period": 29,
-          "std_dev": 1.5895602779080773
+          "period": 43,
+          "std_dev": 2.8292625279950814
         },
         "atr": {
-          "enabled": true,
-          "period": 29
+          "enabled": false,
+          "period": 14
         },
         "adx": {
           "enabled": false,
@@ -181,36 +181,36 @@
     },
     {
       "rank": 5,
-      "fitness_score": 1.0432843247712251,
-      "total_pnl_percent": 1.042399835984256,
-      "win_rate": 0.6,
-      "sharpe_ratio": 2.34488786969091,
+      "fitness_score": 0.11652166393123466,
+      "total_pnl_percent": 0.11596847801121582,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.33185920018831944,
       "max_drawdown": 0,
-      "total_trades": 5,
-      "evaluation_time_seconds": 0.012464761734008789,
-      "avg_daily_performance": 0.001445769536732671,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.014883041381835938,
+      "avg_daily_performance": 0.00016084393621527854,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            85
+            49,
+            145
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 6,
+          "enabled": true,
+          "period": 29,
           "oversold": 37,
-          "overbought": 72
+          "overbought": 62
         },
         "bb": {
-          "enabled": true,
-          "period": 39,
-          "std_dev": 2.385995641221797
+          "enabled": false,
+          "period": 21,
+          "std_dev": 2.8292625279950814
         },
         "atr": {
           "enabled": false,
-          "period": 23
+          "period": 13
         },
         "adx": {
           "enabled": false,
@@ -223,36 +223,36 @@
     },
     {
       "rank": 6,
-      "fitness_score": 0.9773069301026799,
-      "total_pnl_percent": 0.976444897136518,
-      "win_rate": 0.6,
-      "sharpe_ratio": 2.1203296616180425,
+      "fitness_score": 0.11652166393123466,
+      "total_pnl_percent": 0.11596847801121582,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.33185920018831944,
       "max_drawdown": 0,
-      "total_trades": 5,
-      "evaluation_time_seconds": 0.011656999588012695,
-      "avg_daily_performance": 0.001354292506430677,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.014832019805908203,
+      "avg_daily_performance": 0.00016084393621527854,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            92
+            49,
+            145
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 6,
+          "enabled": true,
+          "period": 29,
           "oversold": 37,
-          "overbought": 72
+          "overbought": 62
         },
         "bb": {
-          "enabled": true,
-          "period": 39,
-          "std_dev": 2.385995641221797
+          "enabled": false,
+          "period": 21,
+          "std_dev": 1.5651304226060463
         },
         "atr": {
           "enabled": false,
-          "period": 23
+          "period": 16
         },
         "adx": {
           "enabled": false,
@@ -265,32 +265,32 @@
     },
     {
       "rank": 7,
-      "fitness_score": 0.8962431982499756,
-      "total_pnl_percent": 0.8951897383312247,
-      "win_rate": 0.6666666666666666,
-      "sharpe_ratio": 3.267932520841654,
+      "fitness_score": 0.11520517063284297,
+      "total_pnl_percent": 0.11469443322642897,
+      "win_rate": 0.375,
+      "sharpe_ratio": 0.5573740641399786,
       "max_drawdown": 0,
-      "total_trades": 6,
-      "evaluation_time_seconds": 0.011986017227172852,
-      "avg_daily_performance": 0.0012415946440100204,
+      "total_trades": 8,
+      "evaluation_time_seconds": 3.6401309967041016,
+      "avg_daily_performance": 0.00015907688380919414,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            20,
-            54
+            11,
+            47
           ]
         },
         "rsi": {
           "enabled": false,
-          "period": 30,
-          "oversold": 38,
-          "overbought": 72
+          "period": 7,
+          "oversold": 33,
+          "overbought": 60
         },
         "bb": {
-          "enabled": false,
-          "period": 39,
-          "std_dev": 2.7379829399603124
+          "enabled": true,
+          "period": 10,
+          "std_dev": 2.398823268747481
         },
         "atr": {
           "enabled": true,
@@ -307,36 +307,36 @@
     },
     {
       "rank": 8,
-      "fitness_score": 0.7953097098097159,
-      "total_pnl_percent": 0.7942778352858668,
-      "win_rate": 0.6666666666666666,
-      "sharpe_ratio": 3.0520785718251657,
+      "fitness_score": 0.10499931520936072,
+      "total_pnl_percent": 0.10443328700539167,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.4602820396903868,
       "max_drawdown": 0,
-      "total_trades": 6,
-      "evaluation_time_seconds": 0.013431072235107422,
-      "avg_daily_performance": 0.0011016336134339346,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.014309883117675781,
+      "avg_daily_performance": 0.00014484505825990523,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            20,
-            54
+            44,
+            119
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 6,
+          "enabled": true,
+          "period": 25,
           "oversold": 37,
-          "overbought": 72
+          "overbought": 66
         },
         "bb": {
           "enabled": true,
-          "period": 39,
-          "std_dev": 2.7379829399603124
+          "period": 25,
+          "std_dev": 1.8689482347852984
         },
         "atr": {
           "enabled": true,
-          "period": 18
+          "period": 10
         },
         "adx": {
           "enabled": false,
@@ -349,39 +349,39 @@
     },
     {
       "rank": 9,
-      "fitness_score": 0.6377728685241413,
-      "total_pnl_percent": 0.6367926896442205,
-      "win_rate": 0.6666666666666666,
-      "sharpe_ratio": 2.535122132541004,
+      "fitness_score": 0.09654119077058482,
+      "total_pnl_percent": 0.09599994582364363,
+      "win_rate": 0.5,
+      "sharpe_ratio": 0.21244946941186715,
       "max_drawdown": 0,
-      "total_trades": 6,
-      "evaluation_time_seconds": 0.013577938079833984,
-      "avg_daily_performance": 0.0008832076139309577,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.014367103576660156,
+      "avg_daily_performance": 0.0001331483298524877,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            20,
-            54
+            38,
+            65
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 30,
-          "oversold": 25,
-          "overbought": 63
+          "enabled": true,
+          "period": 22,
+          "oversold": 37,
+          "overbought": 64
         },
         "bb": {
-          "enabled": true,
-          "period": 29,
-          "std_dev": 1.5895602779080773
+          "enabled": false,
+          "period": 25,
+          "std_dev": 1.5651304226060463
         },
         "atr": {
           "enabled": true,
-          "period": 29
+          "period": 16
         },
         "adx": {
-          "enabled": false,
+          "enabled": true,
           "period": 14
         },
         "fibonacci": {
@@ -391,39 +391,39 @@
     },
     {
       "rank": 10,
-      "fitness_score": 0.482386256904154,
-      "total_pnl_percent": 0.4816078338815176,
+      "fitness_score": 0.09654119077058482,
+      "total_pnl_percent": 0.09599994582364363,
       "win_rate": 0.5,
-      "sharpe_ratio": 1.7842302263638163,
+      "sharpe_ratio": 0.21244946941186715,
       "max_drawdown": 0,
-      "total_trades": 10,
-      "evaluation_time_seconds": 0.012480020523071289,
-      "avg_daily_performance": 0.0006679720303488455,
+      "total_trades": 2,
+      "evaluation_time_seconds": 0.014167070388793945,
+      "avg_daily_performance": 0.0001331483298524877,
       "configuration": {
         "ema": {
           "enabled": true,
           "periods": [
-            10,
-            54
+            38,
+            65
           ]
         },
         "rsi": {
-          "enabled": false,
-          "period": 30,
-          "oversold": 25,
-          "overbought": 63
+          "enabled": true,
+          "period": 22,
+          "oversold": 37,
+          "overbought": 64
         },
         "bb": {
-          "enabled": true,
-          "period": 29,
-          "std_dev": 1.5895602779080773
+          "enabled": false,
+          "period": 25,
+          "std_dev": 2.8292625279950814
         },
         "atr": {
           "enabled": true,
-          "period": 29
+          "period": 13
         },
         "adx": {
-          "enabled": false,
+          "enabled": true,
           "period": 14
         },
         "fibonacci": {

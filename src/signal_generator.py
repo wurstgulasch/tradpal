@@ -24,8 +24,22 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     # Get timeframe-specific parameters
     params = get_timeframe_params(TIMEFRAME)
 
-    # Basic signal generation
-    df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
+    # Get EMA periods from config (dynamic)
+    ema_periods = config.get('ema', {}).get('periods', [9, 21])
+    if len(ema_periods) >= 2:
+        ema_short_col = f'EMA{ema_periods[0]}'
+        ema_long_col = f'EMA{ema_periods[1]}'
+    else:
+        # Fallback to defaults
+        ema_short_col = 'EMA9'
+        ema_long_col = 'EMA21'
+
+    # Basic signal generation - use dynamic EMA column names
+    if ema_short_col in df.columns and ema_long_col in df.columns:
+        df['EMA_crossover'] = np.where(df[ema_short_col].values > df[ema_long_col].values, 1, -1)
+    else:
+        # Fallback if columns don't exist
+        df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
     
     if STRICT_SIGNALS_ENABLED:
         buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
@@ -227,9 +241,14 @@ def _log_signal_decisions(df: pd.DataFrame, config: Dict[str, Any], params: Dict
 
         last_row = df.iloc[-1]
 
-        # Extract technical indicators
+        # Extract technical indicators - use dynamic EMA column names
         indicators = {}
-        for indicator in ['EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_lower', 'ATR', 'ADX']:
+        ema_periods = config.get('ema', {}).get('periods', [9, 21])
+        ema_short_col = f'EMA{ema_periods[0]}' if len(ema_periods) >= 1 else 'EMA9'
+        ema_long_col = f'EMA{ema_periods[1]}' if len(ema_periods) >= 2 else 'EMA21'
+        indicator_cols = [ema_short_col, ema_long_col] + ['RSI', 'BB_upper', 'BB_lower', 'ATR', 'ADX']
+        
+        for indicator in indicator_cols:
             if indicator in last_row and not pd.isna(last_row[indicator]):
                 indicators[indicator] = float(last_row[indicator])
 
@@ -242,7 +261,9 @@ def _log_signal_decisions(df: pd.DataFrame, config: Dict[str, Any], params: Dict
 
         # Log buy signal if present
         if 'Buy_Signal' in last_row and last_row['Buy_Signal'] == 1:
-            reasoning = f"EMA9({indicators.get('EMA9', 'N/A')}) > EMA21({indicators.get('EMA21', 'N/A')})"
+            ema_short_val = indicators.get(ema_short_col, 'N/A')
+            ema_long_val = indicators.get(ema_long_col, 'N/A')
+            reasoning = f"{ema_short_col}({ema_short_val}) > {ema_long_col}({ema_long_val})"
             if 'RSI' in indicators:
                 reasoning += f", RSI({indicators['RSI']:.2f}) < oversold({params['rsi_oversold']})"
             if 'BB_lower' in indicators:
@@ -259,7 +280,9 @@ def _log_signal_decisions(df: pd.DataFrame, config: Dict[str, Any], params: Dict
 
         # Log sell signal if present
         elif 'Sell_Signal' in last_row and last_row['Sell_Signal'] == 1:
-            reasoning = f"EMA9({indicators.get('EMA9', 'N/A')}) < EMA21({indicators.get('EMA21', 'N/A')})"
+            ema_short_val = indicators.get(ema_short_col, 'N/A')
+            ema_long_val = indicators.get(ema_long_col, 'N/A')
+            reasoning = f"{ema_short_col}({ema_short_val}) < {ema_long_col}({ema_long_val})"
             if 'RSI' in indicators:
                 reasoning += f", RSI({indicators['RSI']:.2f}) > overbought({params['rsi_overbought']})"
             if 'BB_upper' in indicators:

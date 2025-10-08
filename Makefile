@@ -2,7 +2,7 @@
 
 # Default test command
 test:
-	rm -rf cache/api/*
+	rm -rf cache/*
 	pytest tests/ -v
 
 # Code quality commands

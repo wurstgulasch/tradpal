@@ -546,3 +546,70 @@ def simulate_trades(data):
             return trades_df  # Return all trades if no exits
     else:
         return pd.DataFrame()
+def run_walk_forward_backtest(parameter_grid: dict, evaluation_metric: str = 'sharpe_ratio',
+                             symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> dict:
+    """
+    Run walk-forward backtest analysis using the WalkForwardOptimizer.
+
+    Args:
+        parameter_grid: Dictionary of parameters to optimize
+        evaluation_metric: Metric to use for evaluation ('sharpe_ratio', 'win_rate', 'total_return')
+        symbol: Trading symbol
+        timeframe: Timeframe for analysis
+
+    Returns:
+        Dictionary with optimization results and final backtest
+    """
+    try:
+        from .walk_forward_optimizer import WalkForwardOptimizer
+
+        # Create optimizer instance
+        optimizer = WalkForwardOptimizer(symbol=symbol, timeframe=timeframe)
+
+        # Create sample data for demonstration (in real usage, this would be historical data)
+        dates = pd.date_range(start='2024-01-01', periods=2000, freq='1h')
+        np.random.seed(42)
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'open': 50000 + np.random.normal(0, 1000, 2000),
+            'high': 51000 + np.random.normal(0, 1000, 2000),
+            'low': 49000 + np.random.normal(0, 1000, 2000),
+            'close': 50000 + np.random.normal(0, 1000, 2000),
+            'volume': np.random.randint(1000, 10000, 2000)
+        })
+
+        # Add trend for more realistic data
+        trend = np.linspace(0, 5000, 2000)
+        df['close'] = df['close'] + trend
+
+        # Run walk-forward optimization
+        results = optimizer.optimize_strategy_parameters(
+            df=df,
+            parameter_grid=parameter_grid,
+            evaluation_metric=evaluation_metric,
+            initial_train_size=1000,
+            test_size=200,
+            step_size=100
+        )
+
+        if results.get('success'):
+            # Run final backtest with best parameters
+            best_params = results.get('best_parameters', {})
+            final_backtest = run_backtest(symbol=symbol, timeframe=timeframe)
+
+            return {
+                'optimization_results': results,
+                'final_backtest': {
+                    'metrics': final_backtest.get('metrics', {}),
+                    'trades': final_backtest.get('trades', [])
+                }
+            }
+        else:
+            return {
+                'error': results.get('error', 'Optimization failed')
+            }
+
+    except Exception as e:
+        return {
+            'error': f'Walk-forward backtest failed: {str(e)}'
+        }

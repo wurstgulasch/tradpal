@@ -315,3 +315,32 @@ def validate_risk_params(params):
         return False
 
     return True
+
+# Performance Optimization Settings
+PERFORMANCE_ENABLED = True  # Enable/disable performance optimizations
+PARALLEL_PROCESSING_ENABLED = True  # Enable parallel processing for indicators
+VECTORIZATION_ENABLED = True  # Enable vectorized calculations
+MEMORY_OPTIMIZATION_ENABLED = True  # Enable memory optimization for DataFrames
+PERFORMANCE_MONITORING_ENABLED = True  # Enable performance monitoring
+MAX_WORKERS = None  # Maximum worker threads (None = auto-detect CPU cores)
+CHUNK_SIZE = 1000  # Chunk size for parallel processing
+PERFORMANCE_LOG_LEVEL = 'INFO'  # Performance logging level
+
+# WebSocket Streaming Settings
+WEBSOCKET_ENABLED = True  # Enable/disable WebSocket server
+WEBSOCKET_HOST = '0.0.0.0'  # WebSocket server host
+WEBSOCKET_PORT = 8765  # WebSocket server port
+WEBSOCKET_MAX_CONNECTIONS = 100  # Maximum concurrent WebSocket connections
+WEBSOCKET_PING_INTERVAL = 30  # Ping interval in seconds
+WEBSOCKET_TIMEOUT = 60  # Connection timeout in seconds
+WEBSOCKET_BUFFER_SIZE = 1024  # Message buffer size
+WEBSOCKET_COMPRESSION = True  # Enable message compression
+
+# Real-time Streaming Settings
+REALTIME_ENABLED = True  # Enable real-time data streaming
+REALTIME_UPDATE_INTERVAL = 10  # Update interval in seconds
+REALTIME_MAX_SUBSCRIPTIONS = 50  # Maximum active subscriptions per client
+REALTIME_DATA_RETENTION = 3600  # Data retention time in seconds (1 hour)
+REALTIME_BROADCAST_SIGNALS = True  # Broadcast trading signals
+REALTIME_BROADCAST_MARKET_DATA = True  # Broadcast market data updates
+
