@@ -10,19 +10,26 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Modular ML Extensions**: Advanced signal enhancement using scikit-learn with confidence scoring
 - **Modular Indicator System**: Configurable technical indicators with custom parameters
 - **Enhanced Error Handling**: Robust exception handling with retry mechanisms for API failures
-- **Comprehensive Testing**: 324+ test cases covering all components with 100% pass rate
+- **Comprehensive Testing**: 458+ test cases covering all components with 100% pass rate
 - **Modular Integration System**: Telegram, Discord, Email, SMS, and Webhook integrations
 - **Advanced Backtesting Engine**: Complete historical simulation with detailed performance metrics
 - **Multi-Timeframe Analysis**: Signal confirmation across multiple timeframes for improved accuracy
 - **Dynamic Risk Management**: ATR-based position sizing with volatility-adjusted leverage
 - **Container Optimization**: Docker and Docker Compose support for easy deployment
 - **Security Enhancements**: Environment variable support and secure API key management
-- **Adaptive Optimization System**: Self-learning GA optimization during live trading with configurable intervals
+- **Walk-Forward Optimization**: Advanced strategy validation with out-of-sample testing
+- **ML Signal Enhancement**: Machine learning models for signal prediction and confidence scoring
+- **Audit Logging System**: Complete audit trails with structured JSON logging
+- **Performance Monitoring**: Advanced performance tracking and optimization tools
 
 ### Recent Optimizations
 - **TA-Lib Integration**: High-performance technical analysis library with automatic fallback for maximum compatibility
 - **Enhanced Audit Logging**: Structured JSON logging with file rotation, event categorization, and compliance-ready audit trails
 - **Modular ML Extensions**: Machine learning signal enhancement with feature engineering, model training, and confidence-based decision making
+- **Walk-Forward Optimization**: Advanced strategy validation with out-of-sample testing and overfitting prevention
+- **ML Signal Enhancement**: Machine learning models for signal prediction and confidence scoring
+- **Audit Logging System**: Complete audit trails with structured JSON logging and compliance tracking
+- **Performance Monitoring**: Advanced performance tracking, analytics, and optimization tools
 - **Modular Indicators**: Configurable indicator combinations with custom parameters
 - **Performance**: Vectorized operations for 10x faster indicator calculations
 - **Reliability**: Comprehensive error boundaries and recovery strategies
@@ -107,7 +114,7 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Architecture**: Modular microservices design with clean separation of concerns
 - **Data Processing**: Vectorized operations using pandas/numpy for optimal performance
 - **Error Handling**: Comprehensive error boundary decorators with recovery strategies
-- **Testing**: 324+ unit and integration tests with 100% pass rate
+- **Testing**: 458+ unit and integration tests with 100% pass rate
 - **Performance**: Sub-second analysis for 1-minute charts, optimized for high-frequency data
 - **Memory Usage**: Efficient DataFrame operations with minimal memory footprint
 - **API Compatibility**: ccxt library support for 100+ cryptocurrency and forex exchanges
@@ -126,21 +133,34 @@ tradpal_indicator/
 │   ├── output.py            # JSON output formatting and saving
 │   ├── backtester.py        # Historical backtesting engine
 │   ├── discovery.py         # Genetic algorithm optimization system
-│   ├── error_handling.py    # Error recovery and logging system
+│   ├── walk_forward_optimizer.py  # Walk-forward analysis and optimization
+│   ├── ml_predictor.py      # Machine learning signal enhancement
+│   ├── audit_logger.py      # Audit logging and compliance tracking
+│   ├── performance.py       # Performance monitoring and analytics
 │   ├── cache.py             # API call caching system
+│   ├── config_validation.py # Configuration validation utilities
 │   ├── input_validation.py  # Input validation utilities
 │   ├── logging_config.py    # Logging configuration
-│   └── config_validation.py # Configuration validation
+│   └── error_handling.py    # Error recovery and logging system
+├── services/
+│   ├── core/                # Core trading services
+│   ├── ml-trainer/          # ML model training services
+│   ├── optimizer/           # Optimization services
+│   └── web-ui/              # Web interface services
 ├── integrations/
 │   ├── __init__.py
 │   ├── telegram/
 │   ├── discord/
 │   ├── email/
+│   ├── sms/
 │   └── webhook/
 ├── scripts/
+│   ├── __init__.py
 │   ├── manage_integrations.py
 │   ├── test_integrations.py
-│   └── run_integrated.py
+│   ├── run_integrated.py
+│   ├── train_ml_model.py
+│   └── demo_performance.py
 ├── output/                  # Generated JSON signal files
 ├── logs/                    # Application logs
 ├── tests/                   # Comprehensive test suite
@@ -150,6 +170,7 @@ tradpal_indicator/
 ├── Dockerfile               # Container build configuration
 ├── docker-compose.yml       # Multi-container orchestration
 ├── .env.example             # Environment variables template
+├── .env.test                # Test environment configuration
 ├── .github/copilot-instructions.md  # AI assistant guidelines
 └── README.md
 ```
@@ -213,6 +234,9 @@ python main.py --mode live
 
 # Train ML model for signal enhancement
 python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+
+# Run performance demonstration
+python scripts/demo_performance.py
 ```
 
 ### Environment Configuration
@@ -457,6 +481,40 @@ python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 20
 - `--algorithm`: ML algorithm to use (rf, gb, nn)
 - `--test-size`: Fraction of data for testing (default: 0.2)
 - `--cv-folds`: Number of cross-validation folds (default: 5)
+
+#### Walk-Forward Optimization Mode
+```bash
+python main.py --mode walk-forward --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31 --window-size 30 --step-size 7
+```
+- **Out-of-Sample Testing**: Validates strategies on unseen data to prevent overfitting
+- **Rolling Window Analysis**: Uses expanding windows of historical data for robust validation
+- **Performance Stability**: Measures strategy consistency across different market conditions
+- **Overfitting Prevention**: Identifies strategies that perform well only on in-sample data
+
+**Walk-Forward Parameters:**
+- `--window-size`: Initial training window size (days)
+- `--step-size`: How many days to advance the window each step
+- `--min-trades`: Minimum trades required for valid analysis
+- `--stability-threshold`: Minimum performance stability required
+
+**Example Output:**
+```
+🧪 Walk-Forward Analysis - EUR/USD (1h)
+Window Size: 30 days, Step Size: 7 days
+
+Window 1 (2024-01-01 to 2024-01-30):
+  In-Sample: Win Rate 68.5%, Sharpe 1.45
+  Out-of-Sample: Win Rate 65.2%, Sharpe 1.32
+  Stability Score: 0.89
+
+Window 2 (2024-01-08 to 2024-02-06):
+  In-Sample: Win Rate 71.2%, Sharpe 1.52
+  Out-of-Sample: Win Rate 69.8%, Sharpe 1.48
+  Stability Score: 0.95
+
+Overall Stability: 0.92 (Excellent)
+✅ Strategy shows strong out-of-sample performance
+```
 
 ### Programmatic Usage
 
@@ -708,9 +766,11 @@ The project includes a modular integration system for sending trading signals to
 
 ### Available Integrations
 - **Telegram Bot**: Automatic signal notifications
-- **E-Mail**: Signal notifications via email (planned)
-- **Discord**: Webhook integration for Discord servers (planned)
-- **Webhooks**: Generic HTTP webhook support (planned)
+- **Discord**: Webhook integration for Discord servers
+- **E-Mail**: Signal notifications via email
+- **SMS**: SMS notifications for critical signals
+- **Webhooks**: Generic HTTP webhook support
+- **Web UI**: Web-based dashboard for monitoring and configuration
 
 ### Setup Integration
 
@@ -723,6 +783,9 @@ python scripts/test_integrations.py
 
 # Start integrated system (Indicator + Integrations)
 python scripts/run_integrated.py
+
+# Run performance demonstration
+python scripts/demo_performance.py
 ```
 
 ### Management Commands
@@ -756,6 +819,44 @@ python main.py --mode live
 ```
 
 For more details, see `integrations/README.md`.
+
+## 🔧 Services Architecture
+
+The project includes modular services for advanced functionality:
+
+### Core Services (`services/core/`)
+- **Trading Engine**: Core trading logic and signal processing
+- **Data Pipeline**: Optimized data fetching and processing pipeline
+- **Configuration Management**: Dynamic configuration loading and validation
+
+### ML Trainer Services (`services/ml-trainer/`)
+- **Model Training**: Automated ML model training pipelines
+- **Feature Engineering**: Advanced feature creation and selection
+- **Model Validation**: Cross-validation and performance evaluation
+- **Model Persistence**: Save and load trained models
+
+### Optimizer Services (`services/optimizer/`)
+- **Walk-Forward Optimization**: Out-of-sample strategy validation
+- **Parameter Optimization**: Automated parameter tuning
+- **Strategy Validation**: Robustness testing across market conditions
+
+### Web UI Services (`services/web-ui/`)
+- **Dashboard**: Real-time monitoring and visualization
+- **Configuration Interface**: Web-based configuration management
+- **Performance Analytics**: Interactive charts and reports
+- **Integration Management**: Web interface for managing integrations
+
+### Service Usage
+```bash
+# Start web UI service
+cd services/web-ui && python app.py
+
+# Run ML training service
+cd services/ml-trainer && python train_service.py
+
+# Execute walk-forward optimization
+cd services/optimizer && python optimize_service.py
+```
 
 #### Webhook Integration
 ```python
@@ -809,8 +910,21 @@ services:
     volumes:
       - ./output:/app/output
       - ./config:/app/config
+      - ./logs:/app/logs
     environment:
       - PYTHONPATH=/app
+    restart: unless-stopped
+
+  web-ui:
+    build: ./services/web-ui
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./output:/app/output
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - tradpal-indicator
     restart: unless-stopped
 ```
 
@@ -820,6 +934,9 @@ docker-compose up -d
 
 # View logs
 docker-compose logs -f tradpal-indicator
+
+# Access web UI
+open http://localhost:8080
 
 # Stop service
 docker-compose down
@@ -1135,4 +1252,4 @@ For questions or issues:
 
 ---
 
-**Last Updated**: October 8, 2025
+**Last Updated**: October 9, 2025

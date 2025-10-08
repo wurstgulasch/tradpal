@@ -129,7 +129,7 @@ class InputValidator:
         except (ValueError, TypeError):
             raise ValidationError(f"{field_name} must be a number")
 
-        if not isinstance(value, numbers.Number) or not pd.notna(value):
+        if not pd.notna(num_value):
             raise ValidationError(f"{field_name} must be a valid number")
 
         if min_value is not None and num_value < min_value:

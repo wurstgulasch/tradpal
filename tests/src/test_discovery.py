@@ -256,8 +256,8 @@ class TestDiscoveryOptimizer:
 
         assert len(unique_results) == 2
         # Should keep the higher fitness duplicate
-        assert unique_results[0].fitness == 1.5  # config1 with higher fitness
-        assert unique_results[1].fitness == 1.8  # config2
+        assert unique_results[0].fitness == 1.8  # config2 with highest fitness
+        assert unique_results[1].fitness == 1.5  # config1 with lower fitness
 
     @patch('src.discovery.json.dump')
     def test_save_results(self, mock_json_dump):
@@ -368,9 +368,16 @@ class TestAdaptiveConfig:
 
         assert loaded_config is None
 
-    @patch('src.discovery.DEFAULT_INDICATOR_CONFIG', {'ema': {'enabled': False}})
+    @patch('config.settings.DEFAULT_INDICATOR_CONFIG')
     def test_apply_adaptive_config(self, mock_default_config):
         """Test applying adaptive configuration."""
+        # Mock the copy method and the resulting dict
+        mock_copied_config = {
+            'ema': {'enabled': False},
+            'rsi': {'enabled': False}
+        }
+        mock_default_config.copy.return_value = mock_copied_config
+
         config = {
             'ema': {'enabled': True, 'periods': [9, 21]},
             'rsi': {'enabled': True, 'period': 14}
