@@ -14,6 +14,7 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Dynamic Risk Management**: ATR-based position sizing with volatility-adjusted leverage
 - **Container Optimization**: Docker and Docker Compose support for easy deployment
 - **Security Enhancements**: Environment variable support and secure API key management
+- **Adaptive Optimization System**: Self-learning GA optimization during live trading with configurable intervals
 
 ### Recent Optimizations
 - **Modular Indicators**: Configurable indicator combinations with custom parameters
@@ -54,7 +55,19 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Dynamic Leverage**: 1:5-1:10 based on ATR and market volatility
 - **Trade Duration**: ADX-based holding periods for trend-following
 
-## 🏗️ Architecture & Design
+### Genetic Algorithm Discovery Mode 🧬
+- **GA Optimization**: Evolutionary algorithm to find optimal indicator combinations
+- **Parameter Tuning**: Automatic optimization of EMA periods, RSI thresholds, BB settings
+- **Fitness Function**: Win rate + P&L weighted scoring for best configurations
+- **Top 10 Ranking**: Outputs ranked list of best performing configurations
+- **Performance Metrics**: Includes Sharpe ratio, max drawdown, total trades per config
+
+### Adaptive Optimization Mode 🧠
+- **Self-Optimizing System**: Automatic parameter tuning during live trading
+- **Periodic Discovery**: Configurable intervals for GA optimization runs
+- **Live Adaptation**: Optional automatic application of optimized configurations
+- **Performance Thresholds**: Minimum fitness requirements for configuration changes
+- **Persistent Learning**: Saves and loads optimized configurations across restarts
 
 ## 🏗️ Architecture & Design
 
@@ -82,6 +95,7 @@ tradpal_indicator/
 │   ├── signal_generator.py  # Signal generation and risk management
 │   ├── output.py            # JSON output formatting and saving
 │   ├── backtester.py        # Historical backtesting engine
+│   ├── discovery.py         # Genetic algorithm optimization system
 │   ├── error_handling.py    # Error recovery and logging system
 │   ├── cache.py             # API call caching system
 │   ├── input_validation.py  # Input validation utilities
@@ -238,7 +252,7 @@ DEFAULT_INDICATOR_CONFIG = {
 CAPITAL = 10000             # Total trading capital
 RISK_PER_TRADE = 0.01       # Risk per trade (1% of capital)
 SL_MULTIPLIER = 1.5         # Stop-loss multiplier (ATR × SL_MULTIPLIER)
-TP_MULTIPLIER = 3.0         # Take-profit multiplier (ATR × TP_MULTIPLIER)
+TP_MULTIPLIER = 3.0         # Take-profit multiplier (ATR × TP_Multiplier)
 LEVERAGE_BASE = 10          # Base leverage
 LEVERAGE_MIN = 5            # Minimum leverage
 LEVERAGE_MAX = 10           # Maximum leverage
@@ -252,6 +266,16 @@ LOOKBACK_DAYS = 7           # Historical data for analysis
 OUTPUT_FORMAT = 'json'      # Output format
 OUTPUT_FILE = 'output/signals.json'  # Output file path
 BACKTEST_OUTPUT_FILE = 'output/signals_backtest.json'  # Backtest output file
+
+# Adaptive optimization settings (for live mode)
+ADAPTIVE_OPTIMIZATION_ENABLED = False  # Enable/disable periodic discovery optimization
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 24  # How often to run discovery (in hours)
+ADAPTIVE_OPTIMIZATION_POPULATION = 30  # Smaller population for live optimization
+ADAPTIVE_OPTIMIZATION_GENERATIONS = 10  # Fewer generations for faster results
+ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = 30  # Historical data period for optimization
+ADAPTIVE_AUTO_APPLY_BEST = False  # Automatically apply best configuration found
+ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 0.5  # Minimum fitness score to consider applying
+ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
 ```
 
 ## 🎯 Usage
@@ -266,6 +290,9 @@ python main.py --mode live
 
 # Historical backtesting mode
 python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-01-15
+
+# Genetic Algorithm Discovery mode
+python main.py --mode discovery --symbol EUR/USD --timeframe 1h --population 50 --generations 20
 
 # Single analysis mode
 python main.py --mode analysis
@@ -297,6 +324,77 @@ python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024
 - Saves backtest results to separate JSON file
 - Supports all timeframes and symbols
 
+#### Genetic Algorithm Discovery Mode
+```bash
+python main.py --mode discovery --symbol EUR/USD --timeframe 1h --population 50 --generations 20
+```
+- Uses genetic algorithms to optimize technical indicator combinations
+- Evolves optimal EMA periods, RSI thresholds, Bollinger Band settings
+- Tests hundreds of configurations automatically
+- Outputs top 10 performing configurations with detailed metrics
+- Saves results to `output/discovery_results.json`
+- Useful for systematic strategy development and parameter optimization
+
+**Discovery Parameters:**
+- `--population`: Number of configurations tested per generation (default: 50)
+- `--generations`: Number of evolution cycles (default: 20)
+- `--symbol`: Trading pair to optimize for
+- `--timeframe`: Chart timeframe for backtesting
+- `--start-date`/`--end-date`: Historical data period for optimization
+
+**Example Output:**
+```
+🧬 Starting Discovery Mode - Genetic Algorithm Optimization
+Optimizing indicators for EUR/USD on 1h timeframe
+Population: 50, Generations: 20
+
+🏆 Discovery Results - Top 10 Configurations:
+#1 - Fitness: 85.23
+   P&L: 2.45%, Win Rate: 85.0%
+   Sharpe: 1.67, Trades: 12
+   Indicators: EMA[12, 45], RSI(21), BB(25), ATR(14)
+```
+
+#### Adaptive Optimization Mode (Self-Learning System)
+```bash
+# Enable adaptive optimization in config/settings.py
+ADAPTIVE_OPTIMIZATION_ENABLED = True
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 24  # Run optimization every 24 hours
+ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply optimized configurations
+
+# Then run live mode normally
+python main.py --mode live
+```
+- Runs discovery optimization automatically during live trading at configured intervals
+- Uses recent market data (configurable lookback period) for optimization
+- Optionally applies best configurations automatically if they meet performance thresholds
+- Saves optimized configurations to persist across system restarts
+- Provides detailed logging of optimization runs and configuration changes
+
+**Adaptive Configuration Parameters:**
+- `ADAPTIVE_OPTIMIZATION_ENABLED`: Master switch for adaptive optimization
+- `ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS`: Hours between optimization runs
+- `ADAPTIVE_OPTIMIZATION_POPULATION`: GA population size (smaller for live mode)
+- `ADAPTIVE_OPTIMIZATION_GENERATIONS`: GA generations (fewer for faster results)
+- `ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS`: Historical data period for optimization
+- `ADAPTIVE_AUTO_APPLY_BEST`: Whether to automatically apply optimized configs
+- `ADAPTIVE_MIN_PERFORMANCE_THRESHOLD`: Minimum fitness score for auto-application
+- `ADAPTIVE_CONFIG_FILE`: File path for storing optimized configurations
+
+**Example Live Output with Adaptive Optimization:**
+```
+Starting TradPal Indicator - Continuous Monitoring Mode...
+🔄 Starting adaptive optimization...
+🧬 Running adaptive optimization for EUR/USD...
+   Period: 2024-09-08 to 2024-10-08
+   Population: 30, Generations: 10
+✅ Adaptive optimization completed!
+   Best Fitness: 75.23
+   Win Rate: 75.0%
+   Total P&L: 1.45%
+🔄 Applied new optimized configuration (fitness: 75.23)
+🟢 BUY SIGNAL at 14:30:15...
+```
 #### Single Analysis Mode
 ```bash
 python main.py --mode analysis
@@ -840,40 +938,7 @@ jobs:
         uses: codecov/codecov-action@v2
 ```
 
-## 🗺️ Roadmap & Future Features
-
-### Planned Enhancements (Q4 2025)
-- **Machine Learning Integration**: AI-powered signal prediction using historical data
-- **Real-time WebSocket Support**: Direct exchange connections for ultra-low latency
-- **Advanced Order Types**: Bracket orders, trailing stops, and conditional execution
-- **Portfolio Optimization**: Multi-asset portfolio management and correlation analysis
-- **Cloud Deployment**: AWS/GCP/Azure deployment templates with auto-scaling
-- **Mobile App**: React Native companion app for signal monitoring
-- **REST API**: Full REST API for external integrations and dashboard access
-
-### Research & Development
-- **Alternative Data Sources**: Social sentiment, news analysis, and on-chain metrics
-- **Quantum Computing**: Quantum algorithms for optimization problems
-- **Decentralized Exchanges**: DEX integration for DeFi trading strategies
-- **Cross-Exchange Arbitrage**: Automated arbitrage detection and execution
-- **Risk Parity Strategies**: Advanced portfolio construction techniques
-- **High-Frequency Trading**: Microsecond-level execution optimization
-
-### Community Features
-- **Strategy Marketplace**: User-contributed trading strategies and indicators
-- **Backtesting Competitions**: Community challenges with performance leaderboards
-- **Educational Content**: Interactive tutorials and strategy explanations
-- **API Marketplace**: Third-party integrations and custom indicators
-- **Social Trading**: Strategy following and copy trading features
-
-### Technical Improvements
-- **Performance**: GPU acceleration for complex calculations
-- **Scalability**: Distributed processing for high-volume data
-- **Security**: Advanced encryption and secure key management
-- **Monitoring**: Real-time dashboards and alerting systems
-- **Documentation**: Interactive API documentation and code examples
-
-## 🔧 Troubleshooting
+## 🛠️ Troubleshooting
 
 ### Common Issues
 

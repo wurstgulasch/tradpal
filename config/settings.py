@@ -222,3 +222,13 @@ def validate_risk_params(params):
         return False
 
     return True
+
+# Adaptive optimization settings (for live mode)
+ADAPTIVE_OPTIMIZATION_ENABLED = True  # Enable/disable periodic discovery optimization
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 1  # How often to run discovery (in hours)
+ADAPTIVE_OPTIMIZATION_POPULATION = 100000  # Smaller population for live optimization
+ADAPTIVE_OPTIMIZATION_GENERATIONS = 100  # Fewer generations for faster results
+ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = 30  # Historical data period for optimization
+ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply best configuration found
+ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 1  # Minimum fitness score to consider applying
+ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
