@@ -77,9 +77,33 @@ class Backtester:
 
     def _fetch_data(self):
         """Fetch historical data for backtest period."""
-        # This would need to be implemented to fetch data for specific date ranges
-        # For now, using existing fetch_historical_data
-        return fetch_historical_data()
+        # Calculate limit based on timeframe and date range
+        days = (self.end_date - self.start_date).days
+        if self.timeframe == '1m':
+            limit = min(days * 24 * 60, 50000)  # Increased limit for 1m
+        elif self.timeframe == '5m':
+            limit = min(days * 24 * 12, 50000)
+        elif self.timeframe == '15m':
+            limit = min(days * 24 * 4, 50000)
+        elif self.timeframe == '1h':
+            limit = min(days * 24, 50000)
+        elif self.timeframe == '4h':
+            limit = min(days * 6, 50000)
+        elif self.timeframe == '1d':
+            limit = min(days, 50000)
+        else:
+            limit = 10000  # Default
+
+        # Ensure limit is a Python int, not numpy int
+        limit = int(limit)
+
+        return fetch_historical_data(
+            symbol=self.symbol,
+            exchange_name=self.exchange,
+            timeframe=self.timeframe,
+            limit=limit,
+            start_date=self.start_date
+        )
 
     def _simulate_trades(self, data):
         """
@@ -87,6 +111,10 @@ class Backtester:
         """
         if data.empty:
             return []
+
+        # Drop rows with NaN ATR values to avoid invalid position sizes
+        if 'ATR' in data.columns:
+            data = data.dropna(subset=['ATR'])
 
         # Ensure we have required columns
         required_cols = ['close', 'Buy_Signal', 'Sell_Signal']

@@ -11,16 +11,26 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     Generates Buy/Sell signals based on EMA crossover, RSI and BB.
     Includes optional Multi-Timeframe Analysis (MTA) for signal confirmation.
     """
+    from config.settings import STRICT_SIGNALS_ENABLED, get_timeframe_params, TIMEFRAME
     # Don't drop NaN values here - let indicators handle their own NaN values
     # df.dropna(inplace=True)  # Remove this line
     df.reset_index(drop=True, inplace=True)  # Reset Index
 
+    # Get timeframe-specific parameters
+    params = get_timeframe_params(TIMEFRAME)
+
     # Basic signal generation
     df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
-    buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < 30) & (df['close'].values > df['BB_lower'].values)
-    df['Buy_Signal'] = buy_condition.astype(int)
-    sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > 70) & (df['close'].values < df['BB_upper'].values)
-    df['Sell_Signal'] = sell_condition.astype(int)
+    
+    if STRICT_SIGNALS_ENABLED:
+        buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
+        df['Buy_Signal'] = buy_condition.astype(int)
+        sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values)
+        df['Sell_Signal'] = sell_condition.astype(int)
+    else:
+        # Simplified signals: only EMA crossover
+        df['Buy_Signal'] = (df['EMA_crossover'].values == 1).astype(int)
+        df['Sell_Signal'] = (df['EMA_crossover'].values == -1).astype(int)
 
     # Multi-Timeframe Analysis (MTA) for signal confirmation
     if MTA_ENABLED:

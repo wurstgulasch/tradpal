@@ -105,8 +105,8 @@ BB_STD_DEV = current_params['bb_std_dev']
 ATR_PERIOD = current_params['atr_period']
 
 # Risk management
-CAPITAL = 10000
-RISK_PER_TRADE = 0.01
+CAPITAL = 10000000  # Increased by 1000x for better P&L readability
+RISK_PER_TRADE = 0.01  # 1% risk per trade
 
 # Risk management parameters
 SL_MULTIPLIER = current_params['atr_sl_multiplier']
@@ -131,8 +131,21 @@ ADX_THRESHOLD = current_params['adx_threshold']  # ADX threshold for trend stren
 FIBONACCI_ENABLED = False
 VOLATILITY_FILTER_ENABLED = False
 
+# Signal generation mode
+STRICT_SIGNALS_ENABLED = True  # If False, use only EMA crossover for signals (for backtesting)
+
+# Default indicator configuration for modular indicators
+DEFAULT_INDICATOR_CONFIG = {
+    'ema': {'enabled': True, 'periods': [9, 21]},
+    'rsi': {'enabled': True, 'period': 14},
+    'bb': {'enabled': True, 'period': 20, 'std_dev': 2},
+    'atr': {'enabled': True, 'period': 14},
+    'adx': {'enabled': False, 'period': 14},
+    'fibonacci': {'enabled': False}
+}
+
 # Data and output
-LOOKBACK_DAYS = 7
+LOOKBACK_DAYS = 365  # Increased for longer backtest periods
 OUTPUT_FORMAT = 'json'
 OUTPUT_FILE = 'output/signals.json'
 

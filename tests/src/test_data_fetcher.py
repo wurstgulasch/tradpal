@@ -30,6 +30,8 @@ class TestDataFetcher:
         ]
         mock_exchange.fetch_ohlcv.return_value = mock_data
         mock_exchange.has = {'fetchOHLCV': True}
+        mock_exchange.parse8601.return_value = 1640995200000
+        mock_exchange.timeframes = {'1m': 60000}
 
         # Test the function
         result = fetch_historical_data('EUR/USD', 'kraken', '1m', 3)

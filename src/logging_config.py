@@ -117,7 +117,9 @@ class TradingLogger:
 
     def log_error(self, error_msg: str, **kwargs):
         """Log errors with context."""
-        self.logger.error(f"Error: {error_msg}", extra=kwargs)
+        # Remove exc_info from kwargs to avoid KeyError
+        exc_info = kwargs.pop('exc_info', None)
+        self.logger.error(f"Error: {error_msg}", exc_info=exc_info, extra=kwargs)
 
     def log_performance_metrics(self, metrics: Dict[str, Any]):
         """Log performance metrics."""

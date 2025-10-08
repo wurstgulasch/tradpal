@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.indicators import ema, rsi, bb, atr, adx, fibonacci_extensions, calculate_indicators
 from src.signal_generator import generate_signals, calculate_risk_management
+from config.settings import DEFAULT_INDICATOR_CONFIG
 
 @pytest.fixture
 def sample_data():
@@ -101,6 +102,32 @@ class TestIndicators:
         for col in expected_columns:
             assert col in result.columns
         assert len(result) == len(sample_data)
+
+    def test_calculate_indicators_custom_config(self, sample_data):
+        """Test indicator calculation with custom configuration."""
+        custom_config = {
+            'ema': {'enabled': True, 'periods': [5, 10]},
+            'rsi': {'enabled': True, 'period': 21},
+            'bb': {'enabled': True, 'period': 10, 'std_dev': 1.5},
+            'atr': {'enabled': True, 'period': 21}
+        }
+        result = calculate_indicators(sample_data.copy(), config=custom_config)
+        expected_columns = ['EMA5', 'EMA10', 'RSI', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR']
+        for col in expected_columns:
+            assert col in result.columns
+        assert len(result) == len(sample_data)
+        # Check that custom periods are used (shorter EMA should be more responsive)
+        assert 'EMA5' in result.columns
+        assert 'EMA10' in result.columns
+
+    def test_default_indicator_config(self):
+        """Test that DEFAULT_INDICATOR_CONFIG is properly defined."""
+        assert isinstance(DEFAULT_INDICATOR_CONFIG, dict)
+        required_keys = ['ema', 'rsi', 'bb', 'atr']
+        for key in required_keys:
+            assert key in DEFAULT_INDICATOR_CONFIG
+            assert isinstance(DEFAULT_INDICATOR_CONFIG[key], dict)
+            assert 'enabled' in DEFAULT_INDICATOR_CONFIG[key]
 
 class TestSignalGenerator:
     """Test signal generation logic."""

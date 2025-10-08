@@ -108,25 +108,48 @@ def fibonacci_extensions(high, low, close, trend='bullish'):
 
     return fib_161, fib_262, fib_424
 
-def calculate_indicators(df):
+def calculate_indicators(df, config=None):
     """
-    Calculate all technical indicators for the dataset.
+    Calculate all technical indicators for the dataset based on configuration.
+    If no config provided, uses DEFAULT_INDICATOR_CONFIG.
     """
-    from config.settings import EMA_SHORT, EMA_LONG, RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD, ADX_ENABLED, FIBONACCI_ENABLED
+    from config.settings import DEFAULT_INDICATOR_CONFIG
+    if config is None:
+        config = DEFAULT_INDICATOR_CONFIG
 
-    df['EMA9'] = ema(df['close'], EMA_SHORT)
-    df['EMA21'] = ema(df['close'], EMA_LONG)
-    df['RSI'] = rsi(df['close'], RSI_PERIOD)
-    df['BB_upper'], df['BB_middle'], df['BB_lower'] = bb(df['close'], BB_PERIOD, BB_STD_DEV)
-    df['ATR'] = atr(df['high'], df['low'], df['close'], ATR_PERIOD)
+    # EMA
+    if config.get('ema', {}).get('enabled', False):
+        periods = config['ema'].get('periods', [9, 21])
+        for period in periods:
+            df[f'EMA{period}'] = ema(df['close'], period)
 
-    # Optional indicators
-    if ADX_ENABLED:
-        df['ADX'], df['DI_plus'], df['DI_minus'] = adx(df['high'], df['low'], df['close'], ATR_PERIOD)
+    # RSI
+    if config.get('rsi', {}).get('enabled', False):
+        period = config['rsi'].get('period', 14)
+        df['RSI'] = rsi(df['close'], period)
 
-    if FIBONACCI_ENABLED:
-        # Determine trend based on EMA crossover
-        trend = 'bullish' if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1] else 'bearish'
+    # Bollinger Bands
+    if config.get('bb', {}).get('enabled', False):
+        period = config['bb'].get('period', 20)
+        std_dev = config['bb'].get('std_dev', 2)
+        df['BB_upper'], df['BB_middle'], df['BB_lower'] = bb(df['close'], period, std_dev)
+
+    # ATR
+    if config.get('atr', {}).get('enabled', False):
+        period = config['atr'].get('period', 14)
+        df['ATR'] = atr(df['high'], df['low'], df['close'], period)
+
+    # ADX (optional)
+    if config.get('adx', {}).get('enabled', False):
+        period = config['adx'].get('period', 14)
+        df['ADX'], df['DI_plus'], df['DI_minus'] = adx(df['high'], df['low'], df['close'], period)
+
+    # Fibonacci (optional)
+    if config.get('fibonacci', {}).get('enabled', False):
+        # Determine trend based on EMA crossover if available
+        trend = 'bullish'
+        if 'EMA9' in df.columns and 'EMA21' in df.columns:
+            trend = 'bullish' if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1] else 'bearish'
         df['Fib_161'], df['Fib_262'], df['Fib_424'] = fibonacci_extensions(df['high'], df['low'], df['close'], trend)
 
     return df

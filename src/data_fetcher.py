@@ -47,49 +47,63 @@ def fetch_data(limit: int = 200) -> pd.DataFrame:
 
 @error_boundary(operation="fetch_historical_data", max_retries=2)
 @cache_api_call(ttl_seconds=300)  # Cache for 5 minutes for historical data
-def fetch_historical_data(symbol=None, exchange_name=None, timeframe=None, limit=None):
+def fetch_historical_data(symbol='EUR/USD', exchange_name='kraken', timeframe='1m', limit=1000, start_date=None):
     """
-    Fetches historical data with configurable parameters.
-    Used for both backtesting and live data fetching.
+    Fetches historical OHLCV data from specified exchange using ccxt.
+    Supports pagination for large datasets.
     """
     # Validate inputs
-    validated = validate_api_inputs(
-        symbol=symbol or SYMBOL,
-        exchange=exchange_name or EXCHANGE,
-        timeframe=timeframe or TIMEFRAME,
-        limit=limit or 1000
-    )
+    validate_api_inputs(symbol=symbol, exchange=exchange_name, timeframe=timeframe, limit=limit)
 
-    symbol = validated['symbol']
-    exchange_name = validated['exchange']
-    timeframe = validated['timeframe']
-    limit = validated['limit']
+    # Override exchange if specified
+    if exchange_name != EXCHANGE:
+        exchange_name = exchange_name
 
+    # Get exchange class
     exchange_class = getattr(ccxt, exchange_name)
+    exchange = exchange_class()
 
-    # Use API credentials from environment if available
-    api_key = os.getenv('TRADPAL_API_KEY')
-    api_secret = os.getenv('TRADPAL_API_SECRET')
-
-    if api_key and api_secret:
-        exchange = exchange_class({
-            'apiKey': api_key,
-            'secret': api_secret,
-        })
+    # Set since based on start_date or default
+    if start_date:
+        since = exchange.parse8601(start_date.isoformat())
     else:
-        exchange = exchange_class()
+        since = exchange.parse8601((datetime.now() - timedelta(days=365)).isoformat())  # Default 1 year
 
-    # For backtesting, fetch historical data
-    if limit > 200:
-        since = exchange.parse8601((datetime.now() - timedelta(days=LOOKBACK_DAYS)).isoformat())
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since, limit)
-    else:
-        # For live monitoring, fetch recent data
-        ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+    # For backtesting, fetch historical data with pagination if needed
+    all_ohlcv = []
+    remaining_limit = limit
+    max_per_request = 720  # Kraken's limit for 1m timeframe
 
-    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    while remaining_limit > 0:
+        fetch_limit = min(remaining_limit, max_per_request)
+        try:
+            ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since, fetch_limit)
+        except Exception as e:
+            # Return retry on recoverable errors
+            return "retry"
+        
+        if not ohlcv:
+            break
+        
+        all_ohlcv.extend(ohlcv)
+        
+        # Update since for next batch
+        last_timestamp = ohlcv[-1][0]
+        since = last_timestamp + (exchange.timeframes[timeframe] * 1000)  # Next candle
+        
+        remaining_limit -= len(ohlcv)
+        
+        # Safety check to avoid infinite loops
+        if len(ohlcv) < fetch_limit:
+            break
+
+    df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
+
+    # Validate the fetched data if not empty
+    if len(df) > 0:
+        validate_data(df)
 
     return df
 

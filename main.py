@@ -128,27 +128,46 @@ def run_live_monitoring():
 
 def run_backtest_mode(args):
     """Run backtesting mode."""
+    from config.settings import LOOKBACK_DAYS
+    from datetime import datetime, timedelta
+    
+    # Set default dates if not provided
+    start_date = args.start_date
+    end_date = args.end_date
+    if not start_date:
+        end_date_dt = datetime.now()
+        start_date_dt = end_date_dt - timedelta(days=LOOKBACK_DAYS)
+        start_date = start_date_dt.strftime('%Y-%m-%d')
+        end_date = end_date_dt.strftime('%Y-%m-%d')
+    
     print(f"Running backtest for {args.symbol} on {args.timeframe} timeframe")
+    print(f"Period: {start_date} to {end_date}")
     log_system_status(f"Backtest mode started for {args.symbol} {args.timeframe}")
 
     try:
         results = run_backtest(
             symbol=args.symbol,
             timeframe=args.timeframe,
-            start_date=args.start_date,
-            end_date=args.end_date
+            start_date=start_date,
+            end_date=end_date
         )
 
         print("\n📊 Backtest Results:")
-        print(f"Total Trades: {results['total_trades']}")
-        print(f"Win Rate: {results['win_rate']}%")
-        print(f"Total P&L: ${results['total_pnl']:.2f}")
-        print(f"Max Drawdown: {results['max_drawdown']:.2f}%")
-        print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
-        print(f"CAGR: {results['cagr']:.2f}%")
-        print(f"Final Capital: ${results['final_capital']:.2f}")
+        if 'backtest_results' in results and 'error' not in results['backtest_results']:
+            metrics = results['backtest_results']
+            print(f"Total Trades: {metrics.get('total_trades', 0)}")
+            print(f"Win Rate: {metrics.get('win_rate', 0)}%")
+            print(f"Total P&L: ${metrics.get('total_pnl', 0):.2f}")
+            print(f"Max Drawdown: {metrics.get('max_drawdown', 0):.2f}%")
+            print(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
+            print(f"CAGR: {metrics.get('cagr', 0):.2f}%")
+            print(f"Final Capital: ${metrics.get('final_capital', 0):.2f}")
 
-        log_system_status(f"Backtest completed: {results['total_trades']} trades, {results['win_rate']}% win rate")
+            log_system_status(f"Backtest completed: {metrics.get('total_trades', 0)} trades, {metrics.get('win_rate', 0)}% win rate")
+        else:
+            error_msg = results.get('backtest_results', {}).get('error', 'Unknown error')
+            print(f"Backtest failed: {error_msg}")
+            log_error(f"Backtest error: {error_msg}")
 
     except Exception as e:
         print(f"Backtest failed: {e}")

@@ -5,8 +5,9 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 ## 🚀 Latest Features & Improvements
 
 ### Version Highlights (October 2025)
-- **Enhanced Error Handling**: Robust error recovery with exponential backoff and graceful degradation
-- **Comprehensive Testing**: 292+ test cases covering all components with 100% pass rate
+- **Modular Indicator System**: Configurable technical indicators with custom parameters
+- **Enhanced Error Handling**: Robust exception handling with retry mechanisms for API failures
+- **Comprehensive Testing**: 284+ test cases covering all components with 100% pass rate
 - **Modular Integration System**: Telegram, Discord, Email, SMS, and Webhook integrations
 - **Advanced Backtesting Engine**: Complete historical simulation with detailed performance metrics
 - **Multi-Timeframe Analysis**: Signal confirmation across multiple timeframes for improved accuracy
@@ -15,6 +16,7 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Security Enhancements**: Environment variable support and secure API key management
 
 ### Recent Optimizations
+- **Modular Indicators**: Configurable indicator combinations with custom parameters
 - **Performance**: Vectorized operations for 10x faster indicator calculations
 - **Reliability**: Comprehensive error boundaries and recovery strategies
 - **Scalability**: Timeframe-specific parameters and MTA support
@@ -62,7 +64,7 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Architecture**: Modular microservices design with clean separation of concerns
 - **Data Processing**: Vectorized operations using pandas/numpy for optimal performance
 - **Error Handling**: Comprehensive error boundary decorators with recovery strategies
-- **Testing**: 292+ unit and integration tests with 100% pass rate
+- **Testing**: 284+ unit and integration tests with 100% pass rate
 - **Performance**: Sub-second analysis for 1-minute charts, optimized for high-frequency data
 - **Memory Usage**: Efficient DataFrame operations with minimal memory footprint
 - **API Compatibility**: ccxt library support for 100+ cryptocurrency and forex exchanges
@@ -75,14 +77,16 @@ tradpal_indicator/
 │   └── settings.py          # Configuration (parameters, exchanges, output)
 ├── src/
 │   ├── __init__.py          # Package initialization
-│   ├── data_fetcher.py      # Data fetching with ccxt library
-│   ├── indicators.py        # Technical indicator calculations
+│   ├── data_fetcher.py      # Data fetching with ccxt library and error handling
+│   ├── indicators.py        # Modular technical indicator calculations
 │   ├── signal_generator.py  # Signal generation and risk management
 │   ├── output.py            # JSON output formatting and saving
 │   ├── backtester.py        # Historical backtesting engine
 │   ├── error_handling.py    # Error recovery and logging system
 │   ├── cache.py             # API call caching system
-│   └── input_validation.py  # Input validation utilities
+│   ├── input_validation.py  # Input validation utilities
+│   ├── logging_config.py    # Logging configuration
+│   └── config_validation.py # Configuration validation
 ├── integrations/
 │   ├── __init__.py
 │   ├── telegram/
@@ -220,6 +224,16 @@ ADX_THRESHOLD = 25          # Minimum ADX for valid signals
 ENABLE_FIBONACCI = True     # Enable Fibonacci extensions for take-profit
 FIBONACCI_LEVELS = [161.8, 261.8]  # Fibonacci extension levels
 
+# Modular Indicator Configuration
+DEFAULT_INDICATOR_CONFIG = {
+    'ema': {'enabled': True, 'periods': [9, 21]},
+    'rsi': {'enabled': True, 'period': 14},
+    'bb': {'enabled': True, 'period': 20, 'std_dev': 2},
+    'atr': {'enabled': True, 'period': 14},
+    'adx': {'enabled': False, 'period': 14},
+    'fibonacci': {'enabled': False}
+}
+
 # Risk management
 CAPITAL = 10000             # Total trading capital
 RISK_PER_TRADE = 0.01       # Risk per trade (1% of capital)
@@ -330,38 +344,22 @@ print(f"Total P&L: ${results['total_pnl']:.2f}")
 print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
 ```
 
-#### Advanced Custom Strategy
+#### Custom Indicator Configuration
 ```python
-import pandas as pd
-from src.data_fetcher import fetch_historical_data
-from src.indicators import ema, rsi, bb
-from src.signal_generator import generate_signals
+from src.indicators import calculate_indicators
 
-# Fetch data
-data = fetch_historical_data('BTC/USDT', 'binance', '1h', 500)
+# Use default configuration
+data = calculate_indicators(data)
 
-# Calculate custom indicators
-data['EMA20'] = ema(data['close'], 20)
-data['EMA50'] = ema(data['close'], 50)
-data['RSI'] = rsi(data['close'], 14)
-data['BB_upper'], data['BB_middle'], data['BB_lower'] = bb(data['close'], 20, 2)
-
-# Custom signal logic
-data['Custom_Buy_Signal'] = (
-    (data['EMA20'] > data['EMA50']) &  # EMA crossover
-    (data['RSI'] < 35) &               # Oversold
-    (data['close'] < data['BB_lower']) # Below lower BB
-).astype(int)
-
-data['Custom_Sell_Signal'] = (
-    (data['EMA20'] < data['EMA50']) &  # EMA crossover
-    (data['RSI'] > 65) &               # Overbought
-    (data['close'] > data['BB_upper']) # Above upper BB
-).astype(int)
-
-# Save custom analysis
-from src.output import save_signals_to_json
-save_signals_to_json(data, 'output/custom_strategy.json')
+# Use custom configuration
+custom_config = {
+    'ema': {'enabled': True, 'periods': [5, 10]},
+    'rsi': {'enabled': True, 'period': 21},
+    'bb': {'enabled': True, 'period': 15, 'std_dev': 1.5},
+    'atr': {'enabled': True, 'period': 21},
+    'adx': {'enabled': True, 'period': 14}
+}
+data = calculate_indicators(data, config=custom_config)
 ```
 
 #### Real-time Monitoring Script
