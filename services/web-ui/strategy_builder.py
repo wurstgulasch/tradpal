@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import sys
 import os
-
+from werkzeug.utils import secure_filename
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
@@ -223,7 +223,8 @@ class StrategyBuilderUI:
             strategies_dir = Path(__file__).parent / "strategies"
             strategies_dir.mkdir(exist_ok=True)
             
-            strategy_file = strategies_dir / f"{st.session_state.strategy_name.replace(' ', '_')}.json"
+            safe_strategy_name = secure_filename(st.session_state.strategy_name)
+            strategy_file = strategies_dir / f"{safe_strategy_name}.json"
             
             strategy_data = {
                 'name': st.session_state.strategy_name,
