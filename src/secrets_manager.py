@@ -153,7 +153,7 @@ class AWSSecretsManagerBackend(SecretsBackend):
         except self.client.exceptions.ResourceNotFoundException:
             logger.debug(f"Secret {key} not found in AWS Secrets Manager")
         except Exception as e:
-            logger.error(f"Failed to retrieve secret {key} from AWS: {e}")
+            logger.error(f"Failed to retrieve secret from AWS: {e}")
 
         return default
 
