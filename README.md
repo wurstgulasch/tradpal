@@ -841,15 +841,44 @@ The project includes modular services for advanced functionality:
 - **Strategy Validation**: Robustness testing across market conditions
 
 ### Web UI Services (`services/web-ui/`)
-- **Dashboard**: Real-time monitoring and visualization
-- **Configuration Interface**: Web-based configuration management
-- **Performance Analytics**: Interactive charts and reports
-- **Integration Management**: Web interface for managing integrations
+Comprehensive interactive web interface built with Streamlit, Plotly, and Flask-Login.
 
-### Service Usage
+#### 🎯 Features
+- **🔐 Authentication System**: Secure login with user management and role-based access
+- **🎨 Strategy Builder**: Drag-and-drop interface for creating custom trading strategies
+  - 6 technical indicators (EMA, RSI, Bollinger Bands, ATR, ADX, MACD)
+  - Real-time parameter adjustment with interactive sliders
+  - Preset strategies (Trend Following, Mean Reversion, Scalping)
+  - Save/load custom strategies
+  - Integrated backtesting
+- **⚙️ Interactive Controls**: Real-time parameter tuning
+  - Timeframe-specific parameter sets (1m, 5m, 1h, 1d, etc.)
+  - Visual parameter validation and feedback
+  - Quick preset configurations (Scalping, Trend, Conservative)
+  - Export/import configurations as JSON
+- **📈 Live Charts with Plotly**: Interactive visualizations
+  - Candlestick, Line, and OHLC chart types
+  - Real-time indicator overlay (EMA, RSI, BB, Volume)
+  - Buy/Sell signal markers
+  - Multi-panel synchronized charts
+  - Zoom, pan, and hover details
+  - Auto-refresh capability
+- **📊 Monitoring Dashboard**: Real-time performance tracking
+  - Key metrics (Win Rate, Sharpe Ratio, Drawdown)
+  - System health monitoring
+  - Alert management
+  - Performance charts
+
+#### 🚀 Quick Start
 ```bash
+# Install web UI dependencies
+pip install streamlit plotly flask flask-login werkzeug
+
 # Start web UI service
-cd services/web-ui && python app.py
+cd services/web-ui && streamlit run app.py
+
+# Access at http://localhost:8501
+# Default credentials: admin / admin123
 
 # Run ML training service
 cd services/ml-trainer && python train_service.py
