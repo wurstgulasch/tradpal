@@ -233,12 +233,13 @@ tradpal_indicator/
 │   ├── ml_predictor.py     # Machine learning signal enhancement
 │   ├── performance.py      # System monitoring and performance tracking
 │   ├── audit_logger.py     # Structured JSON logging and compliance
-│   └── cache.py           # API response caching system
-├── services/              # Modular service components
-│   ├── core/              # Core trading services
-│   ├── ml-trainer/        # ML model training services
-│   ├── optimizer/         # Genetic algorithm optimization
-│   └── web-ui/            # Interactive web interface
+│   ├── cache.py           # API response caching system
+│   ├── services/          # Modular service components
+│   │   ├── core/          # Core trading services
+│   │   ├── ml-trainer/    # ML model training services
+│   │   ├── optimizer/     # Genetic algorithm optimization
+│   │   └── web-ui/        # Interactive web interface
+│   └── scripts/           # Utility scripts and management tools
 ├── integrations/          # Notification and webhook integrations
 │   ├── telegram/          # Telegram bot integration
 │   ├── discord/           # Discord webhook integration
@@ -250,7 +251,6 @@ tradpal_indicator/
 ├── cache/                 # ML models and API cache storage
 ├── logs/                  # Application logs with rotation
 ├── docs/                  # Additional documentation
-├── scripts/               # Utility scripts and management tools
 ├── k8s/                   # Kubernetes deployment manifests
 ├── aws/                   # AWS deployment automation
 ├── monitoring/            # Prometheus/Grafana monitoring stack

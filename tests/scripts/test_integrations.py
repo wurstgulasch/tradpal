@@ -70,7 +70,7 @@ def setup_test_integrations():
             return False
     else:
         print("⚠️  Telegram credentials not found in .env")
-        print("   Run 'python scripts/manage_integrations.py --setup' to configure")
+        print("   Run 'python src/scripts/manage_integrations.py --setup' to configure")
         return False
 
 def test_integrations():

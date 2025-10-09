@@ -139,7 +139,7 @@ def interactive_setup():
 
     # Future integrations can be added here
     print("\n🎉 Setup wizard completed!")
-    print("Run 'python scripts/manage_integrations.py --test' to verify everything works")
+    print("Run 'python src/scripts/manage_integrations.py --test' to verify everything works")
 
 def main():
     """Main function"""

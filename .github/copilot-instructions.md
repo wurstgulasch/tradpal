@@ -7,13 +7,9 @@ Dieses Projekt, **TradPal Indicator**, ist ein modulares Trading-Indikator-Syste
 
 ## Projektstruktur
 - `config/settings.py`: Zentrale Konfiguration für Indikator-Parameter, Timeframes, Exchanges, Assets (vorrangig `BTC/USDT`), Risikoparameter und Ausgabeformate. Skalierbare Parameter-Tabellen (z. B. `{'1m': {'ema_short': 9, 'ema_long': 21}, '1d': {'ema_short': 50, 'ema_long': 200}}`).
-- `src/data_fetcher.py`: Datenabruf via CCXT; unterstützt multiple Timeframes/Assets, mit Fokus auf `BTC/USDT`. Neu: Caching für API-Calls.
-- `src/indicators.py`: Berechnet EMA, RSI, BB, ATR, ADX, Fibonacci-Extensions und Volatilitätsmetriken (z. B. BB-Bandwidth). Nutzt TA-Lib für Effizienz, installiert via `tradpal_env`.
-- `src/signal_generator.py`: Signalgenerierung mit MTA, ML-Enhancer (PyTorch/Optuna) und genetischen Algorithmen. Enthält Filter wie Volumen > Durchschnitt.
-- `src/output.py`: JSON-Ausgabe für Integration; erweitert um Backtest-Reports und Plotly-Visualisierungen für Web-UI.
-- `src/backtester.py`: Historische Backtests mit Pandas/TA-Lib; Walk-Forward-Analyse für robuste Validierung; Metriken wie Win-Rate, CAGR, Drawdown.
-- `services/ml_trainer.py`: Neu: ML-Training mit PyTorch (neurale Netze), Optuna (AutoML) und Ensemble-Methoden, ausgeführt in `tradpal_env`.
-- `services/web_ui.py`: Streamlit/Plotly-basierte Web-UI für Echtzeit-Monitoring, Konfiguration und Backtesting (Login: admin/admin123).
+- `src/`: Kernmodule des Trading-Systems (data_fetcher.py, indicators.py, signal_generator.py, backtester.py, ml_predictor.py, etc.).
+- `services/`: Modulare Service-Komponenten (web_ui.py, ml_trainer.py, optimizer/, core/).
+- `scripts/`: Utility-Scripts und Management-Tools (train_ml_model.py, demo_performance.py, manage_integrations.py).
 - `integrations/`: Module für Telegram, Discord, Email-Notifications und Webhooks.
 - `main.py`: Orchestriert Module; Modi: "live", "backtest", "multi-timeframe", "optimize" (genetische Algorithmen).
 - `output/`: JSON-Dateien mit Signalen, Risiko-Parametern, Backtest-Resultaten; Plotly-Charts für Web-UI.
@@ -77,6 +73,7 @@ Dieses Projekt, **TradPal Indicator**, ist ein modulares Trading-Indikator-Syste
 - **Sicherheit:** Vorschläge für sichere Authentifizierung (z. B. OAuth statt admin/admin123) und Disclaimer für Trading-Risiken.
 - **Lizenz:** Schlage eine Open-Source-Lizenz vor (z. B. MIT) und integriere in Repository.
 - **Optimierung:** Reduziere Abhängigkeiten (z. B. optionales ML-Modul); verbessere Caching (z. B. Redis).
+- **Projektstruktur Best Practices:** Halte die modulare Struktur ein - `src/` für Kernlogik, `services/` für Service-Komponenten, `scripts/` für Utilities. Vermeide Verschachtelung von services/scripts unter src/. Neue Services gehören nach `services/`, neue Scripts nach `scripts/`, neue Kernmodule nach `src/`.
 
 ## Verbesserungsvorschläge
 1. **Machine Learning:** Integriere SHAP für ML-Explainability; erweitere Ensemble-Methoden (z. B. XGBoost); teste LSTM-Modelle für Zeitreihen, in `tradpal_env`.

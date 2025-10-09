@@ -15,7 +15,7 @@ tests/
 │   └── test_backtester.py
 ├── integrations/              # Integration tests
 │   └── test_integrations.py
-├── scripts/                   # Script tests
+├── src/scripts/               # Script tests
 │   └── test_scripts.py
 ├── test_error_handling.py     # Comprehensive error handling tests
 ├── test_edge_cases.py         # Edge cases and special scenarios
