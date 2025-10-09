@@ -345,7 +345,12 @@ class EnsemblePredictor:
     
     def _save_performance_history(self):
         """Save performance history to disk."""
-        history_path = self.results_dir / f"{self.symbol}_{self.timeframe}_performance_history.json"
+        # Ensure directory exists
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Replace / in symbol for file path
+        safe_symbol = self.symbol.replace('/', '_')
+        history_path = self.results_dir / f"{safe_symbol}_{self.timeframe}_performance_history.json"
         
         data = {
             'performance_history': self.performance_history,
@@ -358,7 +363,9 @@ class EnsemblePredictor:
     
     def _load_performance_history(self):
         """Load performance history from disk."""
-        history_path = self.results_dir / f"{self.symbol}_{self.timeframe}_performance_history.json"
+        # Replace / in symbol for file path
+        safe_symbol = self.symbol.replace('/', '_')
+        history_path = self.results_dir / f"{safe_symbol}_{self.timeframe}_performance_history.json"
         
         if not history_path.exists():
             return
