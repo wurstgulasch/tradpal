@@ -24,6 +24,18 @@ except ImportError:
     PYTORCH_AVAILABLE = False
     print("⚠️  PyTorch not available. Advanced neural network features will be disabled.")
     print("   Install with: pip install torch")
+    # Create stubs for when PyTorch is not available
+    class nn:
+        class Module:
+            pass
+    class torch:
+        class Tensor:
+            pass
+        class FloatTensor:
+            pass
+        @staticmethod
+        def device(*args, **kwargs):
+            return None
 
 from config.settings import (
     SYMBOL, TIMEFRAME, ML_PYTORCH_HIDDEN_SIZE, ML_PYTORCH_NUM_LAYERS,
@@ -31,31 +43,31 @@ from config.settings import (
     ML_PYTORCH_EPOCHS, ML_PYTORCH_EARLY_STOPPING_PATIENCE
 )
 
-
-class LSTMModel(nn.Module):
-    """
-    Advanced LSTM model for time series prediction with PyTorch.
-    
-    Features:
-    - Bidirectional LSTM layers
-    - Layer normalization
-    - Residual connections
-    - Attention mechanism (optional)
-    """
-    
-    def __init__(self, input_size: int, hidden_size: int = 128, num_layers: int = 2, 
-                 dropout: float = 0.2, use_attention: bool = False):
+if PYTORCH_AVAILABLE:
+    class LSTMModel(nn.Module):
         """
-        Initialize LSTM model.
+        Advanced LSTM model for time series prediction with PyTorch.
         
-        Args:
-            input_size: Number of input features
-            hidden_size: Size of hidden layers
-            num_layers: Number of LSTM layers
-            dropout: Dropout rate
-            use_attention: Whether to use attention mechanism
+        Features:
+        - Bidirectional LSTM layers
+        - Layer normalization
+        - Residual connections
+        - Attention mechanism (optional)
         """
-        super(LSTMModel, self).__init__()
+        
+        def __init__(self, input_size: int, hidden_size: int = 128, num_layers: int = 2, 
+                     dropout: float = 0.2, use_attention: bool = False):
+            """
+            Initialize LSTM model.
+            
+            Args:
+                input_size: Number of input features
+                hidden_size: Size of hidden layers
+                num_layers: Number of LSTM layers
+                dropout: Dropout rate
+                use_attention: Whether to use attention mechanism
+            """
+            super(LSTMModel, self).__init__()
         
         self.hidden_size = hidden_size
         self.num_layers = num_layers

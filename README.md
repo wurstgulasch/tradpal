@@ -5,6 +5,10 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 ## 🚀 Latest Features & Improvements
 
 ### Version Highlights (October 2025)
+- **Advanced ML Models with PyTorch**: LSTM, GRU, and Transformer neural networks for time series prediction with GPU support
+- **AutoML with Optuna**: Automated hyperparameter optimization with TPE, Random, and Grid sampling strategies
+- **Enhanced Walk-Forward Metrics**: Information Coefficient, Bias-Variance tradeoff, and overfitting detection
+- **Ensemble Methods**: Combine GA-optimized indicators with ML predictions using weighted, majority, or unanimous voting
 - **TA-Lib Integration**: Optimized technical analysis with automatic fallback to pandas implementations
 - **Enhanced Audit Logging**: Comprehensive JSON-structured logging with rotation for compliance and debugging
 - **Modular ML Extensions**: Advanced signal enhancement using scikit-learn with confidence scoring
@@ -23,6 +27,10 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Performance Monitoring**: Advanced performance tracking and optimization tools
 
 ### Recent Optimizations
+- **PyTorch Neural Networks**: Advanced LSTM, GRU, and Transformer models with attention mechanisms and residual connections
+- **AutoML Optimization**: Optuna-based hyperparameter tuning with pruning and visualization for sklearn and PyTorch models
+- **Advanced Overfitting Metrics**: Information Coefficient, Bias-Variance analysis, overfitting ratios, and consistency scores
+- **Ensemble Predictions**: Smart combination of GA and ML predictions with adaptive weighting and performance tracking
 - **TA-Lib Integration**: High-performance technical analysis library with automatic fallback for maximum compatibility
 - **Enhanced Audit Logging**: Structured JSON logging with file rotation, event categorization, and compliance-ready audit trails
 - **Modular ML Extensions**: Machine learning signal enhancement with feature engineering, model training, and confidence-based decision making
@@ -91,6 +99,40 @@ A comprehensive Python-based trading indicator system optimized for 1-minute cha
 - **Signal Enhancement**: Override traditional signals based on ML confidence thresholds
 - **Model Persistence**: Save and load trained models for production use
 - **Training Scripts**: Automated model training and evaluation pipelines
+
+### Advanced ML with PyTorch 🧠
+- **Neural Network Models**: LSTM, GRU, and Transformer architectures for time series prediction
+- **GPU Acceleration**: Automatic CUDA support for faster training on compatible hardware
+- **Attention Mechanisms**: Multi-head attention for capturing long-term dependencies
+- **Residual Connections**: Skip connections for deeper networks and better gradient flow
+- **Early Stopping**: Automatic training halt when validation performance stops improving
+- **Learning Rate Scheduling**: Dynamic learning rate adjustment for optimal convergence
+- **Model Checkpointing**: Save best models during training for production deployment
+
+### AutoML with Optuna 🤖
+- **Hyperparameter Optimization**: Automated search for optimal model parameters
+- **Multiple Sampling Strategies**: TPE (Tree-structured Parzen Estimator), Random, Grid sampling
+- **Pruning**: Early termination of unpromising trials for efficient search
+- **Multi-objective**: Optimize for multiple metrics simultaneously
+- **Visualization**: Interactive plots for optimization history and parameter importance
+- **Study Persistence**: Save and resume optimization studies
+- **Model Support**: Works with both scikit-learn and PyTorch models
+
+### Enhanced Walk-Forward Analysis 📊
+- **Information Coefficient**: Correlation between in-sample and out-of-sample performance
+- **Bias-Variance Tradeoff**: Quantitative analysis of model complexity vs. generalization
+- **Overfitting Detection**: Multiple metrics including overfitting ratio and consistency score
+- **Robustness Assessment**: Stability analysis across different market conditions
+- **Human-Readable Interpretation**: Automatic assessment and recommendations
+- **Performance Decay Tracking**: Monitor how well strategies generalize over time
+
+### Ensemble Methods 🎭
+- **GA + ML Combination**: Merge genetic algorithm optimized indicators with ML predictions
+- **Multiple Voting Strategies**: Weighted, majority, and unanimous voting approaches
+- **Adaptive Weighting**: Dynamic weight adjustment based on component performance
+- **Performance Tracking**: Individual and combined performance monitoring
+- **Confidence-Based Decisions**: Minimum confidence thresholds for signal generation
+- **Persistent History**: Track and save ensemble performance over time
 
 ### Genetic Algorithm Discovery Mode 🧬
 - **GA Optimization**: Evolutionary algorithm to find optimal indicator combinations
@@ -342,6 +384,32 @@ ML_MIN_TRAINING_SAMPLES = 1000  # Minimum samples required for training
 ML_TEST_SIZE = 0.2  # Fraction of data for testing
 ML_CV_FOLDS = 5  # Number of cross-validation folds
 ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
+
+# Advanced ML Configuration (PyTorch)
+ML_USE_PYTORCH = False  # Enable PyTorch models (LSTM, GRU, Transformer)
+ML_PYTORCH_MODEL_TYPE = 'lstm'  # Options: 'lstm', 'gru', 'transformer'
+ML_PYTORCH_HIDDEN_SIZE = 128  # Hidden layer size for PyTorch models
+ML_PYTORCH_NUM_LAYERS = 2  # Number of layers for PyTorch models
+ML_PYTORCH_DROPOUT = 0.2  # Dropout rate for regularization
+ML_PYTORCH_LEARNING_RATE = 0.001  # Learning rate for training
+ML_PYTORCH_BATCH_SIZE = 32  # Batch size for training
+ML_PYTORCH_EPOCHS = 100  # Maximum training epochs
+ML_PYTORCH_EARLY_STOPPING_PATIENCE = 10  # Early stopping patience
+
+# AutoML Configuration (Optuna)
+ML_USE_AUTOML = False  # Enable automated hyperparameter optimization
+ML_AUTOML_N_TRIALS = 100  # Number of Optuna trials for hyperparameter search
+ML_AUTOML_TIMEOUT = 3600  # Maximum time for AutoML optimization (seconds)
+ML_AUTOML_STUDY_NAME = 'tradpal_automl'  # Name for Optuna study
+ML_AUTOML_STORAGE = None  # Database URL for Optuna storage (None = in-memory)
+ML_AUTOML_SAMPLER = 'tpe'  # Sampler type: 'tpe', 'random', 'grid'
+ML_AUTOML_PRUNER = 'median'  # Pruner type: 'median', 'hyperband', 'none'
+
+# Ensemble Methods Configuration
+ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
+ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
+ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
+ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
 ```
 
 ## 🎯 Usage
@@ -851,11 +919,29 @@ The project includes modular services for advanced functionality:
 # Start web UI service
 cd services/web-ui && python app.py
 
-# Run ML training service
-cd services/ml-trainer && python train_service.py
+# Run ML training service - sklearn models
+cd services/ml-trainer && python train_service.py --mode sklearn --model-type random_forest
 
-# Execute walk-forward optimization
-cd services/optimizer && python optimize_service.py
+# Run ML training service - PyTorch models
+cd services/ml-trainer && python train_service.py --mode pytorch --model-type lstm
+
+# Run ML training with AutoML
+cd services/ml-trainer && python train_service.py --mode automl --model-type gradient_boosting
+
+# Train ensemble model (combines sklearn + PyTorch)
+cd services/ml-trainer && python train_service.py --mode ensemble
+
+# Execute walk-forward optimization with enhanced metrics
+cd services/optimizer && python optimize_service.py --metric sharpe_ratio
+
+# Example with custom parameters
+cd services/ml-trainer && python train_service.py \
+  --symbol BTC/USDT \
+  --timeframe 1h \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31 \
+  --mode pytorch \
+  --model-type transformer
 ```
 
 #### Webhook Integration
