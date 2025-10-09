@@ -573,35 +573,35 @@ if TENSORFLOW_AVAILABLE:
         def __init__(self, model_dir: str = "cache/ml_models", symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
                      sequence_length: int = 60, lstm_units: int = 64, dropout_rate: float = 0.2):
             """
-        Initialize the LSTM signal predictor.
+            Initialize the LSTM signal predictor.
 
-        Args:
-            model_dir: Directory to store trained models
-            symbol: Trading symbol for model naming
-            timeframe: Timeframe for model naming
-            sequence_length: Number of time steps for LSTM input
-            lstm_units: Number of LSTM units in each layer
-            dropout_rate: Dropout rate for regularization
-        """
-        if not TENSORFLOW_AVAILABLE:
-            raise ImportError("TensorFlow is required for LSTM features. Install with: pip install tensorflow")
+            Args:
+                model_dir: Directory to store trained models
+                symbol: Trading symbol for model naming
+                timeframe: Timeframe for model naming
+                sequence_length: Number of time steps for LSTM input
+                lstm_units: Number of LSTM units in each layer
+                dropout_rate: Dropout rate for regularization
+            """
+            if not TENSORFLOW_AVAILABLE:
+                raise ImportError("TensorFlow is required for LSTM features. Install with: pip install tensorflow")
 
-        self.model_dir = Path(model_dir)
-        self.model_dir.mkdir(parents=True, exist_ok=True)
-        self.symbol = symbol
-        self.timeframe = timeframe
-        self.sequence_length = sequence_length
-        self.lstm_units = lstm_units
-        self.dropout_rate = dropout_rate
+            self.model_dir = Path(model_dir)
+            self.model_dir.mkdir(parents=True, exist_ok=True)
+            self.symbol = symbol
+            self.timeframe = timeframe
+            self.sequence_length = sequence_length
+            self.lstm_units = lstm_units
+            self.dropout_rate = dropout_rate
 
-        self.model = None
-        self.scaler = StandardScaler()
-        self.feature_columns = []
-        self.is_trained = False
-        self.training_history = {}
+            self.model = None
+            self.scaler = StandardScaler()
+            self.feature_columns = []
+            self.is_trained = False
+            self.training_history = {}
 
-        # Load existing model if available
-        self.load_model()
+            # Load existing model if available
+            self.load_model()
 
     def prepare_sequences(self, df: pd.DataFrame, prediction_horizon: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         """
