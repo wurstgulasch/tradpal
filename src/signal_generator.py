@@ -6,7 +6,7 @@ from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIM
 from src.data_fetcher import fetch_data
 from src.indicators import calculate_indicators
 from src.audit_logger import audit_logger, log_signal_buy, log_signal_sell, SignalDecision, RiskAssessment
-from src.ml_predictor import get_ml_predictor, is_ml_available
+from src.ml_predictor import get_ml_predictor, is_ml_available, get_lstm_predictor, is_lstm_available, get_transformer_predictor, is_transformer_available
 
 def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -367,21 +367,45 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
     """
     Apply ML signal enhancement to traditional trading signals.
 
-    Uses trained ML models to enhance or override traditional signals
-    based on confidence thresholds and historical performance.
+    Uses trained ML models (traditional ML, LSTM, Transformer) to enhance or override
+    traditional signals based on confidence thresholds and historical performance.
+    Creates an ensemble prediction from all available models.
     """
     from config.settings import ML_ENABLED, ML_CONFIDENCE_THRESHOLD
-    from src.ml_predictor import get_ml_predictor, is_ml_available
+    from src.ml_predictor import get_ml_predictor, is_ml_available, get_lstm_predictor, is_lstm_available, get_transformer_predictor, is_transformer_available
 
     # Check if ML is enabled and available
-    if not ML_ENABLED or not is_ml_available():
+    if not ML_ENABLED:
         return df
 
     try:
-        # Get ML predictor
-        ml_predictor = get_ml_predictor()
-        if ml_predictor is None or not ml_predictor.is_trained:
+        # Initialize model predictors and predictions
+        predictors = []
+        predictions = []
+
+        # Get traditional ML predictor
+        if is_ml_available():
+            ml_predictor = get_ml_predictor()
+            if ml_predictor and ml_predictor.is_trained:
+                predictors.append(('traditional_ml', ml_predictor))
+
+        # Get LSTM predictor
+        if is_lstm_available():
+            lstm_predictor = get_lstm_predictor()
+            if lstm_predictor and lstm_predictor.is_trained:
+                predictors.append(('lstm', lstm_predictor))
+
+        # Get Transformer predictor
+        if is_transformer_available():
+            transformer_predictor = get_transformer_predictor()
+            if transformer_predictor and transformer_predictor.is_trained:
+                predictors.append(('transformer', transformer_predictor))
+
+        # If no ML models are available, return original dataframe
+        if not predictors:
             return df
+
+        print(f"🔬 Using {len(predictors)} ML models for signal enhancement: {[name for name, _ in predictors]}")
 
         # Add ML signal columns
         df['ML_Signal'] = 'HOLD'
@@ -389,6 +413,7 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
         df['ML_Reason'] = ''
         df['Enhanced_Signal'] = 'HOLD'
         df['Signal_Source'] = 'TRADITIONAL'
+        df['Ensemble_Vote'] = 0.0  # Weighted ensemble score
 
         # Process each row for ML prediction
         for idx, row in df.iterrows():
@@ -396,8 +421,59 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
                 # Create single-row DataFrame for prediction
                 row_df = pd.DataFrame([row])
 
-                # Get ML prediction
-                ml_prediction = ml_predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
+                # Collect predictions from all models
+                model_predictions = []
+                ensemble_score = 0.0
+                total_weight = 0.0
+
+                for model_name, predictor in predictors:
+                    try:
+                        # Get prediction from this model
+                        prediction = predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
+
+                        model_predictions.append({
+                            'model': model_name,
+                            'signal': prediction['signal'],
+                            'confidence': prediction['confidence'],
+                            'reason': prediction.get('reason', '')
+                        })
+
+                        # Convert signal to numerical score for ensemble
+                        signal_score = 0.0
+                        if prediction['signal'] == 'BUY':
+                            signal_score = prediction['confidence']
+                        elif prediction['signal'] == 'SELL':
+                            signal_score = -prediction['confidence']
+
+                        # Weight by model type (LSTM and Transformer get higher weight for time-series)
+                        weight = 1.0
+                        if model_name in ['lstm', 'transformer']:
+                            weight = 1.5  # Higher weight for deep learning models
+
+                        ensemble_score += signal_score * weight * prediction['confidence']
+                        total_weight += weight * prediction['confidence']
+
+                    except Exception as e:
+                        print(f"⚠️  {model_name} prediction failed for row {idx}: {e}")
+                        continue
+
+                # Calculate final ensemble prediction
+                if total_weight > 0:
+                    ensemble_score /= total_weight
+
+                    # Determine ensemble signal
+                    if ensemble_score > ML_CONFIDENCE_THRESHOLD:
+                        ensemble_signal = 'BUY'
+                        ensemble_confidence = min(abs(ensemble_score), 1.0)
+                    elif ensemble_score < -ML_CONFIDENCE_THRESHOLD:
+                        ensemble_signal = 'SELL'
+                        ensemble_confidence = min(abs(ensemble_score), 1.0)
+                    else:
+                        ensemble_signal = 'HOLD'
+                        ensemble_confidence = 0.0
+                else:
+                    ensemble_signal = 'HOLD'
+                    ensemble_confidence = 0.0
 
                 # Determine traditional signal
                 traditional_signal = 'HOLD'
@@ -406,22 +482,39 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
                 elif row.get('Sell_Signal', 0) == 1:
                     traditional_signal = 'SELL'
 
-                # Enhance signal with ML
-                enhanced = ml_predictor.enhance_signal(
-                    traditional_signal,
-                    ml_prediction,
-                    confidence_threshold=ML_CONFIDENCE_THRESHOLD
-                )
+                # Create ensemble prediction dict for compatibility
+                ensemble_prediction = {
+                    'signal': ensemble_signal,
+                    'confidence': ensemble_confidence,
+                    'reason': f'Ensemble prediction from {len(model_predictions)} models'
+                }
+
+                # Use traditional ML predictor for enhancement logic (if available)
+                if predictors and predictors[0][0] == 'traditional_ml':
+                    ml_predictor = predictors[0][1]
+                    enhanced = ml_predictor.enhance_signal(
+                        traditional_signal,
+                        ensemble_prediction,
+                        confidence_threshold=ML_CONFIDENCE_THRESHOLD,
+                        df=df
+                    )
+                else:
+                    # Simple enhancement logic if no traditional ML
+                    enhanced = {
+                        'signal': ensemble_signal if ensemble_confidence > ML_CONFIDENCE_THRESHOLD else traditional_signal,
+                        'source': 'ENSEMBLE' if ensemble_confidence > ML_CONFIDENCE_THRESHOLD else 'TRADITIONAL'
+                    }
 
                 # Update DataFrame
-                df.at[idx, 'ML_Signal'] = ml_prediction['signal']
-                df.at[idx, 'ML_Confidence'] = ml_prediction['confidence']
-                df.at[idx, 'ML_Reason'] = ml_prediction.get('reason', '')
+                df.at[idx, 'ML_Signal'] = ensemble_signal
+                df.at[idx, 'ML_Confidence'] = ensemble_confidence
+                df.at[idx, 'ML_Reason'] = ensemble_prediction['reason']
                 df.at[idx, 'Enhanced_Signal'] = enhanced['signal']
                 df.at[idx, 'Signal_Source'] = enhanced['source']
+                df.at[idx, 'Ensemble_Vote'] = ensemble_score
 
                 # Override original signals if enhanced
-                if enhanced['source'] == 'ML_ENHANCED':
+                if enhanced['source'] in ['ENSEMBLE', 'ML_ENHANCED']:
                     if enhanced['signal'] == 'BUY':
                         df.at[idx, 'Buy_Signal'] = 1
                         df.at[idx, 'Sell_Signal'] = 0
@@ -442,13 +535,14 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
                 continue
 
         # Log ML enhancement completion
-        ml_signals_count = (df['Signal_Source'] != 'TRADITIONAL').sum()
+        enhanced_signals_count = (df['Signal_Source'] != 'TRADITIONAL').sum()
         audit_logger.log_system_event(
             event_type="ML_SIGNAL_ENHANCEMENT_COMPLETED",
-            message=f"ML signal enhancement completed: {ml_signals_count} signals enhanced",
+            message=f"Advanced ML signal enhancement completed: {enhanced_signals_count} signals enhanced using {len(predictors)} models",
             details={
                 'total_signals': len(df),
-                'enhanced_signals': int(ml_signals_count),
+                'enhanced_signals': int(enhanced_signals_count),
+                'models_used': [name for name, _ in predictors],
                 'ml_available': True
             }
         )
@@ -457,7 +551,7 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
         audit_logger.log_error(
             error_type="ML_ENHANCEMENT_ERROR",
             message=f"ML signal enhancement failed: {str(e)}",
-            context={'ml_enabled': ML_ENABLED, 'ml_available': is_ml_available()}
+            context={'ml_enabled': ML_ENABLED}
         )
 
     return df

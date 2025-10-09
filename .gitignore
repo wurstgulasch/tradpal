@@ -148,4 +148,7 @@ config/adaptive_config.json
 
 # OS
 .DS_Store
-Thumbs.dbservices/web-ui/users.json
+Thumbs.db
+
+# Web UI
+services/web-ui/users.json

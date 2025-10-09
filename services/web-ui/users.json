@@ -4,5 +4,12 @@
     "password_hash": "scrypt:32768:8:1$fZO3vAPa6zWEZ9dp$e4a4ab03bf6ed841ee1d5638d8e0f946628f0758c5b3aea017a5abd2b4a3457b9809e3f3707f4b6cf0ad0c802d5a1c007083f33e6192951225fdd13e5ee1a84a",
     "role": "admin",
     "created_at": "2025-10-09T13:00:26.860096"
+  },
+  "testuser": {
+    "username": "testuser",
+    "password_hash": "scrypt:32768:8:1$ykFqnpG9j6sjWp7B$e48f0983de6c36ce1f35c77751a1eccbe068d77eab9c9b0869190ada4a1e76f4e703fc33c58185b1611911d692d7d8a14c5af7a1f102712eb8cb9c78e76ddfbc",
+    "role": "user",
+    "created_at": "2025-10-09T21:15:11.265913+00:00",
+    "last_login": null
   }
 }

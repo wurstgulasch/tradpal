@@ -13,6 +13,7 @@ plotly>=5.17.0  # Interactive charting library
 flask>=3.0.0  # Web framework for authentication
 flask-login>=0.6.3  # Authentication system
 werkzeug>=3.0.0  # Password hashing for Flask
+PyJWT>=2.8.0  # JWT token handling for secure authentication
 
 # Optional integrations
 twilio>=9.8.3  # For SMS integration
@@ -29,6 +30,8 @@ TA-Lib>=0.4.25  # Technical Analysis Library (optional, fallback available)
 scikit-learn>=1.3.0  # ML algorithms for signal prediction (optional)
 torch>=2.0.0  # PyTorch for advanced neural networks (optional)
 optuna>=3.0.0  # Automated hyperparameter optimization (optional)
+shap>=0.42.0  # Model interpretability and explainability (optional)
+xgboost>=1.7.0  # Gradient boosting framework (optional)
 
 # Secrets Management (optional)
 hvac>=2.0.0  # HashiCorp Vault client

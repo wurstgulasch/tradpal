@@ -160,7 +160,7 @@ def test_signal_enhancement():
 
         traditional_signal = 'BUY' if row_df['Buy_Signal'].iloc[0] == 1 else 'SELL' if row_df['Sell_Signal'].iloc[0] == 1 else 'HOLD'
 
-        enhanced = predictor.enhance_signal(traditional_signal, ml_prediction)
+        enhanced = predictor.enhance_signal(traditional_signal, ml_prediction, df=row_df)
 
         if enhanced['source'] != 'TRADITIONAL':
             enhanced_count += 1

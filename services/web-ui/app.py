@@ -17,7 +17,7 @@ sys.path.append(str(project_root))
 
 # Import authentication module
 try:
-    from auth import check_authentication, login_page
+    from auth import check_authentication, logout_user, login_page
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
@@ -53,13 +53,20 @@ def main():
         st.session_state.authenticated = False
     if 'username' not in st.session_state:
         st.session_state.username = None
+    if 'jwt_token' not in st.session_state:
+        st.session_state.jwt_token = None
     if 'page' not in st.session_state:
         st.session_state.page = 'Dashboard'
     
     # Check authentication
-    if AUTH_AVAILABLE and not st.session_state.authenticated:
-        login_page()
-        return
+    if AUTH_AVAILABLE:
+        authenticated, username = check_authentication()
+        if not authenticated:
+            login_page()
+            return
+        # Update session state if authenticated
+        st.session_state.authenticated = True
+        st.session_state.username = username
     
     # Main UI
     st.title("📊 TradPal Indicator - Trading System")
@@ -72,8 +79,7 @@ def main():
         if st.session_state.get('username'):
             st.success(f"👤 Logged in as: {st.session_state.username}")
             if st.button("🚪 Logout"):
-                st.session_state.authenticated = False
-                st.session_state.username = None
+                logout_user()
                 st.rerun()
         
         st.divider()

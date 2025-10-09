@@ -200,10 +200,13 @@ To start the Web UI:
   streamlit run app.py
 
 Then access at: http://localhost:8501
-Default credentials: admin / admin123
+
+First time setup:
+  - Set INITIAL_ADMIN_PASSWORD environment variable
+  - Or register a new user through the web interface
 
 Features available:
-  🔐 Authentication System
+  🔐 JWT-based Authentication System
   🎨 Strategy Builder (6 indicators, drag-and-drop)
   ⚙️  Interactive Controls (real-time parameter tuning)
   📈 Live Charts (Plotly interactive visualizations)
