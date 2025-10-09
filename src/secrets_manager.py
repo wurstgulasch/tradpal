@@ -85,7 +85,7 @@ class VaultBackend(SecretsBackend):
             if response and 'data' in response:
                 return response['data']['data'].get(key, default)
         except Exception as e:
-            logger.error(f"Failed to retrieve secret {key} from Vault: {e}")
+            logger.error(f"Failed to retrieve a secret from Vault: {e}")
 
         return default
 
