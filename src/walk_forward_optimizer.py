@@ -441,14 +441,14 @@ class WalkForwardOptimizer:
     def _analyze_walk_forward_results(self, window_results: List[Dict[str, Any]],
                                     evaluation_metric: str) -> Dict[str, Any]:
         """
-        Analyze walk-forward optimization results.
+        Analyze walk-forward optimization results with advanced overfitting metrics.
         
         Args:
             window_results: List of window optimization results
             evaluation_metric: Metric used for optimization
             
         Returns:
-            Dictionary with analysis results
+            Dictionary with analysis results including overfitting metrics
         """
         if not window_results:
             return {}
@@ -465,6 +465,18 @@ class WalkForwardOptimizer:
                 oos_performances.append(oos_perf[evaluation_metric])
             is_performances.append(is_score)
         
+        # Calculate Information Coefficient (IC) - correlation between predictions and outcomes
+        information_coefficient = None
+        if len(is_performances) == len(oos_performances) and len(is_performances) > 1:
+            try:
+                ic_correlation = np.corrcoef(is_performances, oos_performances)[0, 1]
+                information_coefficient = ic_correlation if not np.isnan(ic_correlation) else 0.0
+            except Exception:
+                information_coefficient = 0.0
+        
+        # Calculate Bias-Variance Tradeoff metrics
+        bias_variance_stats = self._calculate_bias_variance(is_performances, oos_performances)
+        
         # Calculate statistics
         analysis = {
             'total_windows': len(window_results),
@@ -473,7 +485,11 @@ class WalkForwardOptimizer:
             'std_oos_performance': np.std(oos_performances) if oos_performances else 0,
             'average_is_performance': np.mean(is_performances) if is_performances else 0,
             'std_is_performance': np.std(is_performances) if is_performances else 0,
-            'performance_decay': None
+            'performance_decay': None,
+            'information_coefficient': information_coefficient,
+            'bias_variance': bias_variance_stats,
+            'overfitting_ratio': None,
+            'consistency_score': None
         }
         
         # Calculate performance decay (overfitting measure)
@@ -481,6 +497,18 @@ class WalkForwardOptimizer:
             avg_oos = np.mean(oos_performances)
             avg_is = np.mean(is_performances)
             analysis['performance_decay'] = avg_is - avg_oos
+            
+            # Overfitting ratio: how much better in-sample performs vs out-of-sample
+            if avg_oos != 0:
+                analysis['overfitting_ratio'] = (avg_is - avg_oos) / abs(avg_oos)
+            else:
+                analysis['overfitting_ratio'] = float('inf') if avg_is > 0 else 0
+        
+        # Consistency score: how consistent are out-of-sample results
+        if oos_performances and len(oos_performances) > 1:
+            # Lower coefficient of variation = more consistent
+            cv = np.std(oos_performances) / (abs(np.mean(oos_performances)) + 1e-10)
+            analysis['consistency_score'] = 1.0 / (1.0 + cv)  # Normalize to [0, 1]
         
         # Robustness assessment
         if oos_performances:
@@ -492,6 +520,67 @@ class WalkForwardOptimizer:
             }
         
         return analysis
+    
+    def _calculate_bias_variance(self, in_sample: List[float], out_of_sample: List[float]) -> Dict[str, Any]:
+        """
+        Calculate bias-variance tradeoff metrics.
+        
+        Args:
+            in_sample: In-sample performance scores
+            out_of_sample: Out-of-sample performance scores
+            
+        Returns:
+            Dictionary with bias and variance metrics
+        """
+        if not in_sample or not out_of_sample:
+            return {
+                'bias': None,
+                'variance': None,
+                'total_error': None,
+                'bias_variance_ratio': None
+            }
+        
+        # Bias: systematic error (difference between expected and actual)
+        # Represented by the mean difference between in-sample and out-of-sample
+        bias = np.mean(in_sample) - np.mean(out_of_sample)
+        
+        # Variance: model sensitivity to training data
+        # Represented by the variance of out-of-sample performance
+        variance = np.var(out_of_sample) if len(out_of_sample) > 1 else 0
+        
+        # Total error decomposition
+        total_error = bias**2 + variance
+        
+        # Bias-variance ratio
+        bias_variance_ratio = abs(bias) / (variance + 1e-10) if variance > 0 else float('inf')
+        
+        return {
+            'bias': float(bias),
+            'variance': float(variance),
+            'total_error': float(total_error),
+            'bias_variance_ratio': float(bias_variance_ratio),
+            'interpretation': self._interpret_bias_variance(bias, variance)
+        }
+    
+    def _interpret_bias_variance(self, bias: float, variance: float) -> str:
+        """
+        Interpret bias-variance tradeoff results.
+        
+        Args:
+            bias: Bias measure
+            variance: Variance measure
+            
+        Returns:
+            Human-readable interpretation
+        """
+        if abs(bias) > variance * 2:
+            return "High bias (underfitting) - model too simple or features insufficient"
+        elif variance > abs(bias) * 2:
+            return "High variance (overfitting) - model too complex or insufficient data"
+        elif abs(bias) < 0.01 and variance < 0.01:
+            return "Well-balanced model with good generalization"
+        else:
+            return "Moderate bias-variance tradeoff - acceptable balance"
     
     def get_optimization_summary(self) -> Dict[str, Any]:
         """Get summary of optimization results."""

@@ -209,6 +209,32 @@ ML_TEST_SIZE = 0.2  # Fraction of data for testing
 ML_CV_FOLDS = 5  # Number of cross-validation folds
 ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
 
+# Advanced ML Configuration
+ML_USE_PYTORCH = False  # Enable PyTorch models (LSTM, GRU, Transformer)
+ML_PYTORCH_MODEL_TYPE = 'lstm'  # Options: 'lstm', 'gru', 'transformer'
+ML_PYTORCH_HIDDEN_SIZE = 128  # Hidden layer size for PyTorch models
+ML_PYTORCH_NUM_LAYERS = 2  # Number of layers for PyTorch models
+ML_PYTORCH_DROPOUT = 0.2  # Dropout rate for regularization
+ML_PYTORCH_LEARNING_RATE = 0.001  # Learning rate for training
+ML_PYTORCH_BATCH_SIZE = 32  # Batch size for training
+ML_PYTORCH_EPOCHS = 100  # Maximum training epochs
+ML_PYTORCH_EARLY_STOPPING_PATIENCE = 10  # Early stopping patience
+
+# AutoML Configuration with Optuna
+ML_USE_AUTOML = False  # Enable automated hyperparameter optimization
+ML_AUTOML_N_TRIALS = 100  # Number of Optuna trials for hyperparameter search
+ML_AUTOML_TIMEOUT = 3600  # Maximum time for AutoML optimization (seconds)
+ML_AUTOML_STUDY_NAME = 'tradpal_automl'  # Name for Optuna study
+ML_AUTOML_STORAGE = None  # Database URL for Optuna storage (None = in-memory)
+ML_AUTOML_SAMPLER = 'tpe'  # Sampler type: 'tpe', 'random', 'grid'
+ML_AUTOML_PRUNER = 'median'  # Pruner type: 'median', 'hyperband', 'none'
+
+# Ensemble Methods Configuration
+ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
+ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
+ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
+ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
+
 def get_current_indicator_config() -> Dict[str, Any]:
     """
     Get the current indicator configuration based on the selected mode.
