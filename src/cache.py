@@ -142,16 +142,34 @@ class RedisCache:
         """Serialize value for storage in Redis."""
         if isinstance(value, pd.DataFrame):
             # For DataFrames, use pickle for efficient serialization
-            return pickle.dumps(value)
+            return b"PDF:" + pickle.dumps(value)
         else:
-            # For other types, use pickle as well
-            return pickle.dumps(value)
+            # For other types, use JSON for security
+            try:
+                json_str = json.dumps(value, default=str)
+                return b"JSON:" + json_str.encode("utf-8")
+            except (TypeError, ValueError):
+                # Fallback to pickle for complex objects that JSON cannot handle
+                return b"PICKLE:" + pickle.dumps(value)
     
     def _deserialize_value(self, data: bytes) -> Any:
         """Deserialize value from Redis."""
         try:
-            return pickle.loads(data)
+            if data.startswith(b"PDF:"):
+                # DataFrame serialized with pickle
+                return pickle.loads(data[4:])
+            elif data.startswith(b"JSON:"):
+                # JSON serialized data
+                json_str = data[5:].decode("utf-8")
+                return json.loads(json_str)
+            elif data.startswith(b"PICKLE:"):
+                # Fallback pickle data
+                return pickle.loads(data[7:])
+            else:
+                # Legacy pickle data (for backward compatibility)
+                return pickle.loads(data)
         except Exception as e:
+            logger.error(f"Failed to deserialize value: {e}")
             logger.error(f"Failed to deserialize value: {e}")
             return None
     
