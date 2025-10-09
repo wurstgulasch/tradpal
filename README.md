@@ -2,6 +2,36 @@
 
 A comprehensive Python-based trading indicator system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, and advanced risk management. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
 
+## 🎨 **NEW: Interactive Web UI**
+
+**Experience TradPal Indicator through a powerful web interface!**
+
+The new Web UI provides an intuitive, interactive way to build strategies, analyze charts, and monitor performance in real-time.
+
+### ✨ Key Features
+- 🔐 **Secure Authentication**: Login system with user management
+- 🎨 **Strategy Builder**: Drag-and-drop interface to create custom strategies with 6 technical indicators
+- ⚙️ **Interactive Controls**: Real-time parameter tuning with visual feedback
+- 📈 **Live Charts**: Interactive Plotly visualizations with zoom, pan, and multiple timeframes
+- 📊 **Performance Dashboard**: Real-time monitoring and analytics
+
+### 🚀 Quick Start Web UI
+```bash
+# Install web dependencies
+pip install streamlit plotly flask flask-login werkzeug
+
+# Launch the interface
+cd services/web-ui && streamlit run app.py
+# Or use the quick start script: ./start_web_ui.sh
+
+# Access at http://localhost:8501
+# Default login: admin / admin123
+```
+
+📖 **[Full Web UI Documentation →](services/web-ui/README.md)**
+
+---
+
 ## 🚀 Latest Features & Improvements
 
 ### Version Highlights (October 2025)
