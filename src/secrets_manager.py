@@ -151,7 +151,7 @@ class AWSSecretsManagerBackend(SecretsBackend):
                 secret_data = json.loads(response['SecretString'])
                 return secret_data.get(key, default)
         except self.client.exceptions.ResourceNotFoundException:
-            logger.debug(f"Secret {key} not found in AWS Secrets Manager")
+            logger.debug("A secret was not found in AWS Secrets Manager")
         except Exception as e:
             logger.error(f"Failed to retrieve secret from AWS: {e}")
 
