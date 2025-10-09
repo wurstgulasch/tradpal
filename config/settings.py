@@ -209,7 +209,7 @@ ML_TEST_SIZE = 0.2  # Fraction of data for testing
 ML_CV_FOLDS = 5  # Number of cross-validation folds
 ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
 
-# Advanced ML Configuration
+# Advanced ML Configuration (PyTorch)
 ML_USE_PYTORCH = False  # Enable PyTorch models (LSTM, GRU, Transformer)
 ML_PYTORCH_MODEL_TYPE = 'lstm'  # Options: 'lstm', 'gru', 'transformer'
 ML_PYTORCH_HIDDEN_SIZE = 128  # Hidden layer size for PyTorch models
@@ -220,7 +220,7 @@ ML_PYTORCH_BATCH_SIZE = 32  # Batch size for training
 ML_PYTORCH_EPOCHS = 100  # Maximum training epochs
 ML_PYTORCH_EARLY_STOPPING_PATIENCE = 10  # Early stopping patience
 
-# AutoML Configuration with Optuna
+# AutoML Configuration (Optuna)
 ML_USE_AUTOML = False  # Enable automated hyperparameter optimization
 ML_AUTOML_N_TRIALS = 100  # Number of Optuna trials for hyperparameter search
 ML_AUTOML_TIMEOUT = 3600  # Maximum time for AutoML optimization (seconds)
@@ -234,6 +234,25 @@ ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
 ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
 ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
 ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
+
+# Secrets Management Configuration
+SECRETS_BACKEND = os.getenv('SECRETS_BACKEND', 'env')  # Options: 'env', 'vault', 'aws-secretsmanager'
+VAULT_ADDR = os.getenv('VAULT_ADDR', 'http://localhost:8200')  # Vault server address
+VAULT_TOKEN = os.getenv('VAULT_TOKEN', '')  # Vault authentication token
+AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')  # AWS region for Secrets Manager
+
+# Monitoring Configuration
+PROMETHEUS_ENABLED = os.getenv('PROMETHEUS_ENABLED', 'false').lower() == 'true'
+PROMETHEUS_PORT = int(os.getenv('PROMETHEUS_PORT', '8000'))
+MONITORING_STACK_ENABLED = os.getenv('MONITORING_STACK_ENABLED', 'false').lower() == 'true'
+DEPLOYMENT_ENV = os.getenv('DEPLOYMENT_ENV', 'local')  # Options: 'local', 'aws', 'kubernetes'
+
+# Rate Limiting Configuration
+RATE_LIMIT_ENABLED = True  # Enable adaptive rate limiting
+ADAPTIVE_RATE_LIMITING_ENABLED = os.getenv('ADAPTIVE_RATE_LIMITING_ENABLED', 'true').lower() == 'true'
+RATE_LIMIT_MAX_RETRIES = 5  # Maximum retries for rate-limited requests
+RATE_LIMIT_BASE_BACKOFF = 2.0  # Base backoff multiplier for retries
+RATE_LIMIT_MAX_BACKOFF = 300  # Maximum backoff time in seconds
 
 def get_current_indicator_config() -> Dict[str, Any]:
     """

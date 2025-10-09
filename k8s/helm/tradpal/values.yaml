@@ -1,0 +1,130 @@
+# Default values for tradpal.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: tradpal-indicator
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: tradpal.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: tradpal-tls
+  #    hosts:
+  #      - tradpal.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  pythonpath: "/app"
+  pythonunbuffered: "1"
+  testEnvironment: "false"
+  secretsBackend: "vault"
+  prometheusEnabled: "true"
+  prometheusPort: "8000"
+  deploymentEnv: "kubernetes"
+
+# Secrets configuration
+secrets:
+  # Set to true to create secrets, false to use external secrets operator
+  create: true
+  # API Keys (base64 encoded or plain text)
+  tradpalApiKey: ""
+  tradpalApiSecret: ""
+  telegramBotToken: ""
+  telegramChatId: ""
+  vaultToken: ""
+
+# External secrets operator configuration
+externalSecrets:
+  enabled: false
+  secretStore:
+    name: "tradpal-secret-store"
+    kind: "SecretStore"
+
+# Persistence configuration
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  storageClass: ""
+
+# Monitoring configuration
+monitoring:
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+  grafana:
+    enabled: false
+    dashboards: {}
+
+# Redis cache configuration
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    enabled: false

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: tradpal
+description: A Helm chart for TradPal Indicator trading system
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - trading
+  - indicators
+  - cryptocurrency
+  - forex
+home: https://github.com/wurstgulasch/tradpal_indicator
+sources:
+  - https://github.com/wurstgulasch/tradpal_indicator
+maintainers:
+  - name: TradPal Team
+    email: admin@tradpal.com

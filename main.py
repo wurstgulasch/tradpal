@@ -22,6 +22,36 @@ from src.config_validation import validate_configuration_at_startup
 from src.audit_logger import audit_logger
 from config.settings import SYMBOL
 
+# Optional imports for new production features
+try:
+    from src.secrets_manager import initialize_secrets_manager, get_secret
+    SECRETS_AVAILABLE = True
+except ImportError:
+    print("⚠️  Secrets manager not available (optional dependencies not installed)")
+    print("   Run: pip install hvac boto3")
+    SECRETS_AVAILABLE = False
+    def initialize_secrets_manager(*args, **kwargs):
+        pass
+    def get_secret(*args, **kwargs):
+        return None
+
+try:
+    from src.performance import PerformanceMonitor
+    PERFORMANCE_AVAILABLE = True
+except ImportError:
+    print("⚠️  Performance monitoring not available (optional dependencies not installed)")
+    print("   Run: pip install prometheus-client psutil")
+    PERFORMANCE_AVAILABLE = False
+    class PerformanceMonitor:
+        def __init__(self, *args, **kwargs):
+            pass
+        def start_monitoring(self):
+            pass
+        def record_signal(self, *args, **kwargs):
+            pass
+        def record_trade(self, *args, **kwargs):
+            pass
+
 # Optional imports for discovery functionality
 try:
     from src.discovery import run_discovery, load_adaptive_config, save_adaptive_config, apply_adaptive_config
@@ -156,7 +186,7 @@ class AdaptiveOptimizer:
         """Get current adaptive configuration for indicator calculation."""
         return self.current_config
 
-def run_live_monitoring():
+def run_live_monitoring(performance_monitor=None):
     """Run continuous live monitoring mode."""
     print("Starting TradPal Indicator - Continuous Monitoring Mode...")
     print("Press Ctrl+C to stop monitoring\n")
@@ -226,6 +256,15 @@ def run_live_monitoring():
                     leverage=latest['Leverage']
                 )
 
+                # Record signal in performance monitor
+                if performance_monitor:
+                    performance_monitor.record_signal(
+                        signal_type="BUY",
+                        price=latest['close'],
+                        rsi=latest['RSI'],
+                        position_size_pct=latest['Position_Size_Percent']
+                    )
+
                 last_signal_time = current_time
                 has_new_signal = True
 
@@ -253,6 +292,15 @@ def run_live_monitoring():
                     leverage=latest['Leverage']
                 )
 
+                # Record signal in performance monitor
+                if performance_monitor:
+                    performance_monitor.record_signal(
+                        signal_type="SELL",
+                        price=latest['close'],
+                        rsi=latest['RSI'],
+                        position_size_pct=latest['Position_Size_Percent']
+                    )
+
                 last_signal_time = current_time
                 has_new_signal = True
 
@@ -273,7 +321,7 @@ def run_live_monitoring():
             print("Retrying in 60 seconds...")
             time.sleep(60)
 
-def run_backtest_mode(args):
+def run_backtest_mode(args, performance_monitor=None):
     """Run backtesting mode."""
     from config.settings import LOOKBACK_DAYS
     from datetime import datetime, timedelta
@@ -310,6 +358,15 @@ def run_backtest_mode(args):
             print(f"CAGR: {metrics.get('cagr', 0):.2f}%")
             print(f"Final Capital: ${metrics.get('final_capital', 0):.2f}")
 
+            # Record backtest metrics in performance monitor
+            if performance_monitor:
+                performance_monitor.record_trade(
+                    pnl=metrics.get('total_pnl', 0),
+                    win_rate=metrics.get('win_rate', 0),
+                    total_trades=metrics.get('total_trades', 0),
+                    max_drawdown=metrics.get('max_drawdown', 0)
+                )
+
             log_system_status(f"Backtest completed: {metrics.get('total_trades', 0)} trades, {metrics.get('win_rate', 0)}% win rate")
         else:
             error_msg = results.get('backtest_results', {}).get('error', 'Unknown error')
@@ -320,7 +377,7 @@ def run_backtest_mode(args):
         print(f"Backtest failed: {e}")
         log_error(f"Backtest error: {e}")
 
-def run_single_analysis():
+def run_single_analysis(performance_monitor=None):
     """Run one-time analysis mode."""
     print("Running single analysis...")
 
@@ -343,6 +400,13 @@ def run_single_analysis():
         # Calculate risk management
         data = calculate_risk_management(data)
 
+        # Record analysis metrics if performance monitor is available
+        if performance_monitor and len(data) > 0:
+            # Count signals
+            buy_signals = data['Buy_Signal'].sum()
+            sell_signals = data['Sell_Signal'].sum()
+            performance_monitor.record_signal(signal_type="ANALYSIS_SUMMARY", price=0, rsi=0, position_size_pct=buy_signals + sell_signals)
+
         # Save output
         save_signals_to_json(data)
 
@@ -356,6 +420,24 @@ def run_single_analysis():
     except Exception as e:
         print(f"Analysis failed: {e}")
         log_error(f"Single analysis error: {e}")
+
+def initialize_rate_limiting():
+    """Initialize adaptive rate limiting for data fetching."""
+    try:
+        from config.settings import ADAPTIVE_RATE_LIMITING_ENABLED
+        if not ADAPTIVE_RATE_LIMITING_ENABLED:
+            print("ℹ️  Adaptive rate limiting disabled in configuration.")
+            return False
+
+        print("Initializing adaptive rate limiting...")
+        # The rate limiting is initialized automatically in data_fetcher.py
+        # when ADAPTIVE_RATE_LIMITING_ENABLED is True
+        print("✅ Adaptive rate limiting initialized.")
+        return True
+
+    except Exception as e:
+        print(f"⚠️  Rate limiting initialization failed: {e}")
+        return False
 
 def run_discovery_mode(args):
     """Run discovery optimization mode using genetic algorithms."""
@@ -407,6 +489,62 @@ def run_discovery_mode(args):
         print(f"❌ Discovery failed: {e}")
         log_error(f"Discovery error: {e}")
 
+def initialize_monitoring_stack():
+    """Initialize optional monitoring stack (Prometheus, Grafana, Redis)."""
+    try:
+        from config.settings import MONITORING_STACK_ENABLED
+        if not MONITORING_STACK_ENABLED:
+            print("ℹ️  Monitoring stack disabled in configuration.")
+            return False
+
+        print("Initializing monitoring stack...")
+        import subprocess
+
+        # Check if docker-compose is available
+        try:
+            subprocess.run(['docker-compose', '--version'], capture_output=True, check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("⚠️  Docker Compose not available. Monitoring stack requires Docker.")
+            return False
+
+        # Start monitoring services
+        result = subprocess.run([
+            'docker-compose', 'up', '-d',
+            'prometheus', 'grafana', 'redis'
+        ], cwd=os.path.dirname(__file__), capture_output=True, text=True)
+
+        if result.returncode == 0:
+            print("✅ Monitoring stack started successfully.")
+            print("   Prometheus: http://localhost:9090")
+            print("   Grafana: http://localhost:3000 (admin/admin)")
+            print("   Redis: localhost:6379")
+            return True
+        else:
+            print(f"⚠️  Failed to start monitoring stack: {result.stderr}")
+            return False
+
+    except Exception as e:
+        print(f"⚠️  Monitoring stack initialization failed: {e}")
+        return False
+
+def initialize_rate_limiting():
+    """Initialize adaptive rate limiting for data fetching."""
+    try:
+        from config.settings import ADAPTIVE_RATE_LIMITING_ENABLED
+        if not ADAPTIVE_RATE_LIMITING_ENABLED:
+            print("ℹ️  Adaptive rate limiting disabled in configuration.")
+            return False
+
+        print("Initializing adaptive rate limiting...")
+        # The rate limiting is initialized automatically in data_fetcher.py
+        # when ADAPTIVE_RATE_LIMITING_ENABLED is True
+        print("✅ Adaptive rate limiting initialized.")
+        return True
+
+    except Exception as e:
+        print(f"⚠️  Rate limiting initialization failed: {e}")
+        return False
+
 def main():
     # Validate configuration at startup
     print("Validating configuration...")
@@ -415,6 +553,38 @@ def main():
         sys.exit(1)
     print("✅ Configuration validation passed.\n")
 
+    # Initialize secrets manager for secure API key handling
+    if SECRETS_AVAILABLE:
+        print("Initializing secrets manager...")
+        try:
+            initialize_secrets_manager()
+            print("✅ Secrets manager initialized.")
+        except Exception as e:
+            print(f"⚠️  Secrets manager initialization failed: {e}")
+            print("   Continuing with environment variables...")
+    else:
+        print("ℹ️  Secrets manager not available (optional feature).")
+
+    # Initialize performance monitoring
+    performance_monitor = None
+    if PERFORMANCE_AVAILABLE:
+        print("Initializing performance monitoring...")
+        try:
+            performance_monitor = PerformanceMonitor()
+            performance_monitor.start_monitoring()
+            print("✅ Performance monitoring initialized.")
+        except Exception as e:
+            print(f"⚠️  Performance monitoring initialization failed: {e}")
+            print("   Continuing without monitoring...")
+    else:
+        print("ℹ️  Performance monitoring not available (optional feature).")
+
+    # Initialize monitoring stack (Prometheus, Grafana, Redis)
+    monitoring_stack_started = initialize_monitoring_stack()
+
+    # Initialize adaptive rate limiting
+    rate_limiting_enabled = initialize_rate_limiting()
+
     # Log system startup
     audit_logger.log_system_event(
         event_type="SYSTEM_STARTUP",
@@ -422,7 +592,11 @@ def main():
         details={
             "version": "2.0.0",
             "mode": "initialization",
-            "config_validated": True
+            "config_validated": True,
+            "secrets_manager": SECRETS_AVAILABLE,
+            "performance_monitoring": PERFORMANCE_AVAILABLE,
+            "monitoring_stack": monitoring_stack_started,
+            "rate_limiting": rate_limiting_enabled
         }
     )
 
@@ -447,11 +621,11 @@ def main():
         print(f"Caches cleared. Stats: {cache_stats}")
 
     if args.mode == 'live':
-        run_live_monitoring()
+        run_live_monitoring(performance_monitor)
     elif args.mode == 'backtest':
-        run_backtest_mode(args)
+        run_backtest_mode(args, performance_monitor)
     elif args.mode == 'analysis':
-        run_single_analysis()
+        run_single_analysis(performance_monitor)
     elif args.mode == 'discovery':
         run_discovery_mode(args)
     else:

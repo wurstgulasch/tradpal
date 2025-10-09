@@ -1,7 +1,7 @@
 import ccxt
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict
 from config.settings import (
     SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_DATA_LIMIT, HISTORICAL_DATA_LIMIT, 
     MAX_RETRIES_LIVE, MAX_RETRIES_HISTORICAL, CACHE_TTL_LIVE, CACHE_TTL_HISTORICAL, 
@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 from .cache import cache_api_call
 from .input_validation import InputValidator, validate_api_inputs
 from .error_handling import error_boundary, NetworkError, DataError
+import time
+import random
 
 # Load environment variables
 load_dotenv()
@@ -27,7 +29,104 @@ try:
 except ImportError:
     WEBSOCKET_FETCHER_AVAILABLE = False
 
-@error_boundary(operation="fetch_live_data", max_retries=MAX_RETRIES_LIVE)
+class AdaptiveRateLimiter:
+    """Adaptive Rate Limiter für Exchange-API-Aufrufe."""
+
+    def __init__(self, exchange_name: str = EXCHANGE):
+        self.exchange_name = exchange_name
+        self.request_times = []
+        self.rate_limits = self._get_exchange_limits()
+        self.backoff_factor = 1.0
+        self.consecutive_errors = 0
+
+    def _get_exchange_limits(self) -> Dict[str, int]:
+        """Hole Rate-Limits für verschiedene Exchanges."""
+        limits = {
+            'kraken': {'requests_per_second': 1, 'requests_per_minute': 20},
+            'binance': {'requests_per_second': 10, 'requests_per_minute': 1200},
+            'coinbase': {'requests_per_second': 10, 'requests_per_minute': 100},
+            'default': {'requests_per_second': 1, 'requests_per_minute': 60}
+        }
+        return limits.get(self.exchange_name.lower(), limits['default'])
+
+    def can_make_request(self) -> bool:
+        """Prüfe, ob ein Request gemacht werden kann."""
+        now = time.time()
+
+        # Entferne alte Requests außerhalb des Zeitfensters
+        self.request_times = [t for t in self.request_times if now - t < 60]
+
+        # Prüfe Rate-Limits
+        requests_per_minute = len(self.request_times)
+        requests_per_second = len([t for t in self.request_times if now - t < 1])
+
+        return (requests_per_second < self.rate_limits['requests_per_second'] and
+                requests_per_minute < self.rate_limits['requests_per_minute'])
+
+    def record_request(self):
+        """Zeichne einen Request auf."""
+        self.request_times.append(time.time())
+
+    def get_backoff_time(self, retry_count: int) -> float:
+        """Berechne Backoff-Zeit basierend auf Retry-Count und Fehlern."""
+        base_backoff = min(2 ** retry_count, 300)  # Max 5 Minuten
+
+        # Erhöhe Backoff bei aufeinanderfolgenden Fehlern
+        if self.consecutive_errors > 2:
+            base_backoff *= 2
+
+        # Füge Jitter hinzu, um Thundering Herd zu vermeiden
+        jitter = random.uniform(0.1, 1.0) * base_backoff * 0.1
+
+        return base_backoff + jitter
+
+    def record_error(self):
+        """Zeichne einen Fehler auf."""
+        self.consecutive_errors += 1
+
+    def record_success(self):
+        """Zeichne einen Erfolg auf."""
+        self.consecutive_errors = max(0, self.consecutive_errors - 1)
+
+# Global Rate Limiter Instanz
+rate_limiter = AdaptiveRateLimiter()
+
+def adaptive_retry(max_retries: int = 3, base_delay: float = 1.0):
+    """Decorator für adaptive Retries mit Rate-Limiting."""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+
+            for attempt in range(max_retries + 1):
+                try:
+                    # Warte auf Rate-Limit
+                    while not rate_limiter.can_make_request():
+                        backoff_time = rate_limiter.get_backoff_time(attempt)
+                        time.sleep(min(backoff_time, 1.0))  # Max 1 Sekunde warten
+
+                    # Mache Request
+                    rate_limiter.record_request()
+                    result = func(*args, **kwargs)
+
+                    # Erfolg aufzeichnen
+                    rate_limiter.record_success()
+                    return result
+
+                except Exception as e:
+                    last_exception = e
+                    rate_limiter.record_error()
+
+                    if attempt < max_retries:
+                        backoff_time = rate_limiter.get_backoff_time(attempt)
+                        time.sleep(backoff_time)
+
+            # Alle Retries gescheitert
+            raise last_exception
+
+        return wrapper
+    return decorator
+
+@adaptive_retry(max_retries=MAX_RETRIES_LIVE)
 @cache_api_call(ttl_seconds=CACHE_TTL_LIVE)  # Cache for live data
 def fetch_data(limit: int = DEFAULT_DATA_LIMIT) -> pd.DataFrame:
     """
@@ -58,7 +157,7 @@ def fetch_data(limit: int = DEFAULT_DATA_LIMIT) -> pd.DataFrame:
 
     return df
 
-@error_boundary(operation="fetch_historical_data", max_retries=MAX_RETRIES_HISTORICAL)
+@adaptive_retry(max_retries=MAX_RETRIES_HISTORICAL)
 @cache_api_call(ttl_seconds=CACHE_TTL_HISTORICAL)  # Cache for historical data
 def fetch_historical_data(symbol=SYMBOL, exchange_name=EXCHANGE, timeframe=TIMEFRAME, limit=HISTORICAL_DATA_LIMIT, start_date=None):
     """

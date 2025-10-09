@@ -30,6 +30,14 @@ scikit-learn>=1.3.0  # ML algorithms for signal prediction (optional)
 torch>=2.0.0  # PyTorch for advanced neural networks (optional)
 optuna>=3.0.0  # Automated hyperparameter optimization (optional)
 
+# Secrets Management (optional)
+hvac>=2.0.0  # HashiCorp Vault client
+boto3>=1.28.0  # AWS SDK for Secrets Manager
+
+# Monitoring (optional)
+prometheus_client>=0.17.0  # Prometheus metrics collection
+psutil>=5.9.0  # System monitoring
+
 # Performance enhancements
 websocket-client>=1.6.0  # WebSocket support for real-time data streaming
 redis>=5.0.0  # Redis caching for distributed setups

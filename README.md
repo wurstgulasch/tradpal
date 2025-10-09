@@ -35,6 +35,11 @@ cd services/web-ui && streamlit run app.py
 ## 🚀 Latest Features & Improvements
 
 ### Version Highlights (October 2025)
+- **🔐 Enterprise Security**: Secrets management with HashiCorp Vault and AWS Secrets Manager
+- **📊 Advanced Monitoring**: Prometheus metrics collection with Grafana dashboards
+- **🛡️ Adaptive Rate Limiting**: Intelligent API rate limiting with exchange-specific limits
+- **☁️ Cloud-Ready Deployment**: Kubernetes manifests and AWS EC2 automation
+- **🐳 Monitoring Stack**: Complete Docker Compose setup with Prometheus, Grafana, and Redis
 - **Advanced ML Models with PyTorch**: LSTM, GRU, and Transformer neural networks for time series prediction with GPU support
 - **AutoML with Optuna**: Automated hyperparameter optimization with TPE, Random, and Grid sampling strategies
 - **Enhanced Walk-Forward Metrics**: Information Coefficient, Bias-Variance tradeoff, and overfitting detection
@@ -274,6 +279,10 @@ tradpal_indicator/
 - Git
 - **Optional**: TA-Lib (for performance optimization)
 - **Optional**: scikit-learn (for ML signal enhancement)
+- **Optional**: hvac (for HashiCorp Vault secrets)
+- **Optional**: boto3 (for AWS Secrets Manager)
+- **Optional**: prometheus-client, psutil (for monitoring)
+- **Optional**: Docker & Docker Compose (for monitoring stack)
 
 ### Quick Start
 ```bash
@@ -293,6 +302,12 @@ pip install TA-Lib
 
 # Optional: Install scikit-learn for ML signal enhancement
 pip install scikit-learn joblib
+
+# Optional: Install enterprise security and monitoring
+pip install hvac boto3 prometheus-client psutil
+
+# Optional: Install Docker for monitoring stack
+# (Docker Desktop must be installed separately)
 
 # Copy environment template and configure API keys
 cp .env.example .env
@@ -440,6 +455,25 @@ ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
 ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
 ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
 ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
+
+# Secrets Management Configuration
+SECRETS_BACKEND = os.getenv('SECRETS_BACKEND', 'env')  # Options: 'env', 'vault', 'aws-secretsmanager'
+VAULT_ADDR = os.getenv('VAULT_ADDR', 'http://localhost:8200')  # Vault server address
+VAULT_TOKEN = os.getenv('VAULT_TOKEN', '')  # Vault authentication token
+AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')  # AWS region for Secrets Manager
+
+# Monitoring Configuration
+PROMETHEUS_ENABLED = os.getenv('PROMETHEUS_ENABLED', 'false').lower() == 'true'
+PROMETHEUS_PORT = int(os.getenv('PROMETHEUS_PORT', '8000'))
+MONITORING_STACK_ENABLED = os.getenv('MONITORING_STACK_ENABLED', 'false').lower() == 'true'
+DEPLOYMENT_ENV = os.getenv('DEPLOYMENT_ENV', 'local')  # Options: 'local', 'aws', 'kubernetes'
+
+# Rate Limiting Configuration
+RATE_LIMIT_ENABLED = True  # Enable adaptive rate limiting
+ADAPTIVE_RATE_LIMITING_ENABLED = os.getenv('ADAPTIVE_RATE_LIMITING_ENABLED', 'true').lower() == 'true'
+RATE_LIMIT_MAX_RETRIES = 5  # Maximum retries for rate-limited requests
+RATE_LIMIT_BASE_BACKOFF = 2.0  # Base backoff multiplier for retries
+RATE_LIMIT_MAX_BACKOFF = 300  # Maximum backoff time in seconds
 ```
 
 ## 🎯 Usage
@@ -999,6 +1033,49 @@ class LSTMSignalPredictor:
     def predict_signal(self, df: pd.DataFrame) -> dict
 ```
 
+### Security & Monitoring Modules
+
+#### `src.secrets_manager`
+```python
+from src.secrets_manager import initialize_secrets_manager, get_secret
+
+# Initialize secrets backend
+initialize_secrets_manager()
+
+# Retrieve secrets
+api_key = get_secret('kraken_api_key')
+api_secret = get_secret('kraken_api_secret')
+```
+
+#### `src.performance`
+```python
+from src.performance import PerformanceMonitor
+
+# Initialize performance monitoring
+monitor = PerformanceMonitor()
+monitor.start_monitoring()
+
+# Record metrics
+monitor.record_signal("BUY", price=50000, rsi=30)
+monitor.record_trade("EUR/USD", "BUY", pnl=150.0)
+
+# Generate report
+report = monitor.stop_monitoring()
+print(f"CPU Usage: {report['avg_cpu_percent']:.1f}%")
+```
+
+#### `src.data_fetcher` (Rate Limiting)
+```python
+from src.data_fetcher import AdaptiveRateLimiter
+
+# Use rate limiter
+limiter = AdaptiveRateLimiter()
+
+with limiter.limit_requests('kraken'):
+    # API calls are automatically rate-limited
+    data = fetch_data()
+```
+
 ### Integration Modules
 
 #### `integrations.integration_manager`
@@ -1181,3 +1258,27 @@ ALERTS = {
     'performance_drop': {'threshold': 0.1, 'metric': 'win_rate'}
 }
 ```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2025 wurstgulasch
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

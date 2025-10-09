@@ -24,6 +24,33 @@ from config.settings import (
 logging.basicConfig(level=getattr(logging, PERFORMANCE_LOG_LEVEL.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
 
+# Prometheus Metrics (optional)
+try:
+    from prometheus_client import Counter, Gauge, Histogram, start_http_server
+    PROMETHEUS_AVAILABLE = True
+
+    # Performance Metrics
+    api_requests_total = Counter('tradpal_api_requests_total', 'Total API requests', ['method', 'status'])
+    api_request_duration = Histogram('tradpal_api_request_duration_seconds', 'API request duration', ['method'])
+    signal_generation_total = Counter('tradpal_signal_generation_total', 'Total signals generated', ['type'])
+    indicator_calculation_duration = Histogram('tradpal_indicator_calculation_duration_seconds', 'Indicator calculation time')
+
+    # System Metrics
+    cpu_usage_percent = Gauge('tradpal_cpu_usage_percent', 'CPU usage percentage')
+    memory_usage_bytes = Gauge('tradpal_memory_usage_bytes', 'Memory usage in bytes')
+    active_threads = Gauge('tradpal_active_threads', 'Number of active threads')
+
+    # Trading Metrics
+    trades_executed_total = Counter('tradpal_trades_executed_total', 'Total trades executed', ['symbol', 'type'])
+    win_rate_percent = Gauge('tradpal_win_rate_percent', 'Current win rate percentage')
+    profit_loss_total = Gauge('tradpal_profit_loss_total', 'Total profit/loss')
+
+    logger.info("Prometheus metrics initialized")
+
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    logger.info("Prometheus not available, metrics disabled")
+
 
 class PerformanceMonitor:
     """Überwacht System-Performance während der Ausführung."""
@@ -88,11 +115,60 @@ class PerformanceMonitor:
                 memory_mb = memory.used / 1024 / 1024
                 self.memory_usages.append(memory_mb)
 
+                # Prometheus-Metriken aktualisieren
+                if PROMETHEUS_AVAILABLE:
+                    cpu_usage_percent.set(cpu_percent)
+                    memory_usage_bytes.set(memory.used)
+                    active_threads.set(threading.active_count())
+
                 time.sleep(0.5)  # Alle 0.5 Sekunden messen
 
             except Exception as e:
                 logger.warning(f"Fehler beim Performance-Monitoring: {e}")
                 break
+
+    def start_prometheus_server(self, port: int = 8000):
+        """Starte Prometheus HTTP-Server für Metriken-Export."""
+        if not PROMETHEUS_AVAILABLE:
+            logger.warning("Prometheus nicht verfügbar, Server nicht gestartet")
+            return
+
+        try:
+            start_http_server(port)
+            logger.info(f"Prometheus-Metriken-Server gestartet auf Port {port}")
+        except Exception as e:
+            logger.error(f"Fehler beim Starten des Prometheus-Servers: {e}")
+
+    def record_api_request(self, method: str, status: str = "success", duration: float = None):
+        """Zeichne API-Request-Metriken auf."""
+        if not PROMETHEUS_AVAILABLE:
+            return
+
+        api_requests_total.labels(method=method, status=status).inc()
+        if duration is not None:
+            api_request_duration.labels(method=method).observe(duration)
+
+    def record_signal_generation(self, signal_type: str):
+        """Zeichne Signal-Generierungs-Metriken auf."""
+        if not PROMETHEUS_AVAILABLE:
+            return
+
+        signal_generation_total.labels(type=signal_type).inc()
+
+    def record_indicator_calculation(self, duration: float):
+        """Zeichne Indikator-Berechnungs-Metriken auf."""
+        if not PROMETHEUS_AVAILABLE:
+            return
+
+        indicator_calculation_duration.observe(duration)
+
+    def record_trade(self, symbol: str, trade_type: str, pnl: float = 0.0):
+        """Zeichne Trading-Metriken auf."""
+        if not PROMETHEUS_AVAILABLE:
+            return
+
+        trades_executed_total.labels(symbol=symbol, type=trade_type).inc()
+        profit_loss_total.set(profit_loss_total._value.get() + pnl)
 
 
 class PerformanceOptimizer:
@@ -149,7 +225,7 @@ class PerformanceOptimizer:
 
                 # Ergebnisse sammeln
                 results = []
-                for future in as_completed(futures):
+                for future, chunk in zip(futures, chunks):
                     try:
                         result = future.result()
                         results.append(result)
