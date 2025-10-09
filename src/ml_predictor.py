@@ -559,20 +559,20 @@ except ImportError:
 
 if TENSORFLOW_AVAILABLE:
     class LSTMSignalPredictor:
-    """
-    LSTM-based neural network predictor for trading signals.
-
-    Features:
-    - Bidirectional LSTM layers for sequence modeling
-    - Time-series optimized feature engineering
-    - Early stopping and model checkpointing
-    - SHAP-based model interpretability
-    - Confidence scoring and signal enhancement
-    """
-
-    def __init__(self, model_dir: str = "cache/ml_models", symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
-                 sequence_length: int = 60, lstm_units: int = 64, dropout_rate: float = 0.2):
         """
+        LSTM-based neural network predictor for trading signals.
+
+        Features:
+        - Bidirectional LSTM layers for sequence modeling
+        - Time-series optimized feature engineering
+        - Early stopping and model checkpointing
+        - SHAP-based model interpretability
+        - Confidence scoring and signal enhancement
+        """
+
+        def __init__(self, model_dir: str = "cache/ml_models", symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
+                     sequence_length: int = 60, lstm_units: int = 64, dropout_rate: float = 0.2):
+            """
         Initialize the LSTM signal predictor.
 
         Args:

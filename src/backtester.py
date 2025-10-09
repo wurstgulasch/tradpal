@@ -7,6 +7,13 @@ from src.data_fetcher import fetch_historical_data
 from src.indicators import calculate_indicators
 from src.signal_generator import generate_signals, calculate_risk_management
 
+# Import parallel backtesting if available
+try:
+    from src.parallel_backtester import run_parallel_backtests as _run_parallel_backtests
+    PARALLEL_BACKTESTING_AVAILABLE = True
+except ImportError:
+    PARALLEL_BACKTESTING_AVAILABLE = False
+
 class Backtester:
     """
     Historical backtesting module for trading strategies.
@@ -612,4 +619,44 @@ def run_walk_forward_backtest(parameter_grid: dict, evaluation_metric: str = 'sh
     except Exception as e:
         return {
             'error': f'Walk-forward backtest failed: {str(e)}'
+        }
+
+
+def run_multi_symbol_backtest(symbols, exchange=EXCHANGE, timeframe=TIMEFRAME,
+                              start_date=None, end_date=None, initial_capital=CAPITAL,
+                              max_workers=None):
+    """
+    Run backtests for multiple symbols in parallel.
+    
+    Args:
+        symbols: List of trading symbols (e.g., ['BTC/USDT', 'ETH/USDT'])
+        exchange: Exchange name
+        timeframe: Timeframe for backtesting
+        start_date: Start date for backtest period
+        end_date: End date for backtest period
+        initial_capital: Initial capital for each backtest
+        max_workers: Maximum number of worker processes (None = auto)
+        
+    Returns:
+        Dictionary with aggregated results for all symbols
+    """
+    if not PARALLEL_BACKTESTING_AVAILABLE:
+        return {
+            'error': 'Parallel backtesting not available. Install required dependencies.'
+        }
+    
+    try:
+        results = _run_parallel_backtests(
+            symbols=symbols,
+            exchange=exchange,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            initial_capital=initial_capital,
+            max_workers=max_workers
+        )
+        return results
+    except Exception as e:
+        return {
+            'error': f'Multi-symbol backtest failed: {str(e)}'
         }

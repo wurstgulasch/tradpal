@@ -1,6 +1,7 @@
 """
 Caching utilities for the trading indicator system.
 Provides caching for expensive operations like indicator calculations and API calls.
+Supports both file-based caching and Redis for distributed setups.
 """
 
 import functools
@@ -11,6 +12,26 @@ import pickle
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 import pandas as pd
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Try to import Redis
+try:
+    import redis
+    from redis.connection import ConnectionPool
+    REDIS_AVAILABLE = True
+except ImportError:
+    REDIS_AVAILABLE = False
+    logger.info("Redis not available. Using file-based cache only.")
+    logger.info("Install with: pip install redis")
+
+from config.settings import (
+    REDIS_ENABLED, REDIS_HOST, REDIS_PORT, REDIS_DB, 
+    REDIS_PASSWORD, REDIS_TTL_INDICATORS, REDIS_TTL_API,
+    REDIS_MAX_CONNECTIONS
+)
 
 
 class Cache:
@@ -69,9 +90,261 @@ class Cache:
                     pass
 
 
-# Global cache instance
-_indicator_cache = Cache(cache_dir="cache/indicators", ttl_seconds=300)  # 5 minutes for indicators
-_api_cache = Cache(cache_dir="cache/api", ttl_seconds=60)  # 1 minute for API calls
+class RedisCache:
+    """Redis-based cache with TTL support for distributed setups."""
+    
+    def __init__(self, host: str = REDIS_HOST, port: int = REDIS_PORT, 
+                 db: int = REDIS_DB, password: Optional[str] = REDIS_PASSWORD,
+                 ttl_seconds: int = 3600, max_connections: int = REDIS_MAX_CONNECTIONS):
+        """
+        Initialize Redis cache.
+        
+        Args:
+            host: Redis server host
+            port: Redis server port
+            db: Redis database number
+            password: Redis password (if required)
+            ttl_seconds: Default TTL for cache entries
+            max_connections: Maximum number of connections in the pool
+        """
+        self.ttl_seconds = ttl_seconds
+        self.redis_client = None
+        
+        if not REDIS_AVAILABLE:
+            logger.warning("Redis not available. RedisCache will not function.")
+            return
+        
+        if not REDIS_ENABLED:
+            logger.info("Redis caching is disabled in settings.")
+            return
+        
+        try:
+            # Create connection pool
+            pool = ConnectionPool(
+                host=host,
+                port=port,
+                db=db,
+                password=password,
+                max_connections=max_connections,
+                decode_responses=False  # We'll handle encoding/decoding ourselves
+            )
+            self.redis_client = redis.Redis(connection_pool=pool)
+            
+            # Test connection
+            self.redis_client.ping()
+            logger.info(f"Connected to Redis at {host}:{port}")
+            
+        except Exception as e:
+            logger.error(f"Failed to connect to Redis: {e}")
+            self.redis_client = None
+    
+    def _serialize_value(self, value: Any) -> bytes:
+        """Serialize value for storage in Redis."""
+        if isinstance(value, pd.DataFrame):
+            # For DataFrames, use pickle for efficient serialization
+            return pickle.dumps(value)
+        else:
+            # For other types, use pickle as well
+            return pickle.dumps(value)
+    
+    def _deserialize_value(self, data: bytes) -> Any:
+        """Deserialize value from Redis."""
+        try:
+            return pickle.loads(data)
+        except Exception as e:
+            logger.error(f"Failed to deserialize value: {e}")
+            return None
+    
+    def get(self, key: str) -> Optional[Any]:
+        """
+        Get value from Redis cache.
+        
+        Args:
+            key: Cache key
+            
+        Returns:
+            Cached value or None if not found or expired
+        """
+        if not self.redis_client:
+            return None
+        
+        try:
+            data = self.redis_client.get(key)
+            if data:
+                return self._deserialize_value(data)
+            return None
+        except Exception as e:
+            logger.error(f"Error getting value from Redis: {e}")
+            return None
+    
+    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> bool:
+        """
+        Store value in Redis cache.
+        
+        Args:
+            key: Cache key
+            value: Value to cache
+            ttl_seconds: TTL in seconds (uses default if not specified)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.redis_client:
+            return False
+        
+        try:
+            ttl = ttl_seconds if ttl_seconds is not None else self.ttl_seconds
+            serialized = self._serialize_value(value)
+            self.redis_client.setex(key, ttl, serialized)
+            return True
+        except Exception as e:
+            logger.error(f"Error setting value in Redis: {e}")
+            return False
+    
+    def delete(self, key: str) -> bool:
+        """
+        Delete value from Redis cache.
+        
+        Args:
+            key: Cache key
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.redis_client:
+            return False
+        
+        try:
+            self.redis_client.delete(key)
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting value from Redis: {e}")
+            return False
+    
+    def clear(self, pattern: str = "*") -> bool:
+        """
+        Clear cache entries matching pattern.
+        
+        Args:
+            pattern: Key pattern to match (default: all keys)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.redis_client:
+            return False
+        
+        try:
+            keys = self.redis_client.keys(pattern)
+            if keys:
+                self.redis_client.delete(*keys)
+            return True
+        except Exception as e:
+            logger.error(f"Error clearing Redis cache: {e}")
+            return False
+    
+    def exists(self, key: str) -> bool:
+        """
+        Check if key exists in cache.
+        
+        Args:
+            key: Cache key
+            
+        Returns:
+            True if key exists, False otherwise
+        """
+        if not self.redis_client:
+            return False
+        
+        try:
+            return self.redis_client.exists(key) > 0
+        except Exception as e:
+            logger.error(f"Error checking key existence in Redis: {e}")
+            return False
+    
+    def get_ttl(self, key: str) -> Optional[int]:
+        """
+        Get remaining TTL for a key.
+        
+        Args:
+            key: Cache key
+            
+        Returns:
+            Remaining TTL in seconds, or None if key doesn't exist
+        """
+        if not self.redis_client:
+            return None
+        
+        try:
+            ttl = self.redis_client.ttl(key)
+            return ttl if ttl > 0 else None
+        except Exception as e:
+            logger.error(f"Error getting TTL from Redis: {e}")
+            return None
+
+
+class HybridCache:
+    """
+    Hybrid cache that uses Redis for distributed caching with file-based fallback.
+    
+    This cache tries Redis first, then falls back to file-based caching if Redis
+    is unavailable. This provides the benefits of distributed caching when available
+    while maintaining functionality when Redis is not configured.
+    """
+    
+    def __init__(self, cache_dir: str = "cache", ttl_seconds: int = 3600):
+        """
+        Initialize hybrid cache.
+        
+        Args:
+            cache_dir: Directory for file-based cache
+            ttl_seconds: Default TTL for cache entries
+        """
+        self.ttl_seconds = ttl_seconds
+        
+        # Initialize both cache backends
+        self.redis_cache = RedisCache(ttl_seconds=ttl_seconds) if REDIS_ENABLED and REDIS_AVAILABLE else None
+        self.file_cache = Cache(cache_dir=cache_dir, ttl_seconds=ttl_seconds)
+        
+        # Determine which cache to use
+        self.use_redis = (self.redis_cache and 
+                         self.redis_cache.redis_client is not None and 
+                         REDIS_ENABLED)
+        
+        if self.use_redis:
+            logger.info("Using Redis cache for distributed caching")
+        else:
+            logger.info("Using file-based cache (Redis not available or disabled)")
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get value from cache (tries Redis first, then file-based)."""
+        if self.use_redis:
+            value = self.redis_cache.get(key)
+            if value is not None:
+                return value
+        
+        # Fallback to file-based cache
+        return self.file_cache.get(key)
+    
+    def set(self, key: str, value: Any) -> None:
+        """Store value in cache (both Redis and file-based for redundancy)."""
+        if self.use_redis:
+            self.redis_cache.set(key, value)
+        
+        # Always store in file-based cache as backup
+        self.file_cache.set(key, value)
+    
+    def clear(self) -> None:
+        """Clear all cache entries."""
+        if self.use_redis:
+            self.redis_cache.clear()
+        
+        self.file_cache.clear()
+
+
+# Global cache instances
+_indicator_cache = HybridCache(cache_dir="cache/indicators", ttl_seconds=REDIS_TTL_INDICATORS)
+_api_cache = HybridCache(cache_dir="cache/api", ttl_seconds=REDIS_TTL_API)
 
 
 def cache_indicators(ttl_seconds: int = 300):
