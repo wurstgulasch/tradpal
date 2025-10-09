@@ -544,6 +544,7 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    Sequential = None  # Define as None when not available
     print("⚠️  TensorFlow not available. LSTM features will be disabled.")
     print("   Install with: pip install tensorflow")
 
@@ -556,7 +557,8 @@ except ImportError:
     print("   Install with: pip install shap")
 
 
-class LSTMSignalPredictor:
+if TENSORFLOW_AVAILABLE:
+    class LSTMSignalPredictor:
     """
     LSTM-based neural network predictor for trading signals.
 
@@ -1067,6 +1069,11 @@ class LSTMSignalPredictor:
             'training_history': self.training_history
         }
 
+else:
+    # Placeholder class when TensorFlow is not available
+    class LSTMSignalPredictor:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("TensorFlow is not available. Install with: pip install tensorflow")
 
 # Global LSTM predictor instance
 lstm_predictor = None
