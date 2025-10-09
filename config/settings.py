@@ -344,3 +344,24 @@ REALTIME_DATA_RETENTION = 3600  # Data retention time in seconds (1 hour)
 REALTIME_BROADCAST_SIGNALS = True  # Broadcast trading signals
 REALTIME_BROADCAST_MARKET_DATA = True  # Broadcast market data updates
 
+# WebSocket Data Fetching Settings (New)
+WEBSOCKET_DATA_ENABLED = os.getenv('WEBSOCKET_DATA_ENABLED', 'false').lower() == 'true'  # Enable WebSocket data fetching
+WEBSOCKET_RECONNECT_ATTEMPTS = 5  # Number of reconnection attempts
+WEBSOCKET_RECONNECT_DELAY = 5  # Delay between reconnection attempts (seconds)
+WEBSOCKET_PING_TIMEOUT = 30  # Ping timeout for WebSocket connections
+
+# Redis Cache Settings (New)
+REDIS_ENABLED = os.getenv('REDIS_ENABLED', 'false').lower() == 'true'  # Enable Redis caching
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Redis server host
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))  # Redis server port
+REDIS_DB = int(os.getenv('REDIS_DB', '0'))  # Redis database number
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)  # Redis password (if required)
+REDIS_TTL_INDICATORS = 300  # Cache TTL for indicators (seconds)
+REDIS_TTL_API = 60  # Cache TTL for API calls (seconds)
+REDIS_MAX_CONNECTIONS = 10  # Maximum Redis connection pool size
+
+# Parallel Processing Settings (New)
+PARALLEL_BACKTESTING_ENABLED = os.getenv('PARALLEL_BACKTESTING_ENABLED', 'true').lower() == 'true'  # Enable parallel backtesting
+MAX_BACKTEST_WORKERS = int(os.getenv('MAX_BACKTEST_WORKERS', '0'))  # Max workers for parallel backtesting (0 = auto)
+BACKTEST_BATCH_SIZE = int(os.getenv('BACKTEST_BATCH_SIZE', '10'))  # Batch size for parallel processing
+

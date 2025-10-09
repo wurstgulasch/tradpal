@@ -2,7 +2,11 @@ import ccxt
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
-from config.settings import SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_DATA_LIMIT, HISTORICAL_DATA_LIMIT, MAX_RETRIES_LIVE, MAX_RETRIES_HISTORICAL, CACHE_TTL_LIVE, CACHE_TTL_HISTORICAL, KRAKEN_MAX_PER_REQUEST, DEFAULT_HISTORICAL_DAYS, LOOKBACK_DAYS
+from config.settings import (
+    SYMBOL, EXCHANGE, TIMEFRAME, DEFAULT_DATA_LIMIT, HISTORICAL_DATA_LIMIT, 
+    MAX_RETRIES_LIVE, MAX_RETRIES_HISTORICAL, CACHE_TTL_LIVE, CACHE_TTL_HISTORICAL, 
+    KRAKEN_MAX_PER_REQUEST, DEFAULT_HISTORICAL_DAYS, LOOKBACK_DAYS, WEBSOCKET_DATA_ENABLED
+)
 import os
 import asyncio
 import aiohttp
@@ -13,6 +17,15 @@ from .error_handling import error_boundary, NetworkError, DataError
 
 # Load environment variables
 load_dotenv()
+
+# Import WebSocket functionality
+try:
+    from .websocket_data_fetcher import (
+        WebSocketDataFetcher, fetch_realtime_data, is_websocket_available
+    )
+    WEBSOCKET_FETCHER_AVAILABLE = True
+except ImportError:
+    WEBSOCKET_FETCHER_AVAILABLE = False
 
 @error_boundary(operation="fetch_live_data", max_retries=MAX_RETRIES_LIVE)
 @cache_api_call(ttl_seconds=CACHE_TTL_LIVE)  # Cache for live data
@@ -165,3 +178,40 @@ def validate_data(df):
             raise ValueError("Timestamps are not in chronological order")
 
     return True
+
+
+def fetch_data_realtime(symbol: str = SYMBOL, exchange: str = EXCHANGE,
+                       timeframe: str = TIMEFRAME, duration: int = 60) -> pd.DataFrame:
+    """
+    Fetch real-time data using WebSocket if available, otherwise fall back to REST API.
+    
+    Args:
+        symbol: Trading symbol
+        exchange: Exchange name
+        timeframe: Timeframe for candlestick data
+        duration: Duration in seconds to collect data (for WebSocket mode)
+        
+    Returns:
+        DataFrame with OHLCV data
+    """
+    if WEBSOCKET_DATA_ENABLED and WEBSOCKET_FETCHER_AVAILABLE and is_websocket_available():
+        try:
+            # Use async WebSocket fetching
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            data = loop.run_until_complete(
+                fetch_realtime_data(symbol, exchange, timeframe, duration)
+            )
+            loop.close()
+            
+            if not data.empty:
+                return data
+            else:
+                # Fall back to REST API if WebSocket returns no data
+                return fetch_data()
+        except Exception as e:
+            # Fall back to REST API on error
+            return fetch_data()
+    else:
+        # Use standard REST API
+        return fetch_data()

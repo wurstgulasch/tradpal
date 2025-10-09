@@ -544,6 +544,7 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    Sequential = None  # Define as None when not available
     print("⚠️  TensorFlow not available. LSTM features will be disabled.")
     print("   Install with: pip install tensorflow")
 
@@ -556,21 +557,22 @@ except ImportError:
     print("   Install with: pip install shap")
 
 
-class LSTMSignalPredictor:
-    """
-    LSTM-based neural network predictor for trading signals.
-
-    Features:
-    - Bidirectional LSTM layers for sequence modeling
-    - Time-series optimized feature engineering
-    - Early stopping and model checkpointing
-    - SHAP-based model interpretability
-    - Confidence scoring and signal enhancement
-    """
-
-    def __init__(self, model_dir: str = "cache/ml_models", symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
-                 sequence_length: int = 60, lstm_units: int = 64, dropout_rate: float = 0.2):
+if TENSORFLOW_AVAILABLE:
+    class LSTMSignalPredictor:
         """
+        LSTM-based neural network predictor for trading signals.
+
+        Features:
+        - Bidirectional LSTM layers for sequence modeling
+        - Time-series optimized feature engineering
+        - Early stopping and model checkpointing
+        - SHAP-based model interpretability
+        - Confidence scoring and signal enhancement
+        """
+
+        def __init__(self, model_dir: str = "cache/ml_models", symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
+                     sequence_length: int = 60, lstm_units: int = 64, dropout_rate: float = 0.2):
+            """
         Initialize the LSTM signal predictor.
 
         Args:
@@ -1067,6 +1069,11 @@ class LSTMSignalPredictor:
             'training_history': self.training_history
         }
 
+else:
+    # Placeholder class when TensorFlow is not available
+    class LSTMSignalPredictor:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("TensorFlow is not available. Install with: pip install tensorflow")
 
 # Global LSTM predictor instance
 lstm_predictor = None
