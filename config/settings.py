@@ -182,24 +182,24 @@ DISCOVERY_CROSSOVER_RATE = 0.8  # Crossover probability
 DISCOVERY_LOOKBACK_DAYS = 30  # Historical data period for optimization
 
 # Adaptive optimization settings (for discovery mode)
-ADAPTIVE_OPTIMIZATION_ENABLED = True  # Enable/disable periodic discovery optimization
-ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 24  # How often to run discovery (in hours)
-ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply best configuration found
-ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 0.5  # Minimum fitness score to consider applying
-ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
+ADAPTIVE_OPTIMIZATION_ENABLED = os.getenv('ADAPTIVE_OPTIMIZATION_ENABLED', 'true').lower() == 'true'  # Enable/disable periodic discovery optimization
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = int(os.getenv('ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS', '24'))  # How often to run discovery (in hours)
+ADAPTIVE_AUTO_APPLY_BEST = os.getenv('ADAPTIVE_AUTO_APPLY_BEST', 'true').lower() == 'true'  # Automatically apply best configuration found
+ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = float(os.getenv('ADAPTIVE_MIN_PERFORMANCE_THRESHOLD', '0.5'))  # Minimum fitness score to consider applying
+ADAPTIVE_CONFIG_FILE = os.getenv('ADAPTIVE_CONFIG_FILE', 'config/adaptive_config.json')  # File to store optimized config
 
 # Adaptive optimization settings (for live mode)
-ADAPTIVE_OPTIMIZATION_ENABLED = True  # Enable/disable periodic discovery optimization
-ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 1  # How often to run discovery (in hours)
-ADAPTIVE_OPTIMIZATION_POPULATION = 1000  # Smaller population for live optimization
-ADAPTIVE_OPTIMIZATION_GENERATIONS = 50  # Fewer generations for faster results
-ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = 30  # Historical data period for optimization
-ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply best configuration found
-ADAPTIVE_MIN_PERFORMANCE_THRESHOLD = 1  # Minimum fitness score to consider applying
-ADAPTIVE_CONFIG_FILE = 'config/adaptive_config.json'  # File to store optimized config
+ADAPTIVE_OPTIMIZATION_ENABLED_LIVE = os.getenv('ADAPTIVE_OPTIMIZATION_ENABLED', 'true').lower() == 'true'  # Enable/disable periodic discovery optimization
+ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS_LIVE = int(os.getenv('ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS', '1'))  # How often to run discovery (in hours)
+ADAPTIVE_OPTIMIZATION_POPULATION = int(os.getenv('ADAPTIVE_OPTIMIZATION_POPULATION', '1000'))  # Smaller population for live optimization
+ADAPTIVE_OPTIMIZATION_GENERATIONS = int(os.getenv('ADAPTIVE_OPTIMIZATION_GENERATIONS', '50'))  # Fewer generations for faster results
+ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS = int(os.getenv('ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS', '30'))  # Historical data period for optimization
+ADAPTIVE_AUTO_APPLY_BEST_LIVE = os.getenv('ADAPTIVE_AUTO_APPLY_BEST', 'true').lower() == 'true'  # Automatically apply best configuration found
+ADAPTIVE_MIN_PERFORMANCE_THRESHOLD_LIVE = float(os.getenv('ADAPTIVE_MIN_PERFORMANCE_THRESHOLD', '1'))  # Minimum fitness score to consider applying
+ADAPTIVE_CONFIG_FILE_LIVE = os.getenv('ADAPTIVE_CONFIG_FILE', 'config/adaptive_config.json')  # File to store optimized config
 
 # Machine Learning settings
-ML_ENABLED = True  # Enable/disable ML signal enhancement
+ML_ENABLED = os.getenv('ML_ENABLED', 'true').lower() == 'true'  # Enable/disable ML signal enhancement
 ML_MODEL_DIR = 'cache/ml_models'  # Directory to store trained ML models
 ML_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for ML signal override
 ML_TRAINING_HORIZON = 5  # Prediction horizon for training labels (periods ahead)
@@ -362,11 +362,11 @@ def validate_risk_params(params):
     return True
 
 # Performance Optimization Settings
-PERFORMANCE_ENABLED = True  # Enable/disable performance optimizations
-PARALLEL_PROCESSING_ENABLED = True  # Enable parallel processing for indicators
+PERFORMANCE_ENABLED = os.getenv('PERFORMANCE_ENABLED', 'true').lower() == 'true'  # Enable/disable performance optimizations
+PARALLEL_PROCESSING_ENABLED = os.getenv('PARALLEL_PROCESSING_ENABLED', 'true').lower() == 'true'  # Enable parallel processing for indicators
 VECTORIZATION_ENABLED = True  # Enable vectorized calculations
 MEMORY_OPTIMIZATION_ENABLED = True  # Enable memory optimization for DataFrames
-PERFORMANCE_MONITORING_ENABLED = True  # Enable performance monitoring
+PERFORMANCE_MONITORING_ENABLED = os.getenv('PERFORMANCE_MONITORING_ENABLED', 'true').lower() == 'true'  # Enable performance monitoring
 MAX_WORKERS = None  # Maximum worker threads (None = auto-detect CPU cores)
 CHUNK_SIZE = 1000  # Chunk size for parallel processing
 PERFORMANCE_LOG_LEVEL = 'INFO'  # Performance logging level

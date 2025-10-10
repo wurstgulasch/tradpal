@@ -11,6 +11,52 @@ import time
 import argparse
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
+def load_profile(profile_name):
+    """
+    Load the appropriate .env file based on the profile name.
+    Must be called before importing config.settings.
+    """
+    from dotenv import load_dotenv
+
+    profile_files = {
+        'light': '.env.light',
+        'heavy': '.env.heavy'
+    }
+
+    if profile_name in profile_files:
+        env_file = profile_files[profile_name]
+        if os.path.exists(env_file):
+            print(f"🔧 Loading profile: {profile_name} ({env_file})")
+            load_dotenv(env_file)
+            return True
+        else:
+            print(f"⚠️  Profile '{profile_name}' not found, using default .env")
+            load_dotenv()  # Fallback to default
+            return False
+    else:
+        print(f"⚠️  Unknown profile '{profile_name}', using default .env")
+        load_dotenv()  # Fallback to default
+        return False
+
+# Parse profile argument first (before other imports)
+if __name__ == "__main__":
+    # Quick pre-parse for profile argument
+    import sys
+    profile = 'default'
+    for i, arg in enumerate(sys.argv):
+        if arg == '--profile' and i + 1 < len(sys.argv):
+            profile = sys.argv[i + 1]
+            break
+
+    # Load profile before importing settings
+    if profile != 'default':
+        load_profile(profile)
+    else:
+        # Load default .env if no profile specified
+        from dotenv import load_dotenv
+        load_dotenv()
+
+# Now import everything else after profile is loaded
 from src.data_fetcher import fetch_data, fetch_historical_data
 from src.indicators import calculate_indicators
 from src.signal_generator import generate_signals, calculate_risk_management
@@ -75,25 +121,25 @@ class AdaptiveOptimizer:
 
     def __init__(self):
         from config.settings import (
-            ADAPTIVE_OPTIMIZATION_ENABLED,
-            ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS,
+            ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
+            ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS_LIVE,
             ADAPTIVE_OPTIMIZATION_POPULATION,
             ADAPTIVE_OPTIMIZATION_GENERATIONS,
             ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS,
-            ADAPTIVE_AUTO_APPLY_BEST,
-            ADAPTIVE_MIN_PERFORMANCE_THRESHOLD,
+            ADAPTIVE_AUTO_APPLY_BEST_LIVE,
+            ADAPTIVE_MIN_PERFORMANCE_THRESHOLD_LIVE,
             SYMBOL,
             TIMEFRAME,
             get_current_indicator_config
         )
 
-        self.enabled = ADAPTIVE_OPTIMIZATION_ENABLED
-        self.interval_hours = ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS
+        self.enabled = ADAPTIVE_OPTIMIZATION_ENABLED_LIVE
+        self.interval_hours = ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS_LIVE
         self.population = ADAPTIVE_OPTIMIZATION_POPULATION
         self.generations = ADAPTIVE_OPTIMIZATION_GENERATIONS
         self.lookback_days = ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS
-        self.auto_apply = ADAPTIVE_AUTO_APPLY_BEST
-        self.min_threshold = ADAPTIVE_MIN_PERFORMANCE_THRESHOLD
+        self.auto_apply = ADAPTIVE_AUTO_APPLY_BEST_LIVE
+        self.min_threshold = ADAPTIVE_MIN_PERFORMANCE_THRESHOLD_LIVE
         self.symbol = SYMBOL
         self.timeframe = TIMEFRAME
 
@@ -193,8 +239,13 @@ def run_live_monitoring(performance_monitor=None):
 
     log_system_status("Live monitoring mode started")
 
-    # Initialize adaptive optimizer
-    adaptive_optimizer = AdaptiveOptimizer()
+    # Initialize adaptive optimizer only if enabled and config file exists
+    from config.settings import ADAPTIVE_OPTIMIZATION_ENABLED_LIVE, ADAPTIVE_CONFIG_FILE_LIVE
+    import os
+    if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE and os.path.exists(ADAPTIVE_CONFIG_FILE_LIVE):
+        adaptive_optimizer = AdaptiveOptimizer()
+    else:
+        adaptive_optimizer = None
 
     last_signal_time = 0
     signal_cooldown = 60  # Minimum seconds between signals
@@ -202,7 +253,7 @@ def run_live_monitoring(performance_monitor=None):
     while True:
         try:
             # Check if adaptive optimization should run
-            if adaptive_optimizer.should_run_optimization():
+            if adaptive_optimizer and adaptive_optimizer.should_run_optimization():
                 adaptive_optimizer.run_optimization()
 
             # Fetch latest data
@@ -214,9 +265,12 @@ def run_live_monitoring(performance_monitor=None):
                 continue
 
             # Calculate indicators (use adaptive config if available)
-            adaptive_config = adaptive_optimizer.get_current_config()
-            if adaptive_config:
-                data = calculate_indicators(data, config=adaptive_config)
+            if adaptive_optimizer:
+                adaptive_config = adaptive_optimizer.get_current_config()
+                if adaptive_config:
+                    data = calculate_indicators(data, config=adaptive_config)
+                else:
+                    data = calculate_indicators(data)
             else:
                 data = calculate_indicators(data)
 
@@ -545,6 +599,56 @@ def initialize_rate_limiting():
         print(f"⚠️  Rate limiting initialization failed: {e}")
         return False
 
+def print_profile_info():
+    """Print information about available performance profiles."""
+    print("📊 Available Performance Profiles:")
+    print("   light    - Minimal resources, basic indicators only (no AI/ML)")
+    print("   heavy    - Full functionality, all features enabled (with AI/ML)")
+    print("   default  - Use .env file (current behavior)")
+    print()
+
+def validate_profile_config(profile_name):
+    """
+    Validate that the profile configuration is complete and consistent.
+    Returns True if valid, False otherwise.
+    """
+    try:
+        from config.settings import (
+            ML_ENABLED, ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
+            MONITORING_STACK_ENABLED, PERFORMANCE_MONITORING_ENABLED
+        )
+
+        issues = []
+
+        # Light profile should have AI/ML disabled
+        if profile_name == 'light':
+            if ML_ENABLED:
+                issues.append("Light profile should have ML_ENABLED=false")
+            if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE:
+                issues.append("Light profile should have ADAPTIVE_OPTIMIZATION_ENABLED=false")
+            if MONITORING_STACK_ENABLED:
+                issues.append("Light profile should have MONITORING_STACK_ENABLED=false")
+            if PERFORMANCE_MONITORING_ENABLED:
+                issues.append("Light profile should have PERFORMANCE_MONITORING_ENABLED=false")
+
+        # Heavy profile should have advanced features enabled
+        elif profile_name == 'heavy':
+            # Heavy profile can have everything enabled, but we don't enforce it
+            pass
+
+        if issues:
+            print(f"⚠️  Profile validation issues for '{profile_name}':")
+            for issue in issues:
+                print(f"   - {issue}")
+            return False
+
+        print(f"✅ Profile '{profile_name}' validation passed")
+        return True
+
+    except Exception as e:
+        print(f"⚠️  Profile validation failed: {e}")
+        return False
+
 def main():
     # Validate configuration at startup
     print("Validating configuration...")
@@ -552,6 +656,9 @@ def main():
         print("❌ Configuration validation failed. Please fix the errors above and restart.")
         sys.exit(1)
     print("✅ Configuration validation passed.\n")
+
+    # Show profile information
+    print_profile_info()
 
     # Initialize secrets manager for secure API key handling
     if SECRETS_AVAILABLE:
@@ -603,6 +710,8 @@ def main():
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
     parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery'],
                        default='live', help='Operation mode (default: live)')
+    parser.add_argument('--profile', choices=['light', 'heavy'],
+                       default='default', help='Performance profile (default: default .env)')
     parser.add_argument('--symbol', default=SYMBOL, help=f'Trading symbol (default: {SYMBOL})')
     parser.add_argument('--timeframe', default='1m', help='Timeframe (default: 1m)')
     parser.add_argument('--start-date', help='Backtest start date (YYYY-MM-DD)')
@@ -612,6 +721,10 @@ def main():
     parser.add_argument('--generations', type=int, default=20, help='GA generations (default: 20)')
 
     args = parser.parse_args()
+
+    # Validate profile configuration if a specific profile was selected
+    if hasattr(args, 'profile') and args.profile in ['light', 'heavy']:
+        validate_profile_config(args.profile)
 
     # Handle cache clearing
     if args.clear_cache:

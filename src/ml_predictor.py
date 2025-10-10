@@ -1854,18 +1854,23 @@ else:
 # Global LSTM predictor instance
 lstm_predictor = None
 
-def get_lstm_predictor(symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> Optional[LSTMSignalPredictor]:
-    """Get or create LSTM predictor instance."""
-    global lstm_predictor
+if TENSORFLOW_AVAILABLE:
+    def get_lstm_predictor(symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> Optional[LSTMSignalPredictor]:
+        """Get or create LSTM predictor instance."""
+        global lstm_predictor
 
-    if lstm_predictor is None and TENSORFLOW_AVAILABLE:
-        try:
-            lstm_predictor = LSTMSignalPredictor(symbol=symbol, timeframe=timeframe)
-        except Exception as e:
-            print(f"❌ Failed to initialize LSTM predictor: {e}")
-            return None
+        if lstm_predictor is None:
+            try:
+                lstm_predictor = LSTMSignalPredictor(symbol=symbol, timeframe=timeframe)
+            except Exception as e:
+                print(f"❌ Failed to initialize LSTM predictor: {e}")
+                return None
 
-    return lstm_predictor
+        return lstm_predictor
+else:
+    def get_lstm_predictor(symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> Optional[Any]:
+        """Get LSTM predictor instance (not available)."""
+        return None
 
 def is_lstm_available() -> bool:
     """Check if LSTM features are available."""
@@ -1874,18 +1879,23 @@ def is_lstm_available() -> bool:
 # Global Transformer predictor instance
 transformer_predictor = None
 
-def get_transformer_predictor(symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> Optional[TransformerSignalPredictor]:
-    """Get or create Transformer predictor instance."""
-    global transformer_predictor
+if TENSORFLOW_AVAILABLE:
+    def get_transformer_predictor(symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> Optional[TransformerSignalPredictor]:
+        """Get or create Transformer predictor instance."""
+        global transformer_predictor
 
-    if transformer_predictor is None and TENSORFLOW_AVAILABLE:
-        try:
-            transformer_predictor = TransformerSignalPredictor(symbol=symbol, timeframe=timeframe)
-        except Exception as e:
-            print(f"❌ Failed to initialize Transformer predictor: {e}")
-            return None
+        if transformer_predictor is None:
+            try:
+                transformer_predictor = TransformerSignalPredictor(symbol=symbol, timeframe=timeframe)
+            except Exception as e:
+                print(f"❌ Failed to initialize Transformer predictor: {e}")
+                return None
 
-    return transformer_predictor
+        return transformer_predictor
+else:
+    def get_transformer_predictor(symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> Optional[Any]:
+        """Get Transformer predictor instance (not available)."""
+        return None
 
 def is_transformer_available() -> bool:
     """Check if Transformer features are available."""

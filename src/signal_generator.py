@@ -6,7 +6,26 @@ from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIM
 from src.data_fetcher import fetch_data
 from src.indicators import calculate_indicators
 from src.audit_logger import audit_logger, log_signal_buy, log_signal_sell, SignalDecision, RiskAssessment
-from src.ml_predictor import get_ml_predictor, is_ml_available, get_lstm_predictor, is_lstm_available, get_transformer_predictor, is_transformer_available
+
+# Conditional imports for ML features
+try:
+    from src.ml_predictor import get_ml_predictor, is_ml_available, get_lstm_predictor, is_lstm_available, get_transformer_predictor, is_transformer_available
+    ML_IMPORTS_AVAILABLE = True
+except ImportError:
+    print("⚠️  ML predictor imports not available (optional dependencies not installed)")
+    ML_IMPORTS_AVAILABLE = False
+    def get_ml_predictor(*args, **kwargs):
+        return None
+    def is_ml_available():
+        return False
+    def get_lstm_predictor(*args, **kwargs):
+        return None
+    def is_lstm_available():
+        return False
+    def get_transformer_predictor(*args, **kwargs):
+        return None
+    def is_transformer_available():
+        return False
 
 def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -372,10 +391,9 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
     Creates an ensemble prediction from all available models.
     """
     from config.settings import ML_ENABLED, ML_CONFIDENCE_THRESHOLD
-    from src.ml_predictor import get_ml_predictor, is_ml_available, get_lstm_predictor, is_lstm_available, get_transformer_predictor, is_transformer_available
 
     # Check if ML is enabled and available
-    if not ML_ENABLED:
+    if not ML_ENABLED or not ML_IMPORTS_AVAILABLE:
         return df
 
     try:
