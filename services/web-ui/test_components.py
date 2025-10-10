@@ -23,24 +23,22 @@ try:
     from auth import (
         load_users, 
         authenticate_user, 
-        register_user, 
-        DEFAULT_ADMIN
+        register_user
     )
     
     print("   ✅ Authentication module imports successfully")
-    print(f"   ✅ Default admin user: {DEFAULT_ADMIN['username']}")
     
     # Test user registration
-    success, msg = register_user("testuser", "testpass123", "user")
+    success, msg = register_user("testuser", "TestPass123", "user")
     if success:
         print(f"   ✅ User registration works: {msg}")
-    
-    # Test authentication
-    success, msg = authenticate_user("admin", "admin123")
-    if success:
-        print(f"   ✅ Authentication works: {msg}")
-    else:
-        print(f"   ⚠️  Authentication test: {msg}")
+        
+        # Test authentication with registered user
+        success, msg, token = authenticate_user("testuser", "TestPass123")
+        if success and token:
+            print(f"   ✅ Authentication works: {msg}")
+        else:
+            print(f"   ⚠️  Authentication test: {msg}")
     
     # Clean up test user
     users = load_users()

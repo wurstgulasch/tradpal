@@ -1,0 +1,135 @@
+name: 🐛 Bug Report
+description: Report a bug or issue with TradPal Indicator
+title: "[BUG] "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐛 Bug Report
+
+        Thanks for reporting a bug! Please fill out the information below to help us understand and fix the issue.
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: Which version of TradPal Indicator are you using?
+      options:
+        - v2.5.0 (latest)
+        - v2.4.x
+        - v2.3.x
+        - v2.2.x
+        - v2.1.x
+        - v2.0.x
+        - Other (please specify)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: How are you running TradPal Indicator?
+      options:
+        - Local Python environment
+        - Docker container
+        - Kubernetes deployment
+        - Other (please specify)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Performance Profile
+      description: Which performance profile are you using?
+      options:
+        - light (minimal resources)
+        - heavy (full features)
+        - default (.env file)
+        - custom configuration
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python Version
+      description: Which Python version are you using? (e.g., 3.10.5)
+      placeholder: "3.10.5"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Which operating system are you using?
+      placeholder: "macOS 12.6, Ubuntu 22.04, Windows 11, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Please provide a clear and concise description of the bug.
+      placeholder: "Describe what happened, what you expected to happen, and any error messages."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide step-by-step instructions to reproduce the bug.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Run command '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+      placeholder: "Describe what you expected to happen."
+    validations:
+      required: false
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: "Describe what actually happened."
+    validations:
+      required: false
+
+  - type: textarea
+    id: error_logs
+    attributes:
+      label: Error Logs/Screenshots
+      description: Please provide any error logs, screenshots, or additional context.
+      placeholder: |
+        ```
+        Paste error logs here
+        ```
+
+        Or attach screenshots if applicable.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any additional information that might be helpful.
+      placeholder: "Add any other context about the problem here."
+    validations:
+      required: false

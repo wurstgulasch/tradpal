@@ -1,0 +1,108 @@
+name: ❓ Question/Support
+description: Ask a question or request help with TradPal Indicator
+title: "[QUESTION] "
+labels: ["question", "help wanted"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ❓ Question/Support Request
+
+        Need help with TradPal Indicator? We're here to help! Please provide as much detail as possible.
+
+  - type: dropdown
+    id: question_type
+    attributes:
+      label: Type of Question
+      description: What type of question do you have?
+      options:
+        - Setup/Installation issue
+        - Configuration problem
+        - Usage question
+        - Performance issue
+        - Integration question
+        - Documentation clarification
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is your question?
+      options:
+        - Low - General question, can wait
+        - Medium - Blocking my progress
+        - High - Critical issue, urgent help needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: Please describe your question clearly and provide context.
+      placeholder: |
+        What are you trying to accomplish? What have you tried so far?
+
+        Example:
+        "I'm trying to set up the Web UI but getting an error when running `streamlit run app.py`. The error message is: [paste error here]"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Please provide details about your setup.
+      placeholder: |
+        - TradPal Indicator version: v2.5.0
+        - Python version: 3.10.5
+        - Operating System: macOS 12.6
+        - Performance profile: heavy
+        - Installation method: pip/conda/docker
+        - Any custom configurations: [describe]
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps_taken
+    attributes:
+      label: Steps You've Taken
+      description: What have you tried so far to solve this?
+      placeholder: |
+        Describe what you've already tried:
+        - Checked the documentation
+        - Searched existing issues
+        - Tried different configurations
+        - Restarted services
+        - etc.
+    validations:
+      required: false
+
+  - type: textarea
+    id: error_logs
+    attributes:
+      label: Error Messages/Logs
+      description: If applicable, please provide any error messages or logs.
+      placeholder: |
+        ```
+        Paste error messages or logs here
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any additional information that might be helpful.
+      placeholder: |
+        - Screenshots
+        - Configuration files (without sensitive data)
+        - Links to related issues or documentation
+        - Your specific use case or requirements
+    validations:
+      required: false

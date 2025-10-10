@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/wurstgulasch/tradpal_indicator#readme
+    about: Check the README and documentation first
+  - name: 💬 Discussions
+    url: https://github.com/wurstgulasch/tradpal_indicator/discussions
+    about: Ask questions and discuss ideas in GitHub Discussions
+  - name: 🐛 Security Issues
+    url: https://github.com/wurstgulasch/tradpal_indicator/security/advisories/new
+    about: Report security vulnerabilities privately

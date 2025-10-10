@@ -28,6 +28,24 @@ cd services/web-ui && streamlit run app.py
 # Default login: admin / admin123
 ```
 
+### 📸 Screenshots
+
+#### Strategy Builder Interface
+![Strategy Builder](docs/screenshots/strategy_builder.png)
+*Interactive strategy builder with drag-and-drop technical indicators*
+
+#### Live Trading Dashboard
+![Live Dashboard](docs/screenshots/live_dashboard.png)
+*Real-time monitoring with live charts and signal alerts*
+
+#### Backtest Results Visualization
+![Backtest Results](docs/screenshots/backtest_visualization.png)
+*Interactive backtest analysis with performance metrics and trade history*
+
+#### Performance Analytics
+![Performance Analytics](docs/screenshots/performance_analytics.png)
+*Comprehensive performance analytics with risk metrics and returns analysis*
+
 📖 **[Full Web UI Documentation →](services/web-ui/README.md)**
 
 ---
@@ -65,6 +83,9 @@ cd services/web-ui && streamlit run app.py
 - **🛡️ Adaptive Rate Limiting**: Intelligent API rate limiting with exchange-specific limits
 - **☁️ Cloud-Ready Deployment**: Kubernetes manifests and AWS EC2 automation
 - **🐳 Monitoring Stack**: Complete Docker Compose setup with Prometheus, Grafana, and Redis
+- **📈 Portfolio Management**: Multi-asset portfolio system with risk-based allocation and rebalancing
+- **🔍 SHAP Explainability**: PyTorch model interpretability with feature importance and trading signal explanations
+- **📰 Sentiment Analysis**: Multi-source sentiment aggregation from Twitter, news, and Reddit for enhanced signals
 - **Advanced ML Models with PyTorch**: LSTM, GRU, and Transformer neural networks for time series prediction with GPU support
 - **AutoML with Optuna**: Automated hyperparameter optimization with TPE, Random, and Grid sampling strategies
 - **Enhanced Walk-Forward Metrics**: Information Coefficient, Bias-Variance tradeoff, and overfitting detection
@@ -169,6 +190,35 @@ cd services/web-ui && streamlit run app.py
 - **Learning Rate Scheduling**: Dynamic learning rate adjustment for optimal convergence
 - **Model Checkpointing**: Save best models during training for production deployment
 
+### Sentiment Analysis Integration 📰
+- **Multi-Source Sentiment**: Twitter/X, financial news, and Reddit community analysis
+- **Real-time Social Sentiment**: Track cryptocurrency mentions and sentiment on social media
+- **Financial News Analysis**: Monitor news articles for market-moving sentiment
+- **Community Sentiment**: Analyze Reddit discussions for crowd wisdom
+- **Aggregated Signals**: Combine multiple sentiment sources with confidence weighting
+- **Sentiment-Enhanced Trading**: Integrate sentiment scores with technical indicators
+- **NLP Models**: FinBERT and RoBERTa for financial text sentiment analysis
+- **Rate Limiting**: Built-in API rate limiting and intelligent caching
+- **Confidence Scoring**: Sentiment confidence levels for signal filtering
+
+### Portfolio Management System 📈
+- **Multi-Asset Portfolios**: Support for cryptocurrencies, forex, and stocks in single portfolio
+- **Risk-Based Allocation**: Equal weight, risk parity, volatility-targeted, and minimum variance strategies
+- **Dynamic Rebalancing**: Automatic portfolio rebalancing based on thresholds or schedules
+- **Advanced Risk Metrics**: VaR, CVaR, Sharpe ratio, diversification ratio, and concentration analysis
+- **Position Sizing**: ATR-based position sizing with volatility-adjusted leverage
+- **Performance Attribution**: Detailed portfolio analytics and performance tracking
+- **Asset Universe**: Pre-configured support for 20+ major assets across crypto and forex
+
+### SHAP Explainability Integration 🔍
+- **PyTorch Model Explanations**: SHAP-based interpretability for neural network predictions
+- **Feature Importance**: Global and local feature importance analysis
+- **Trading Signal Explanations**: Detailed explanations for buy/sell/hold decisions
+- **Model Transparency**: Understand why ML models make specific predictions
+- **Visualization Support**: Integration with matplotlib for explanation plots
+- **Caching System**: Efficient caching of SHAP explanations for performance
+- **Multi-Model Support**: Explain predictions from different ML architectures
+
 ### AutoML with Optuna 🤖
 - **Hyperparameter Optimization**: Automated search for optimal model parameters
 - **Multiple Sampling Strategies**: TPE (Tree-structured Parzen Estimator), Random, Grid sampling
@@ -224,6 +274,7 @@ cd services/web-ui && streamlit run app.py
 
 ### Project Structure
 ```
+```
 tradpal_indicator/
 ├── config/                 # Configuration files and settings
 │   ├── settings.py         # Main configuration with timeframe-specific parameters
@@ -234,6 +285,9 @@ tradpal_indicator/
 │   ├── signal_generator.py # Signal generation and risk management
 │   ├── backtester.py       # Historical backtesting engine
 │   ├── ml_predictor.py     # Machine learning signal enhancement
+│   ├── portfolio_manager.py # Multi-asset portfolio management system
+│   ├── shap_explainer.py   # SHAP-based model explainability
+│   ├── sentiment_analyzer.py # Multi-source sentiment analysis
 │   ├── performance.py      # System monitoring and performance tracking
 │   ├── audit_logger.py     # Structured JSON logging and compliance
 │   ├── cache.py           # API response caching system
@@ -245,11 +299,15 @@ tradpal_indicator/
 │   └── scripts/           # Utility scripts and management tools
 ├── integrations/          # Notification and webhook integrations
 │   ├── telegram/          # Telegram bot integration
-│   ├── discord/           # Discord webhook integration
+│   ├── discord/          # Discord webhook integration
 │   ├── email/             # Email notifications
 │   ├── sms/               # SMS notifications
 │   └── webhook/           # Generic webhook support
 ├── tests/                 # Comprehensive test suite (540+ tests)
+│   ├── test_portfolio_manager.py # Portfolio management tests
+│   ├── test_shap_integration.py  # SHAP explainability tests
+│   ├── test_sentiment_analysis.py # Sentiment analysis tests
+│   └── ...                # Additional test files
 ├── output/                # Generated signals and backtest results
 ├── cache/                 # ML models and API cache storage
 ├── logs/                  # Application logs with rotation
@@ -260,6 +318,7 @@ tradpal_indicator/
 ├── .env.light             # Light performance profile configuration
 ├── .env.heavy             # Heavy performance profile configuration
 └── docker-compose.yml     # Multi-container deployment
+```
 ```
 
 ### Performance Profiles System 🏃‍♂️
@@ -297,10 +356,8 @@ tradpal_indicator/
 - Git
 - **Optional**: TA-Lib (for performance optimization)
 - **Optional**: scikit-learn (for ML signal enhancement)
-- **Optional**: hvac (for HashiCorp Vault secrets)
-- **Optional**: boto3 (for AWS Secrets Manager)
-- **Optional**: prometheus-client, psutil (for monitoring)
-- **Optional**: Docker & Docker Compose (for monitoring stack)
+- **Optional**: PyTorch (for advanced ML models)
+- **Optional**: tweepy, textblob, transformers (for sentiment analysis)
 
 ### Quick Start
 ```bash
@@ -324,6 +381,15 @@ pip install scikit-learn joblib
 # Optional: Install enterprise security and monitoring
 pip install hvac boto3 prometheus-client psutil
 
+# Optional: Install web UI
+pip install streamlit plotly flask flask-login werkzeug PyJWT
+
+# Optional: Install sentiment analysis
+pip install tweepy textblob transformers newsapi-python praw
+
+# Optional: Install portfolio management and SHAP
+pip install shap
+
 # Optional: Install Docker for monitoring stack
 # (Docker Desktop must be installed separately)
 
@@ -344,999 +410,186 @@ python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 20
 python scripts/demo_performance.py
 ```
 
-### Environment Configuration
-Create a `.env` file in the project root with your API credentials, or use the provided profile configurations:
+### PyPI Installation (Recommended)
+
+TradPal Indicator is available on PyPI for easy installation:
 
 ```bash
-# Exchange API Keys (optional, for authenticated endpoints)
-KRAKEN_API_KEY=your_kraken_api_key
-KRAKEN_API_SECRET=your_kraken_api_secret
+# Install core package
+pip install tradpal-indicator
 
-# Logging Configuration
-LOG_LEVEL=INFO
-LOG_FILE=logs/tradpal_indicator.log
+# Install with web UI support
+pip install tradpal-indicator[webui]
 
-# Advanced Settings
-ENABLE_MTA=true
-ADX_THRESHOLD=25
-FIBONACCI_LEVELS=161.8,261.8
+# Install with ML support
+pip install tradpal-indicator[ml]
+
+# Install with sentiment analysis
+pip install tradpal-indicator[sentiment]
+
+# Install with all optional features
+pip install tradpal-indicator[all]
+
+# Install development dependencies
+pip install tradpal-indicator[dev]
 ```
 
-### Performance Profiles
-The system includes pre-configured performance profiles for different hardware capabilities:
-
-#### Light Profile (.env.light)
-- Minimal resource usage for basic trading signals
-- Disables AI/ML, monitoring, and advanced features
-- Suitable for MacBook Air, Raspberry Pi, or low-end hardware
-
-#### Heavy Profile (.env.heavy)
-- Full functionality with all advanced features enabled
-- Includes AI/ML, monitoring stack, and parallel processing
-- Requires powerful hardware with GPU support for optimal performance
-
-**Usage:**
-```bash
-# Use light profile
-python main.py --profile light --mode live
-
-# Use heavy profile
-python main.py --profile heavy --mode live
-```
-
-### Docker Deployment
-```bash
-# Build and run with Docker Compose
-docker-compose up --build
-
-# Or run with Docker directly
-docker build -t tradpal-indicator .
-docker run --env-file .env -v $(pwd)/output:/app/output tradpal-indicator
-```
-
-## ⚙️ Configuration
-
-Edit `config/settings.py` to customize behavior:
-
-```python
-# Trading pair and exchange
-SYMBOL = 'EUR/USD'          # Trading pair (ccxt format)
-EXCHANGE = 'kraken'         # Exchange name (must be supported by ccxt)
-TIMEFRAME = '1m'            # Chart timeframe
-
-# Timeframe-specific parameters for scalability
-TIMEFRAME_PARAMS = {
-    '1m': {
-        'ema_short': 9, 'ema_long': 21, 'rsi_period': 14, 'bb_period': 20,
-        'atr_period': 14, 'adx_period': 14, 'rsi_oversold': 30, 'rsi_overbought': 70
-    },
-    '5m': {
-        'ema_short': 12, 'ema_long': 26, 'rsi_period': 14, 'bb_period': 20,
-        'atr_period': 14, 'adx_period': 14, 'rsi_oversold': 35, 'rsi_overbought': 65
-    },
-    '1h': {
-        'ema_short': 50, 'ema_long': 200, 'rsi_period': 14, 'bb_period': 20,
-        'atr_period': 14, 'adx_period': 14, 'rsi_oversold': 40, 'rsi_overbought': 60
-    }
-}
-
-# Multi-Timeframe Analysis (MTA)
-ENABLE_MTA = True           # Enable signal confirmation on higher timeframes
-MTA_TIMEFRAMES = ['5m', '15m']  # Higher timeframes for confirmation
-
-# Advanced Indicators
-ENABLE_ADX = True           # Enable ADX for trend strength filtering
-ADX_THRESHOLD = 25          # Minimum ADX for valid signals
-ENABLE_FIBONACCI = True     # Enable Fibonacci extensions for take-profit
-FIBONACCI_LEVELS = [161.8, 261.8]  # Fibonacci extension levels
-
-# Modular Indicator Configuration
-DEFAULT_INDICATOR_CONFIG = {
-    'ema': {'enabled': True, 'periods': [9, 21]},
-    'rsi': {'enabled': True, 'period': 14},
-    'bb': {'enabled': True, 'period': 20, 'std_dev': 2},
-    'atr': {'enabled': True, 'period': 14},
-    'adx': {'enabled': False, 'period': 14},
-    'fibonacci': {'enabled': False}
-}
-
-# Risk management
-CAPITAL = 10000             # Total trading capital
-RISK_PER_TRADE = 0.01       # Risk per trade (1% of capital)
-SL_MULTIPLIER = 1.5         # Stop-loss multiplier (ATR × SL_MULTIPLIER)
-TP_MULTIPLIER = 3.0         # Take-profit multiplier (ATR × TP_Multiplier)
-LEVERAGE_BASE = 10          # Base leverage
-LEVERAGE_MIN = 5            # Minimum leverage
-LEVERAGE_MAX = 10           # Maximum leverage
-
-# Backtesting parameters
-BACKTEST_START_DATE = '2024-01-01'  # Default backtest start date
-BACKTEST_END_DATE = '2024-12-31'    # Default backtest end date
-
-# Data and output
-LOOKBACK_DAYS = 7           # Historical data for analysis
-OUTPUT_FORMAT = 'json'      # Output format
-OUTPUT_FILE = 'output/signals.json'  # Output file path
-BACKTEST_OUTPUT_FILE = 'output/signals_backtest.json'  # Backtest output file
-
-# Machine Learning settings
-ML_ENABLED = True  # Enable/disable ML signal enhancement
-ML_MODEL_DIR = 'cache/ml_models'  # Directory to store trained ML models
-ML_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for ML signal override
-ML_TRAINING_HORIZON = 5  # Prediction horizon for training labels (periods ahead)
-ML_RETRAINING_INTERVAL_HOURS = 24  # How often to retrain models (hours)
-ML_MIN_TRAINING_SAMPLES = 1000  # Minimum samples required for training
-ML_TEST_SIZE = 0.2  # Fraction of data for testing
-ML_CV_FOLDS = 5  # Number of cross-validation folds
-ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
-
-# Advanced ML Configuration (PyTorch)
-ML_USE_PYTORCH = False  # Enable PyTorch models (LSTM, GRU, Transformer)
-ML_PYTORCH_MODEL_TYPE = 'lstm'  # Options: 'lstm', 'gru', 'transformer'
-ML_PYTORCH_HIDDEN_SIZE = 128  # Hidden layer size for PyTorch models
-ML_PYTORCH_NUM_LAYERS = 2  # Number of layers for PyTorch models
-ML_PYTORCH_DROPOUT = 0.2  # Dropout rate for regularization
-ML_PYTORCH_LEARNING_RATE = 0.001  # Learning rate for training
-ML_PYTORCH_BATCH_SIZE = 32  # Batch size for training
-ML_PYTORCH_EPOCHS = 100  # Maximum training epochs
-ML_PYTORCH_EARLY_STOPPING_PATIENCE = 10  # Early stopping patience
-
-# AutoML Configuration (Optuna)
-ML_USE_AUTOML = False  # Enable automated hyperparameter optimization
-ML_AUTOML_N_TRIALS = 100  # Number of Optuna trials for hyperparameter search
-ML_AUTOML_TIMEOUT = 3600  # Maximum time for AutoML optimization (seconds)
-ML_AUTOML_STUDY_NAME = 'tradpal_automl'  # Name for Optuna study
-ML_AUTOML_STORAGE = None  # Database URL for Optuna storage (None = in-memory)
-ML_AUTOML_SAMPLER = 'tpe'  # Sampler type: 'tpe', 'random', 'grid'
-ML_AUTOML_PRUNER = 'median'  # Pruner type: 'median', 'hyperband', 'none'
-
-# Ensemble Methods Configuration
-ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
-ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
-ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
-ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
-
-# Secrets Management Configuration
-SECRETS_BACKEND = os.getenv('SECRETS_BACKEND', 'env')  # Options: 'env', 'vault', 'aws-secretsmanager'
-VAULT_ADDR = os.getenv('VAULT_ADDR', 'http://localhost:8200')  # Vault server address
-VAULT_TOKEN = os.getenv('VAULT_TOKEN', '')  # Vault authentication token
-AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')  # AWS region for Secrets Manager
-
-# Monitoring Configuration
-PROMETHEUS_ENABLED = os.getenv('PROMETHEUS_ENABLED', 'false').lower() == 'true'
-PROMETHEUS_PORT = int(os.getenv('PROMETHEUS_PORT', '8000'))
-MONITORING_STACK_ENABLED = os.getenv('MONITORING_STACK_ENABLED', 'false').lower() == 'true'
-DEPLOYMENT_ENV = os.getenv('DEPLOYMENT_ENV', 'local')  # Options: 'local', 'aws', 'kubernetes'
-
-# Rate Limiting Configuration
-RATE_LIMIT_ENABLED = True  # Enable adaptive rate limiting
-ADAPTIVE_RATE_LIMITING_ENABLED = os.getenv('ADAPTIVE_RATE_LIMITING_ENABLED', 'true').lower() == 'true'
-RATE_LIMIT_MAX_RETRIES = 5  # Maximum retries for rate-limited requests
-RATE_LIMIT_BASE_BACKOFF = 2.0  # Base backoff multiplier for retries
-RATE_LIMIT_MAX_BACKOFF = 300  # Maximum backoff time in seconds
-```
-
-## 🎯 Usage
-
-### Command Line Interface
-
-The system supports multiple operational modes and performance profiles:
+After PyPI installation, you can run TradPal commands directly:
 
 ```bash
-# Live monitoring mode (default)
-python main.py --mode live
+# Run live trading
+tradpal --mode live
 
-# Live monitoring with light profile (minimal resources)
-python main.py --mode live --profile light
+# Run backtesting
+tradpal --mode backtest --symbol BTC/USDT --timeframe 1h
 
-# Live monitoring with heavy profile (all features)
-python main.py --mode live --profile heavy
+# Launch web UI
+tradpal-webui
 
-# Historical backtesting mode
-python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-01-15
-
-# Genetic Algorithm Discovery mode
-python main.py --mode discovery --symbol EUR/USD --timeframe 1h --population 50 --generations 20
-
-# Single analysis mode
-python main.py --mode analysis
-
-# Run test suite
-python -m pytest tests/ -v
+# Run sentiment analysis demo
+python -c "from tradpal_indicator.examples.sentiment_analysis_demo import demo_aggregated_sentiment; demo_aggregated_sentiment()"
 ```
 
-### Operational Modes
+### Development Installation
 
-#### Live Monitoring Mode
+For contributors and development:
+
 ```bash
-python main.py --mode live
-```
-- Runs continuous market monitoring
-- Monitors every 30 seconds for 1-minute charts
-- Only displays output when signals are generated
-- Automatically saves signals to JSON with timestamps
-- Includes MTA confirmation if enabled
-- **New**: Enhanced audit logging for all signal decisions and system events
-- **New**: ML signal enhancement if enabled and model is trained
-- Press `Ctrl+C` to stop gracefully
+# Clone repository
+git clone https://github.com/wurstgulasch/tradpal_indicator.git
+cd tradpal_indicator
 
-#### Backtesting Mode
+# Install in development mode
+pip install -e .[dev,ml,webui,sentiment]
+
+# Run tests
+pytest
+
+# Build for PyPI
+python setup_pypi.py build
+
+# Test package
+python setup_pypi.py test
+
+# Publish to PyPI (requires API token)
+python setup_pypi.py publish
+```
+
+## 📚 Examples & Tutorials
+
+TradPal Indicator includes comprehensive Jupyter notebooks and example scripts to help you get started quickly.
+
+### 📓 Jupyter Notebooks
+
+#### BTC/USDT Backtest Tutorial (`examples/btc_usdt_backtest.ipynb`)
+Complete step-by-step guide for backtesting BTC/USDT trading strategies:
+- Data fetching from Kraken exchange
+- Technical indicator calculation (EMA, RSI, Bollinger Bands, ATR, ADX)
+- Signal generation with buy/sell logic
+- Risk management (position sizing, stop-loss, take-profit)
+- Interactive visualization with Plotly
+- Performance analysis and metrics
+- Historical simulation walkthrough
+
+**Perfect for beginners** - Learn backtesting from data fetching to performance analysis.
+
+#### ML Training Guide (`examples/ml_training_guide.ipynb`)
+Comprehensive machine learning tutorial covering:
+- Data preparation and feature engineering
+- Training multiple ML models (Random Forest, XGBoost, LSTM)
+- Model evaluation and cross-validation
+- Feature importance analysis with SHAP
+- Model persistence and deployment
+- Best practices for financial ML
+
+**Advanced users** - Master ML-enhanced trading signal prediction.
+
+### 🚀 Quick Start Examples
+
+#### Basic Backtest Script (`examples/demo_performance.py`)
+```python
+# Run a complete backtest in < 30 seconds
+python examples/demo_performance.py
+```
+
+#### ML Model Training (`scripts/train_ml_model.py`)
+```python
+# Train ML models for signal enhancement
+python scripts/train_ml_model.py --symbol BTC/USDT --timeframe 1h --start-date 2024-01-01
+```
+
+#### Performance Demonstration (`scripts/demo_performance.py`)
+```python
+# See TradPal in action with live performance metrics
+python scripts/demo_performance.py
+```
+
+#### Sentiment Analysis Mode
 ```bash
-python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+python examples/sentiment_analysis_demo.py
 ```
-- Performs historical backtesting on specified date range
-- Calculates comprehensive performance metrics
-- Outputs detailed results including win rate, P&L, drawdown, Sharpe ratio
-- Saves backtest results to separate JSON file
-- Supports all timeframes and symbols
+- Analyzes real-time sentiment from Twitter, news, and Reddit
+- Provides sentiment-enhanced trading signals
+- Demonstrates multi-source sentiment aggregation
+- Shows integration with technical analysis
 
-#### Genetic Algorithm Discovery Mode
+#### Portfolio Management Demo
 ```bash
-python main.py --mode discovery --symbol EUR/USD --timeframe 1h --population 50 --generations 20
+python examples/portfolio_management_demo.py
 ```
-- Uses genetic algorithms to optimize technical indicator combinations
-- Evolves optimal EMA periods, RSI thresholds, Bollinger Band settings
-- Tests hundreds of configurations automatically
-- Outputs top 10 performing configurations with detailed metrics
-- Saves results to `output/discovery_results.json`
-- Useful for systematic strategy development and parameter optimization
+- Creates multi-asset portfolios with different allocation strategies
+- Demonstrates risk-based rebalancing and performance tracking
+- Shows portfolio optimization and risk metrics calculation
+- Interactive portfolio analysis and reporting
 
-**Discovery Parameters:**
-- `--population`: Number of configurations tested per generation (default: 50)
-- `--generations`: Number of evolution cycles (default: 20)
-- `--symbol`: Trading pair to optimize for
-- `--timeframe`: Chart timeframe for backtesting
-- `--start-date`/`--end-date`: Historical data period for optimization
-
-**Example Output:**
-```
-🧬 Starting Discovery Mode - Genetic Algorithm Optimization
-Optimizing indicators for EUR/USD on 1h timeframe
-Population: 50, Generations: 20
-
-🏆 Discovery Results - Top 10 Configurations:
-#1 - Fitness: 85.23
-   P&L: 2.45%, Win Rate: 85.0%
-   Sharpe: 1.67, Trades: 12
-   Indicators: EMA[12, 45], RSI(21), BB(25), ATR(14)
-```
-
-#### Adaptive Optimization Mode (Self-Learning System)
+#### SHAP Explainability Demo
 ```bash
-# Enable adaptive optimization in config/settings.py
-ADAPTIVE_OPTIMIZATION_ENABLED = True
-ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS = 24  # Run optimization every 24 hours
-ADAPTIVE_AUTO_APPLY_BEST = True  # Automatically apply optimized configurations
-
-# Then run live mode normally
-python main.py --mode live
+python examples/shap_integration_demo.py
 ```
-- Runs discovery optimization automatically during live trading at configured intervals
-- Uses recent market data (configurable lookback period) for optimization
-- Optionally applies best configurations automatically if they meet performance thresholds
-- Saves optimized configurations to persist across system restarts
-- Provides detailed logging of optimization runs and configuration changes
+- Demonstrates ML model explainability with SHAP
+- Shows feature importance analysis for trading signals
+- Interactive visualizations of model decisions
+- Integration examples with PyTorch models
 
-**Adaptive Configuration Parameters:**
-- `ADAPTIVE_OPTIMIZATION_ENABLED`: Master switch for adaptive optimization
-- `ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS`: Hours between optimization runs
-- `ADAPTIVE_OPTIMIZATION_POPULATION`: GA population size (smaller for live mode)
-- `ADAPTIVE_OPTIMIZATION_GENERATIONS`: GA generations (fewer for faster results)
-- `ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS`: Historical data period for optimization
-- `ADAPTIVE_AUTO_APPLY_BEST`: Whether to automatically apply optimized configs
-- `ADAPTIVE_MIN_PERFORMANCE_THRESHOLD`: Minimum fitness score for auto-application
-- `ADAPTIVE_CONFIG_FILE`: File path for storing optimized configurations
+**Sentiment Configuration:**
+```python
+# Enable sentiment analysis in config/settings.py
+SENTIMENT_ENABLED = True
+SENTIMENT_SOURCES = ['twitter', 'news', 'reddit']  # Sources to use
+SENTIMENT_HOURS_BACK = 24  # Hours of historical data
+SENTIMENT_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for signals
+SENTIMENT_SIGNAL_WEIGHT = 0.3  # Weight in ensemble decisions
+```
 
-**Example Live Output with Adaptive Optimization:**
+**Portfolio Management Configuration:**
+```python
+# Enable portfolio management in config/settings.py
+PORTFOLIO_MANAGEMENT_ENABLED = True
+DEFAULT_ALLOCATION_METHOD = 'risk_parity'  # equal_weight, risk_parity, volatility_targeted
+REBALANCING_FREQUENCY = 'weekly'  # daily, weekly, monthly, threshold
+REBALANCE_THRESHOLD = 0.05  # 5% deviation triggers rebalance
+MAX_ASSETS_PER_PORTFOLIO = 20
+RISK_FREE_RATE = 0.02  # For Sharpe ratio calculations
 ```
-Starting TradPal Indicator - Continuous Monitoring Mode...
-🔄 Starting adaptive optimization...
-🧬 Running adaptive optimization for EUR/USD...
-   Period: 2024-09-08 to 2024-10-08
-   Population: 30, Generations: 10
-✅ Adaptive optimization completed!
-   Best Fitness: 75.23
-   Win Rate: 75.0%
-   Total P&L: 1.45%
-🔄 Applied new optimized configuration (fitness: 75.23)
-🟢 BUY SIGNAL at 14:30:15...
+
+**SHAP Explainability Configuration:**
+```python
+# Enable SHAP explanations in config/settings.py
+SHAP_ENABLED = True
+SHAP_CACHE_EXPIRATION = 3600  # Cache explanations for 1 hour
+SHAP_MAX_SAMPLES = 1000  # Maximum samples for global explanations
+SHAP_PLOT_FORMAT = 'png'  # Format for explanation plots
 ```
-#### ML Model Training Mode
+
+**API Keys Setup:**
 ```bash
-python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+# Twitter/X API (for social sentiment)
+export TWITTER_BEARER_TOKEN="your_bearer_token"
+
+# News API (for financial news)
+export NEWS_API_KEY="your_news_api_key"
+
+# Reddit API (for community sentiment)
+export REDDIT_CLIENT_ID="your_client_id"
+export REDDIT_CLIENT_SECRET="your_client_secret"
 ```
-- Trains machine learning models for signal enhancement using historical data
-- Uses technical indicators as features to predict future price movements
-- Performs cross-validation and evaluates model performance
-- Saves trained models to cache/ml_models/ for use in live trading
-- Supports multiple algorithms (Random Forest, Gradient Boosting, Neural Networks)
-- Outputs detailed performance metrics and feature importance
-
-**ML Training Parameters:**
-- `--symbol`: Trading pair to train on
-- `--timeframe`: Chart timeframe for training data
-- `--start-date`/`--end-date`: Historical data period
-- `--algorithm`: ML algorithm to use (rf, gb, nn)
-- `--test-size`: Fraction of data for testing (default: 0.2)
-- `--cv-folds`: Number of cross-validation folds (default: 5)
-
-#### Walk-Forward Optimization Mode
-```bash
-python main.py --mode walk-forward --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31 --window-size 30 --step-size 7
-```
-- **Out-of-Sample Testing**: Validates strategies on unseen data to prevent overfitting
-- **Rolling Window Analysis**: Uses expanding windows of historical data for robust validation
-- **Performance Stability**: Measures strategy consistency across different market conditions
-- **Overfitting Prevention**: Identifies strategies that perform well only on in-sample data
-
-**Walk-Forward Parameters:**
-- `--window-size`: Initial training window size (days)
-- `--step-size`: How many days to advance the window each step
-- `--min-trades`: Minimum trades required for valid analysis
-- `--stability-threshold`: Minimum performance stability required
-
-**Example Output:**
-```
-🧪 Walk-Forward Analysis - EUR/USD (1h)
-Window Size: 30 days, Step Size: 7 days
-
-Window 1 (2024-01-01 to 2024-01-30):
-  In-Sample: Win Rate 68.5%, Sharpe 1.45
-  Out-of-Sample: Win Rate 65.2%, Sharpe 1.32
-  Stability Score: 0.89
-
-Window 2 (2024-01-08 to 2024-02-06):
-  In-Sample: Win Rate 71.2%, Sharpe 1.52
-  Out-of-Sample: Win Rate 69.8%, Sharpe 1.48
-  Stability Score: 0.95
-
-Overall Stability: 0.92 (Excellent)
-✅ Strategy shows strong out-of-sample performance
-```
-
-### Programmatic Usage
-
-#### Basic Analysis Pipeline
-```python
-from src.data_fetcher import fetch_historical_data
-from src.indicators import calculate_indicators
-from src.signal_generator import generate_signals, calculate_risk_management
-from src.output import save_signals_to_json
-
-# Fetch historical data
-data = fetch_historical_data()
-
-# Process data through pipeline
-data = calculate_indicators(data)
-data = generate_signals(data)
-data = calculate_risk_management(data)
-
-# Save results
-save_signals_to_json(data)
-```
-
-#### Backtesting Example
-```python
-from src.backtester import run_backtest
-
-# Run backtest with custom parameters
-results = run_backtest(
-    symbol='EUR/USD',
-    timeframe='1h',
-    start_date='2024-01-01',
-    end_date='2024-12-31'
-)
-
-print(f"Win Rate: {results['win_rate']}%")
-print(f"Total P&L: ${results['total_pnl']:.2f}")
-print(f"Sharpe Ratio: {results['sharpe_ratio']:.2f}")
-```
-
-#### Custom Indicator Configuration
-```python
-from src.indicators import calculate_indicators
-
-# Use default configuration
-data = calculate_indicators(data)
-
-# Use custom configuration
-custom_config = {
-    'ema': {'enabled': True, 'periods': [5, 10]},
-    'rsi': {'enabled': True, 'period': 21},
-    'bb': {'enabled': True, 'period': 15, 'std_dev': 1.5},
-    'atr': {'enabled': True, 'period': 21},
-    'adx': {'enabled': True, 'period': 14}
-}
-data = calculate_indicators(data, config=custom_config)
-```
-
-#### Real-time Monitoring Script
-```python
-import time
-import json
-from src.data_fetcher import fetch_data
-from src.indicators import calculate_indicators
-from src.signal_generator import generate_signals
-
-def monitor_realtime():
-    """Monitor market in real-time and alert on signals."""
-    last_signal_time = None
-
-    while True:
-        try:
-            # Fetch latest data
-            data = fetch_data(limit=100)
-
-            # Process indicators and signals
-            data = calculate_indicators(data)
-            data = generate_signals(data)
-
-            # Check for new signals
-            latest_row = data.iloc[-1]
-            current_time = latest_row.name
-
-            if (latest_row['Buy_Signal'] == 1 or latest_row['Sell_Signal'] == 1):
-                if last_signal_time != current_time:
-                    signal_type = "BUY" if latest_row['Buy_Signal'] == 1 else "SELL"
-                    price = latest_row['close']
-
-                    print(f"🚨 {signal_type} Signal at {current_time}: {price}")
-
-                    # Send to integrations (if configured)
-                    from integrations.integration_manager import IntegrationManager
-                    manager = IntegrationManager()
-                    signal_data = {
-                        'type': signal_type,
-                        'price': price,
-                        'time': current_time.isoformat(),
-                        'symbol': 'EUR/USD'
-                    }
-                    manager.send_signal_to_all(signal_data)
-
-                    last_signal_time = current_time
-
-            time.sleep(30)  # Check every 30 seconds
-
-        except KeyboardInterrupt:
-            print("Monitoring stopped by user")
-            break
-        except Exception as e:
-            print(f"Error in monitoring: {e}")
-            time.sleep(60)
-
-if __name__ == "__main__":
-    monitor_realtime()
-```
-
-#### Performance Analysis Script
-```python
-import pandas as pd
-from src.backtester import run_backtest, calculate_performance_metrics
-import matplotlib.pyplot as plt
-
-def analyze_strategy_performance():
-    """Analyze strategy performance across multiple timeframes."""
-
-    timeframes = ['1m', '5m', '15m', '1h', '4h', '1d']
-    results = {}
-
-    for timeframe in timeframes:
-        print(f"Backtesting {timeframe} timeframe...")
-
-        result = run_backtest(
-            symbol='EUR/USD',
-            timeframe=timeframe,
-            start_date='2024-01-01',
-            end_date='2024-12-31'
-        )
-
-        results[timeframe] = result['backtest_results']
-
-    # Create performance comparison
-    performance_df = pd.DataFrame(results).T
-
-    # Plot results
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-
-    # Win Rate
-    performance_df['win_rate'].plot(kind='bar', ax=axes[0,0], title='Win Rate by Timeframe')
-    axes[0,0].set_ylabel('Win Rate (%)')
-
-    # Total P&L
-    performance_df['total_pnl'].plot(kind='bar', ax=axes[0,1], title='Total P&L by Timeframe', color='green')
-    axes[0,1].set_ylabel('P&L ($)')
-
-    # Sharpe Ratio
-    performance_df['sharpe_ratio'].plot(kind='bar', ax=axes[1,0], title='Sharpe Ratio by Timeframe', color='blue')
-    axes[1,0].set_ylabel('Sharpe Ratio')
-
-    # Max Drawdown
-    performance_df['max_drawdown'].plot(kind='bar', ax=axes[1,1], title='Max Drawdown by Timeframe', color='red')
-    axes[1,1].set_ylabel('Max Drawdown (%)')
-
-    plt.tight_layout()
-    plt.savefig('output/performance_analysis.png', dpi=300, bbox_inches='tight')
-    plt.show()
-
-    # Print summary
-    print("\n=== Performance Summary ===")
-    print(performance_df.round(2))
-
-    # Find best performing timeframe
-    best_timeframe = performance_df['sharpe_ratio'].idxmax()
-    print(f"\nBest performing timeframe (Sharpe Ratio): {best_timeframe}")
-    print(f"Sharpe Ratio: {performance_df.loc[best_timeframe, 'sharpe_ratio']:.2f}")
-
-if __name__ == "__main__":
-    analyze_strategy_performance()
-```
-
-## 📊 Performance Benchmarks
-
-### Indicator Calculation Performance
-- **TA-Lib Integration**: Up to 10x faster indicator calculations
-- **Vectorized Operations**: Sub-millisecond processing for 1-minute charts
-- **Memory Efficient**: < 50MB RAM usage for typical operations
-- **Scalable**: Handles 100k+ data points without performance degradation
-
-### Backtesting Performance
-- **Historical Analysis**: Processes 1 year of 1-minute data in < 10 seconds
-- **Multi-Timeframe**: Concurrent analysis across 5+ timeframes
-- **Memory Optimized**: Efficient DataFrame operations with minimal memory footprint
-
-### Test Suite Performance
-- **Full Test Suite**: 522+ tests complete in ~2 minutes (vs 49+ minutes previously)
-- **No Infinite Loops**: All monitoring tests now use proper timeout mechanisms
-- **Conditional Testing**: Optional dependency tests properly skipped when unavailable
-- **CI/CD Ready**: Automated testing pipeline with comprehensive coverage
-
-### ML Model Performance
-- **Training Time**: PyTorch LSTM models train in 2-5 minutes on modern hardware
-- **Inference Speed**: < 10ms per prediction for real-time signal enhancement
-- **GPU Acceleration**: Automatic CUDA support for 3-5x faster training
-
-### Integration Performance
-- **Webhook Delivery**: < 100ms response time for signal notifications
-- **Database Operations**: Redis caching provides < 1ms lookup times
-- **Concurrent Processing**: Handles multiple integrations simultaneously
-
-## 🔄 Changelog
-
-### Version 2.5.0 (October 2025)
-- **🏃‍♂️ Performance Profiles System**: Simplified from 3 to 2 profiles (light/heavy) with automatic validation
-- **🧪 Enhanced Testing**: 540+ comprehensive test cases with profile validation tests
-- **📊 Profile-Based Configuration**: Environment-specific settings via .env.light and .env.heavy files
-- **🔧 Modular Profile Management**: Easy switching between resource-optimized and full-feature modes
-- **🧠 Advanced ML Models**: PyTorch LSTM, GRU, and Transformer neural networks with GPU support
-- **🤖 AutoML Integration**: Optuna-based hyperparameter optimization with pruning and visualization
-- **📊 Enhanced Walk-Forward**: Information Coefficient, Bias-Variance analysis, and overfitting detection
-- **🎭 Ensemble Methods**: Smart combination of GA and ML predictions with adaptive weighting
-- **🎨 Interactive Web UI**: Streamlit-based strategy builder and real-time monitoring dashboard
-- **🔧 Modular Services**: Separate services for ML training, optimization, and web interface
-- **📈 Performance Enhancements**: TA-Lib integration and vectorized operations
-- **🧪 Comprehensive Testing**: 540+ test cases with 100% pass rate (13 skipped for optional dependencies)
-- **🐛 Bug Fixes**: Fixed infinite loop issues in monitoring tests and performance timeouts
-
-### Version 2.0.0 (July 2025)
-- **🔌 Integration System**: Telegram, Discord, Email, SMS, and Webhook support
-- **🧬 Genetic Algorithm Discovery**: Automated parameter optimization
-- **📊 Walk-Forward Optimization**: Out-of-sample strategy validation
-- **🛡️ Security Enhancements**: Environment variables and secure API management
-- **🐳 Docker Support**: Complete containerization with Docker Compose
-
-### Version 1.5.0 (April 2025)
-- **📈 Multi-Timeframe Analysis**: Signal confirmation across timeframes
-- **⚡ Performance Optimization**: Vectorized operations and caching
-- **🔍 Enhanced Audit Logging**: JSON-structured logging with rotation
-- **🧪 Comprehensive Testing**: 540+ test cases with 100% pass rate
-
-### Version 1.0.0 (January 2025)
-- **📊 Core Trading Indicators**: EMA, RSI, Bollinger Bands, ATR, ADX
-- **🎯 Signal Generation**: Buy/Sell signals with risk management
-- **📈 Backtesting Engine**: Historical performance analysis
-- **⚙️ Configuration System**: Modular parameter management
-
-## ❓ FAQ
-
-### General Questions
-
-**Q: Is this ready for live trading?**
-A: This is an educational project. Always backtest thoroughly and consult financial professionals before live trading.
-
-**Q: Which exchanges are supported?**
-A: All exchanges supported by ccxt library (100+ exchanges including Binance, Kraken, Coinbase, etc.)
-
-**Q: Can I use this without API keys?**
-A: Yes, for public market data. API keys are only required for authenticated endpoints or higher rate limits.
-
-**Q: What's the minimum system requirements?**
-A: Python 3.10+, 4GB RAM, internet connection. GPU recommended for ML features.
-
-### Technical Questions
-
-**Q: How do I enable TA-Lib for better performance?**
-A: Install TA-Lib: `pip install TA-Lib`. The system automatically detects and uses it.
-
-**Q: Can I run multiple instances?**
-A: Yes, but configure different output directories and ensure API rate limits are respected.
-
-**Q: How do I customize indicators?**
-A: Modify `config/settings.py` or use the Web UI strategy builder for visual configuration.
-
-**Q: What's the difference between discovery and walk-forward modes?**
-A: Discovery optimizes parameters, walk-forward validates strategy robustness on unseen data.
-
-### Troubleshooting
-
-**Q: Getting "Module not found" errors?**
-A: Run `pip install -r requirements.txt` and ensure you're in the correct conda environment.
-
-**Q: No signals being generated?**
-A: Check your indicator parameters in `config/settings.py` and ensure market conditions meet signal criteria.
-
-**Q: Backtesting shows no trades?**
-A: Verify date ranges and ensure sufficient historical data is available for the symbol/timeframe.
-
-**Q: Integration messages not sending?**
-A: Check your API keys/tokens in `.env` file and verify network connectivity.
-
-## 🚨 Known Limitations
-
-### Current Constraints
-- **Real-time Data**: Limited to REST API polling (websocket support planned)
-- **Exchange Coverage**: Dependent on ccxt library support
-- **ML Models**: Requires sufficient historical data for training
-- **Memory Usage**: Large datasets may require optimization for low-memory systems
-
-### Planned Improvements
-- **WebSocket Integration**: Real-time data streaming
-- **Additional Indicators**: MACD, Stochastic, Williams %R
-- **Portfolio Optimization**: Multi-asset portfolio management
-- **Paper Trading**: Simulated trading environment
-- **Advanced ML**: Reinforcement learning and automated strategy generation
-
-### Workarounds
-- **High-Frequency Trading**: Use shorter polling intervals or implement custom websocket clients
-- **Memory Issues**: Process data in chunks or use database storage for large datasets
-- **Limited Exchanges**: Most major exchanges are supported; check ccxt documentation
-
-## 🤝 Contributing Guidelines
-
-### Development Setup
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature-name`
-3. Set up development environment:
-   ```bash
-   conda create -n tradpal_dev python=3.10
-   conda activate tradpal_dev
-   pip install -r requirements.txt
-   pip install -e .  # For development installation
-   ```
-
-### Code Standards
-- **PEP 8**: Follow Python style guidelines
-- **Type Hints**: Use type annotations for function parameters and return values
-- **Docstrings**: Use Google-style docstrings for all public functions
-- **Testing**: Write tests for new features (aim for 80%+ coverage)
-- **Documentation**: Update README and docstrings for API changes
-
-### Pull Request Process
-1. Ensure all tests pass: `pytest`
-2. Update documentation if needed
-3. Write clear commit messages
-4. Create a detailed PR description explaining the changes
-5. Request review from maintainers
-
-### Testing Requirements
-- All new code must include unit tests
-- Integration tests for new features
-- Performance tests for optimization changes
-- Documentation tests for examples
-
-### Commit Message Format
-```
-type(scope): description
-
-[optional body]
-
-[optional footer]
-```
-
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
-
-## 🔗 API Reference
-
-### Core Modules
-
-#### `src.data_fetcher`
-```python
-def fetch_historical_data(symbol: str, timeframe: str, limit: int = 1000) -> pd.DataFrame
-def fetch_data(symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame
-```
-
-#### `src.indicators`
-```python
-def calculate_indicators(df: pd.DataFrame, config: dict = None) -> pd.DataFrame
-def ema(series: pd.Series, period: int) -> pd.Series
-def rsi(series: pd.Series, period: int = 14) -> pd.Series
-def bollinger_bands(series: pd.Series, period: int = 20, std_dev: float = 2.0) -> tuple
-def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series
-```
-
-#### `src.signal_generator`
-```python
-def generate_signals(df: pd.DataFrame) -> pd.DataFrame
-def calculate_risk_management(df: pd.DataFrame) -> pd.DataFrame
-def validate_signals(df: pd.DataFrame) -> pd.DataFrame
-```
-
-#### `src.backtester`
-```python
-def run_backtest(symbol: str, timeframe: str, start_date: str, end_date: str) -> dict
-def calculate_performance_metrics(trades: list) -> dict
-```
-
-### ML Modules
-
-#### `src.ml_predictor`
-```python
-class MLSignalPredictor:
-    def __init__(self, model_dir: str = "cache/ml_models")
-    def train_model(self, df: pd.DataFrame) -> dict
-    def predict_signal(self, df: pd.DataFrame) -> dict
-
-class LSTMSignalPredictor:
-    def __init__(self, model_dir: str = "cache/ml_models", symbol: str = "EUR/USD")
-    def train_model(self, df: pd.DataFrame) -> dict
-    def predict_signal(self, df: pd.DataFrame) -> dict
-```
-
-### Security & Monitoring Modules
-
-#### `src.secrets_manager`
-```python
-from src.secrets_manager import initialize_secrets_manager, get_secret
-
-# Initialize secrets backend
-initialize_secrets_manager()
-
-# Retrieve secrets
-api_key = get_secret('kraken_api_key')
-api_secret = get_secret('kraken_api_secret')
-```
-
-#### `src.performance`
-```python
-from src.performance import PerformanceMonitor
-
-# Initialize performance monitoring
-monitor = PerformanceMonitor()
-monitor.start_monitoring()
-
-# Record metrics
-monitor.record_signal("BUY", price=50000, rsi=30)
-monitor.record_trade("EUR/USD", "BUY", pnl=150.0)
-
-# Generate report
-report = monitor.stop_monitoring()
-print(f"CPU Usage: {report['avg_cpu_percent']:.1f}%")
-```
-
-#### `src.data_fetcher` (Rate Limiting)
-```python
-from src.data_fetcher import AdaptiveRateLimiter
-
-# Use rate limiter
-limiter = AdaptiveRateLimiter()
-
-with limiter.limit_requests('kraken'):
-    # API calls are automatically rate-limited
-    data = fetch_data()
-```
-
-### Integration Modules
-
-#### `integrations.integration_manager`
-```python
-class IntegrationManager:
-    def __init__(self)
-    def send_signal_to_all(self, signal_data: dict) -> None
-    def add_integration(self, integration_type: str, config: dict) -> None
-```
-
-## 🔄 Migration Guide
-
-### Upgrading from v1.x to v2.x
-
-#### Breaking Changes
-- Configuration structure changed in `config/settings.py`
-- ML model directory moved from `models/` to `cache/ml_models/`
-- Integration system requires new configuration format
-
-#### Migration Steps
-1. **Backup your configuration**:
-   ```bash
-   cp config/settings.py config/settings_backup.py
-   ```
-
-2. **Update configuration**:
-   ```python
-   # Old format (v1.x)
-   SYMBOL = 'EUR/USD'
-   EMA_PERIODS = [9, 21]
-
-   # New format (v2.x)
-   SYMBOL = 'EUR/USD'
-   TIMEFRAME_PARAMS = {
-       '1m': {'ema_short': 9, 'ema_long': 21, ...}
-   }
-   ```
-
-3. **Migrate ML models**:
-   ```bash
-   mv models/ cache/ml_models/
-   ```
-
-4. **Update integrations**:
-   ```bash
-   python scripts/manage_integrations.py --setup
-   ```
-
-#### New Features to Enable
-- Enable TA-Lib: `pip install TA-Lib`
-- Configure integrations in `.env` file
-- Set up Web UI: `pip install streamlit plotly`
-
-### Upgrading from v2.0 to v2.5
-
-#### New Dependencies
-```bash
-pip install torch torchvision torchaudio  # For PyTorch models
-pip install optuna  # For AutoML
-pip install shap  # For model explainability
-```
-
-#### Configuration Updates
-Add to `config/settings.py`:
-```python
-# PyTorch ML Settings
-ML_USE_PYTORCH = True
-ML_PYTORCH_MODEL_TYPE = 'lstm'
-ML_PYTORCH_HIDDEN_SIZE = 128
-
-# AutoML Settings
-ML_USE_AUTOML = True
-ML_AUTOML_N_TRIALS = 100
-
-# Ensemble Settings
-ML_USE_ENSEMBLE = True
-```
-
-## 🔧 CI/CD Pipeline
-
-### GitHub Actions Configuration
-```yaml
-# .github/workflows/ci.yml
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: [3.9, 3.10, 3.11]
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Run tests
-      run: |
-        pytest --cov=src --cov-report=xml
-
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-
-  docker:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Build Docker image
-      run: docker build -t tradpal-indicator .
-
-    - name: Test Docker image
-      run: docker run --rm tradpal-indicator python -c "import src.main; print('OK')"
-```
-
-### Local Development Pipeline
-```bash
-# Run full pipeline locally
-make ci
-
-# Individual stages
-make lint      # Code quality checks
-make test      # Run test suite
-make build     # Build Docker image
-make deploy    # Deploy to staging
-```
-
-## 📈 Monitoring & Observability
-
-### Health Checks
-```bash
-# System health check
-python -c "from src.main import health_check; health_check()"
-
-# API connectivity test
-python -c "from src.data_fetcher import test_api_connection; test_api_connection()"
-
-# ML model validation
-python scripts/train_ml_model.py --validate-only
-```
-
-### Performance Monitoring
-```python
-# Enable performance logging
-import logging
-logging.getLogger('tradpal.performance').setLevel(logging.DEBUG)
-
-# Monitor key metrics
-from src.performance import PerformanceMonitor
-monitor = PerformanceMonitor()
-monitor.start_monitoring()
-
-# Generate performance report
-monitor.generate_report()
-```
-
-### Alert Configuration
-```python
-# Configure alerts in settings.py
-ALERTS = {
-    'signal_frequency': {'threshold': 10, 'window': '1h'},
-    'api_errors': {'threshold': 5, 'window': '1h'},
-    'performance_drop': {'threshold': 0.1, 'metric': 'win_rate'}
-}
-```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-Copyright (c) 2025 wurstgulasch
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.

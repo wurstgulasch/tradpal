@@ -1,6 +1,7 @@
 pandas>=1.5.0
 numpy>=1.21.0
 ccxt>=4.0.0
+ccxtpro>=1.0.0  # WebSocket support for real-time data streaming
 matplotlib>=3.5.0
 pytest>=7.0.0
 python-dotenv>=1.0.0
@@ -44,3 +45,10 @@ psutil>=5.9.0  # System monitoring
 # Performance enhancements
 websocket-client>=1.6.0  # WebSocket support for real-time data streaming
 redis>=5.0.0  # Redis caching for distributed setups
+
+# Sentiment Analysis (optional)
+tweepy>=4.14.0  # Twitter/X API client for social sentiment
+textblob>=0.17.1  # Simple NLP for sentiment analysis
+transformers>=4.21.0  # Pre-trained NLP models (FinBERT, RoBERTa)
+newsapi-python>=0.2.7  # News API client for financial news sentiment
+praw>=7.7.0  # Reddit API client for community sentiment

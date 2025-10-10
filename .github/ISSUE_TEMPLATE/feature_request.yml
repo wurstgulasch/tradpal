@@ -1,0 +1,116 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement for TradPal Indicator
+title: "[FEATURE] "
+labels: ["enhancement", "feature-request"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ Feature Request
+
+        Thanks for suggesting a new feature! Please fill out the information below to help us understand your idea.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: Provide a brief summary of the feature you'd like to see.
+      placeholder: "A clear and concise description of the proposed feature."
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem/Use Case
+      description: What problem would this feature solve? What's your use case?
+      placeholder: |
+        Describe the problem this feature would solve:
+        - What are you trying to accomplish?
+        - What's currently difficult or impossible?
+        - How would this feature help you?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like this feature to work?
+      placeholder: |
+        Describe your proposed solution:
+        - How should the feature work?
+        - What would the user experience be like?
+        - Are there any specific requirements or constraints?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Nice to have
+        - Would be helpful
+        - Important for my use case
+        - Critical/blocking my work
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Estimated Complexity
+      description: How complex do you think this feature would be to implement?
+      options:
+        - Simple (small changes, 1-2 days)
+        - Medium (moderate changes, 1-2 weeks)
+        - Complex (major changes, 1+ months)
+        - Very Complex (architectural changes, multiple months)
+        - Not sure
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: feature_areas
+    attributes:
+      label: Feature Areas
+      description: Which areas of TradPal Indicator would this feature affect?
+      options:
+        - [ ] Data fetching (CCXT, WebSocket)
+        - [ ] Technical indicators (EMA, RSI, BB, etc.)
+        - [ ] Signal generation & trading logic
+        - [ ] Risk management (position sizing, stop-loss)
+        - [ ] Machine learning & AI features
+        - [ ] Web UI & user interface
+        - [ ] Backtesting & performance analysis
+        - [ ] Integrations (Telegram, Discord, etc.)
+        - [ ] Configuration & profiles
+        - [ ] Documentation & tutorials
+        - [ ] Deployment & DevOps
+        - [ ] Other (please specify)
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: "Describe any alternative approaches you've considered."
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: Any additional information, screenshots, or examples.
+      placeholder: |
+        Add any other context, screenshots, or examples that might be helpful:
+        - Links to similar features in other tools
+        - Screenshots of desired UI/UX
+        - Code examples or pseudocode
+        - Research or articles related to this feature
+    validations:
+      required: false

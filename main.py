@@ -232,6 +232,228 @@ class AdaptiveOptimizer:
         """Get current adaptive configuration for indicator calculation."""
         return self.current_config
 
+def run_paper_trading_mode(args, performance_monitor=None):
+    """Run paper trading mode with simulated orders."""
+    print("📈 Starting TradPal Indicator - Paper Trading Mode")
+    print("💰 Virtual portfolio trading - NO REAL MONEY AT RISK")
+    print("Press Ctrl+C to stop paper trading\n")
+
+    log_system_status("Paper trading mode started")
+
+    # Initialize virtual portfolio
+    virtual_capital = 10000.0  # $10,000 starting capital
+    current_position = None  # None, 'long', or 'short'
+    entry_price = 0.0
+    position_size = 0.0
+    total_trades = 0
+    winning_trades = 0
+    total_pnl = 0.0
+
+    print(f"💼 Initial Virtual Capital: ${virtual_capital:.2f}")
+    print(f"📊 Trading {args.symbol} on {args.timeframe} timeframe\n")
+
+    # Initialize adaptive optimizer only if enabled and config file exists
+    from config.settings import ADAPTIVE_OPTIMIZATION_ENABLED_LIVE, ADAPTIVE_CONFIG_FILE_LIVE
+    import os
+    if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE and ADAPTIVE_CONFIG_FILE_LIVE and os.path.exists(ADAPTIVE_CONFIG_FILE_LIVE):
+        adaptive_optimizer = AdaptiveOptimizer()
+    else:
+        adaptive_optimizer = None
+
+    last_signal_time = 0
+    signal_cooldown = 60  # Minimum seconds between signals
+
+    while True:
+        try:
+            # Check if adaptive optimization should run
+            if adaptive_optimizer and adaptive_optimizer.should_run_optimization():
+                adaptive_optimizer.run_optimization()
+
+            # Fetch latest data
+            data = fetch_data()
+
+            if data.empty:
+                print("No data available, retrying in 30 seconds...")
+                time.sleep(30)
+                continue
+
+            # Calculate indicators (use adaptive config if available)
+            if adaptive_optimizer:
+                adaptive_config = adaptive_optimizer.get_current_config()
+                if adaptive_config:
+                    data = calculate_indicators(data, config=adaptive_config)
+                else:
+                    data = calculate_indicators(data)
+            else:
+                data = calculate_indicators(data)
+
+            # Generate signals
+            data = generate_signals(data)
+
+            # Calculate risk management
+            data = calculate_risk_management(data)
+
+            # Check for new signals
+            latest = data.iloc[-1]  # Get most recent data point
+
+            current_time = time.time()
+            has_new_signal = False
+
+            # Handle BUY signals
+            if latest['Buy_Signal'] == 1 and (current_time - last_signal_time) > signal_cooldown:
+                if current_position is None:  # Only enter if no current position
+                    entry_price = latest['close']
+                    position_size_pct = latest['Position_Size_Percent']
+                    position_size = (virtual_capital * position_size_pct / 100) / entry_price
+                    stop_loss = latest['Stop_Loss_Buy']
+                    take_profit = latest['Take_Profit_Buy']
+                    leverage = latest['Leverage']
+
+                    current_position = 'long'
+
+                    print(f"🟢 PAPER BUY SIGNAL at {time.strftime('%H:%M:%S')}")
+                    print(f"   Entry Price: ${entry_price:.5f}")
+                    print(f"   Position Size: {position_size:.6f} {args.symbol.split('/')[0]} (${position_size * entry_price:.2f})")
+                    print(f"   Stop Loss: ${stop_loss:.5f}")
+                    print(f"   Take Profit: ${take_profit:.5f}")
+                    print(f"   Leverage: {leverage}x")
+                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
+                    print()
+
+                    # Log signal for audit trail
+                    log_signal(
+                        signal_type="PAPER_BUY",
+                        price=entry_price,
+                        rsi=latest['RSI'],
+                        ema9=latest['EMA9'],
+                        ema21=latest['EMA21'],
+                        position_size_pct=position_size_pct,
+                        stop_loss=stop_loss,
+                        take_profit=take_profit,
+                        leverage=leverage
+                    )
+
+                    last_signal_time = current_time
+                    has_new_signal = True
+
+            # Handle SELL signals
+            elif latest['Sell_Signal'] == 1 and (current_time - last_signal_time) > signal_cooldown:
+                if current_position == 'long':  # Only exit if we have a long position
+                    exit_price = latest['close']
+                    pnl = (exit_price - entry_price) * position_size * leverage
+                    total_pnl += pnl
+                    virtual_capital += pnl
+                    total_trades += 1
+
+                    if pnl > 0:
+                        winning_trades += 1
+
+                    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+
+                    print(f"🔴 PAPER SELL SIGNAL at {time.strftime('%H:%M:%S')}")
+                    print(f"   Exit Price: ${exit_price:.5f}")
+                    print(f"   P&L: ${pnl:.2f} ({'+' if pnl > 0 else ''}{pnl/entry_price*100:.2f}%)")
+                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
+                    print(f"   Total Trades: {total_trades}, Win Rate: {win_rate:.1f}%")
+                    print(f"   Total P&L: ${total_pnl:.2f}")
+                    print()
+
+                    # Log signal for audit trail
+                    log_signal(
+                        signal_type="PAPER_SELL",
+                        price=exit_price,
+                        rsi=latest['RSI'],
+                        ema9=latest['EMA9'],
+                        ema21=latest['EMA21'],
+                        position_size_pct=0,  # Exit position
+                        stop_loss=0,
+                        take_profit=0,
+                        leverage=leverage
+                    )
+
+                    # Reset position
+                    current_position = None
+                    entry_price = 0.0
+                    position_size = 0.0
+
+                    last_signal_time = current_time
+                    has_new_signal = True
+
+                elif current_position is None:  # Could implement short selling here
+                    print(f"🔴 SELL SIGNAL at {time.strftime('%H:%M:%S')} (no position to sell)")
+                    print(f"   Price: {latest['close']:.5f}")
+                    print()
+
+            # Check for stop loss / take profit hits (simplified)
+            elif current_position == 'long':
+                current_price = latest['close']
+
+                # Check stop loss
+                if current_price <= stop_loss:
+                    exit_price = stop_loss
+                    pnl = (exit_price - entry_price) * position_size * leverage
+                    total_pnl += pnl
+                    virtual_capital += pnl
+                    total_trades += 1
+
+                    print(f"🛑 PAPER STOP LOSS HIT at {time.strftime('%H:%M:%S')}")
+                    print(f"   Exit Price: ${exit_price:.5f}")
+                    print(f"   P&L: ${pnl:.2f} ({pnl/entry_price*100:.2f}%)")
+                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
+                    print()
+
+                    current_position = None
+                    entry_price = 0.0
+                    position_size = 0.0
+
+                # Check take profit
+                elif current_price >= take_profit:
+                    exit_price = take_profit
+                    pnl = (exit_price - entry_price) * position_size * leverage
+                    total_pnl += pnl
+                    virtual_capital += pnl
+                    total_trades += 1
+                    winning_trades += 1
+
+                    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+
+                    print(f"🎯 PAPER TAKE PROFIT HIT at {time.strftime('%H:%M:%S')}")
+                    print(f"   Exit Price: ${exit_price:.5f}")
+                    print(f"   P&L: ${pnl:.2f} ({pnl/entry_price*100:.2f}%)")
+                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
+                    print(f"   Total Trades: {total_trades}, Win Rate: {win_rate:.1f}%")
+                    print()
+
+                    current_position = None
+                    entry_price = 0.0
+                    position_size = 0.0
+
+            # Save signals to JSON only when there are actual signals
+            if has_new_signal:
+                save_signals_to_json(data)
+
+            # Wait before next check (30 seconds for 1-minute charts)
+            time.sleep(30)
+
+        except KeyboardInterrupt:
+            print("\nStopping Paper Trading...")
+            print(f"📊 Final Results:")
+            print(f"   Virtual Capital: ${virtual_capital:.2f}")
+            print(f"   Total Trades: {total_trades}")
+            if total_trades > 0:
+                win_rate = winning_trades / total_trades * 100
+                print(f"   Win Rate: {win_rate:.1f}%")
+                print(f"   Total P&L: ${total_pnl:.2f}")
+                print(f"   Return: {total_pnl/10000*100:.2f}%")
+
+            log_system_status("Paper trading mode stopped by user")
+            break
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            log_error(f"Paper trading error: {e}")
+            print("Retrying in 60 seconds...")
+            time.sleep(60)
+
 def run_live_monitoring(performance_monitor=None):
     """Run continuous live monitoring mode."""
     print("Starting TradPal Indicator - Continuous Monitoring Mode...")
@@ -708,7 +930,7 @@ def main():
     )
 
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
-    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery'],
+    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery', 'paper'],
                        default='live', help='Operation mode (default: live)')
     parser.add_argument('--profile', choices=['light', 'heavy'],
                        default='default', help='Performance profile (default: default .env)')
@@ -741,6 +963,8 @@ def main():
         run_single_analysis(performance_monitor)
     elif args.mode == 'discovery':
         run_discovery_mode(args)
+    elif args.mode == 'paper':
+        run_paper_trading_mode(args, performance_monitor)
     else:
         print(f"Unknown mode: {args.mode}")
 
