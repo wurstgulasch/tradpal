@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TradPal Indicator Web UI - Main Application
+TradPal Web UI - Main Application
 
 Comprehensive web interface with authentication, strategy builder, and interactive controls.
 Uses Streamlit for UI, Plotly for charts, and Flask-Login for authentication.
@@ -42,7 +42,7 @@ except ImportError:
 def main():
     """Main application entry point."""
     st.set_page_config(
-        page_title="TradPal Indicator - Web UI",
+        page_title="TradPal - Web UI",
         page_icon="📊",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -69,7 +69,7 @@ def main():
         st.session_state.username = username
     
     # Main UI
-    st.title("📊 TradPal Indicator - Trading System")
+    st.title("📊 TradPal - Trading System")
     
     # Sidebar navigation
     with st.sidebar:

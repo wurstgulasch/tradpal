@@ -1,5 +1,5 @@
 """
-Portfolio Management Module for TradPal Indicator
+Portfolio Management Module for TradPal
 
 This module provides advanced portfolio management capabilities for multi-asset trading,
 including position sizing, risk allocation, rebalancing, and performance tracking.
@@ -13,7 +13,7 @@ Features:
 - Performance attribution and analytics
 - Integration with existing trading signals
 
-Author: TradPal Indicator Team
+Author: TradPal Team
 Version: 2.5.0
 """
 
@@ -114,7 +114,7 @@ class Portfolio:
 
 class PortfolioManager:
     """
-    Advanced portfolio management system for TradPal Indicator.
+    Advanced portfolio management system for TradPal.
 
     Provides comprehensive portfolio management including:
     - Multi-asset position tracking

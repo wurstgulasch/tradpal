@@ -1,5 +1,5 @@
 """
-Portfolio Management Example for TradPal Indicator
+Portfolio Management Example for TradPal
 
 This example demonstrates advanced portfolio management capabilities including:
 - Multi-asset portfolio creation with different allocation methods
@@ -14,7 +14,7 @@ Features showcased:
 - Performance tracking
 - Risk management metrics
 
-Author: TradPal Indicator Team
+Author: TradPal Team
 Version: 2.5.0
 """
 
@@ -245,7 +245,7 @@ def create_performance_visualization():
 
 def main():
     """Main demonstration function."""
-    print("🚀 TradPal Indicator - Portfolio Management Demo")
+    print("🚀 TradPal - Portfolio Management Demo")
     print("=" * 50)
 
     try:

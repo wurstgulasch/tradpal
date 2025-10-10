@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-API Integration Tests for Tradpal Indicator System
+API Integration Tests for Tradpal System
 
 Tests integration endpoints and API functionality.
 """

@@ -1,6 +1,6 @@
-# TradPal Indicator - Web UI
+# TradPal - Web UI
 
-A comprehensive, interactive web interface for the TradPal Indicator trading system featuring authentication, real-time charts, strategy builder, and interactive controls.
+A comprehensive, interactive web interface for the TradPal trading system featuring authentication, real-time charts, strategy builder, and interactive controls.
 
 ## 🎯 Features
 
@@ -411,4 +411,4 @@ Same as main project - see LICENSE file in project root.
 
 **Last Updated**: October 2025
 **Version**: 1.0.0
-**Maintainer**: TradPal Indicator Team
+**Maintainer**: TradPal Team

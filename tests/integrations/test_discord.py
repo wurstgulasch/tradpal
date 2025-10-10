@@ -334,7 +334,7 @@ class TestDiscordIntegration:
         assert "1m" in embed['description']
         assert embed['color'] == 0x28a745  # Green
         assert len(embed['fields']) == 2  # Indicators and Risk Management
-        assert embed['footer']['text'] == "TradPal Indicator"
+        assert embed['footer']['text'] == "TradPal"
         assert embed['timestamp'] == "2024-01-15T10:30:00Z"
 
     def test_discord_embed_creation_sell_signal(self):

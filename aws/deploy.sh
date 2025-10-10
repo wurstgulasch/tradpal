@@ -1,5 +1,5 @@
 #!/bin/bash
-# AWS EC2 Deployment Script for TradPal Indicator
+# AWS EC2 Deployment Script for TradPal
 # This script sets up TradPal on AWS EC2 with proper security and monitoring
 
 set -e
@@ -82,7 +82,7 @@ create_security_group() {
     log "Creating security group..."
     SG_ID=$(aws ec2 create-security-group \
         --group-name tradpal-sg \
-        --description "Security group for TradPal Indicator" \
+        --description "Security group for TradPal" \
         --vpc-id $VPC_ID \
         --region $REGION \
         --query 'GroupId' \
@@ -242,7 +242,7 @@ create_cloudwatch_alarms() {
 
 # Main deployment function
 main() {
-    log "Starting TradPal Indicator AWS deployment..."
+    log "Starting TradPal AWS deployment..."
 
     check_prerequisites
     create_vpc

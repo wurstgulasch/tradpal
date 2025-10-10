@@ -1,5 +1,5 @@
 name: ❓ Question/Support
-description: Ask a question or request help with TradPal Indicator
+description: Ask a question or request help with TradPal
 title: "[QUESTION] "
 labels: ["question", "help wanted"]
 assignees: []
@@ -9,7 +9,7 @@ body:
       value: |
         ## ❓ Question/Support Request
 
-        Need help with TradPal Indicator? We're here to help! Please provide as much detail as possible.
+        Need help with TradPal? We're here to help! Please provide as much detail as possible.
 
   - type: dropdown
     id: question_type
@@ -58,7 +58,7 @@ body:
       label: Environment Details
       description: Please provide details about your setup.
       placeholder: |
-        - TradPal Indicator version: v2.5.0
+        - TradPal version: v2.5.0
         - Python version: 3.10.5
         - Operating System: macOS 12.6
         - Performance profile: heavy

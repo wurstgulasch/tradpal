@@ -1,6 +1,6 @@
 apiVersion: v2
 name: tradpal
-description: A Helm chart for TradPal Indicator trading system
+description: A Helm chart for TradPal trading system
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

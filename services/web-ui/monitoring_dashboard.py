@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-TradPal Indicator Monitoring Dashboard
+TradPal Monitoring Dashboard
 
-A comprehensive monitoring dashboard for the TradPal Indicator trading system.
+A comprehensive monitoring dashboard for the TradPal trading system.
 Provides real-time performance metrics, alerts, and system monitoring.
 """
 
@@ -33,7 +33,7 @@ except ImportError as e:
 
 class MonitoringDashboard:
     """
-    Comprehensive monitoring dashboard for the TradPal Indicator system.
+    Comprehensive monitoring dashboard for the TradPal system.
     """
     
     def __init__(self):
@@ -54,12 +54,12 @@ class MonitoringDashboard:
             return
             
         st.set_page_config(
-            page_title="TradPal Indicator - Monitoring Dashboard",
+            page_title="TradPal - Monitoring Dashboard",
             page_icon="📊",
             layout="wide"
         )
         
-        st.title("📊 TradPal Indicator - Monitoring Dashboard")
+        st.title("📊 TradPal - Monitoring Dashboard")
         
         # Sidebar with controls
         self.sidebar_controls()

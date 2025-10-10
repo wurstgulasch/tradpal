@@ -1,5 +1,5 @@
 """
-Discord Integration for TradPal Indicator
+Discord Integration for TradPal
 Sends trading signals via Discord webhooks
 """
 
@@ -17,7 +17,7 @@ class DiscordConfig(IntegrationConfig):
                  enabled: bool = True,
                  name: str = "Discord Notifications",
                  webhook_url: str = "",
-                 username: str = "TradPal Indicator",
+                 username: str = "TradPal",
                  avatar_url: str = ""):
         super().__init__(enabled=enabled, name=name)
         self.webhook_url = webhook_url
@@ -31,7 +31,7 @@ class DiscordConfig(IntegrationConfig):
             enabled=bool(os.getenv('DISCORD_WEBHOOK_URL')),
             name="Discord Notifications",
             webhook_url=os.getenv('DISCORD_WEBHOOK_URL', ''),
-            username=os.getenv('DISCORD_USERNAME', 'TradPal Indicator'),
+            username=os.getenv('DISCORD_USERNAME', 'TradPal'),
             avatar_url=os.getenv('DISCORD_AVATAR_URL', '')
         )
 
@@ -104,8 +104,8 @@ class DiscordIntegration(BaseIntegration):
 
             # Send test message
             test_embed = {
-                "title": "TradPal Indicator Test",
-                "description": "This is a test message from TradPal Indicator",
+                "title": "TradPal Test",
+                "description": "This is a test message from TradPal",
                 "color": 0x00ff00,
                 "footer": {
                     "text": "Test completed successfully"
@@ -188,7 +188,7 @@ class DiscordIntegration(BaseIntegration):
 
         # Add footer
         embed["footer"] = {
-            "text": "TradPal Indicator"
+            "text": "TradPal"
         }
 
         return embed

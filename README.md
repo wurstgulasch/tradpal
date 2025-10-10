@@ -1,10 +1,10 @@
-# TradPal Indicator
+# TradPal
 
-A comprehensive Python-based trading indicator system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, and advanced risk management. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
+A comprehensive Python-based trading system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, advanced portfolio management, sentiment analysis, and explainable AI. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
 
 ## 🎨 **NEW: Interactive Web UI**
 
-**Experience TradPal Indicator through a powerful web interface!**
+**Experience TradPal through a powerful web interface!**
 
 The new Web UI provides an intuitive, interactive way to build strategies, analyze charts, and monitor performance in real-time.
 
@@ -275,7 +275,7 @@ cd services/web-ui && streamlit run app.py
 ### Project Structure
 ```
 ```
-tradpal_indicator/
+tradpal/
 ├── config/                 # Configuration files and settings
 │   ├── settings.py         # Main configuration with timeframe-specific parameters
 │   └── adaptive_config.json # Adaptive optimization configurations
@@ -362,8 +362,8 @@ tradpal_indicator/
 ### Quick Start
 ```bash
 # Clone repository
-git clone https://github.com/wurstgulasch/tradpal_indicator.git
-cd tradpal_indicator
+git clone https://github.com/wurstgulasch/tradpal.git
+cd tradpal
 
 # Create and activate conda environment
 conda create -n tradpal_env python=3.10
@@ -412,7 +412,7 @@ python scripts/demo_performance.py
 
 ### PyPI Installation (Recommended)
 
-TradPal Indicator is available on PyPI for easy installation:
+TradPal is available on PyPI for easy installation:
 
 ```bash
 # Install core package
@@ -447,7 +447,7 @@ tradpal --mode backtest --symbol BTC/USDT --timeframe 1h
 tradpal-webui
 
 # Run sentiment analysis demo
-python -c "from tradpal_indicator.examples.sentiment_analysis_demo import demo_aggregated_sentiment; demo_aggregated_sentiment()"
+python -c "from tradpal.examples.sentiment_analysis_demo import demo_aggregated_sentiment; demo_aggregated_sentiment()"
 ```
 
 ### Development Installation
@@ -456,8 +456,8 @@ For contributors and development:
 
 ```bash
 # Clone repository
-git clone https://github.com/wurstgulasch/tradpal_indicator.git
-cd tradpal_indicator
+git clone https://github.com/wurstgulasch/tradpal.git
+cd tradpal
 
 # Install in development mode
 pip install -e .[dev,ml,webui,sentiment]
@@ -477,7 +477,7 @@ python setup_pypi.py publish
 
 ## 📚 Examples & Tutorials
 
-TradPal Indicator includes comprehensive Jupyter notebooks and example scripts to help you get started quickly.
+TradPal includes comprehensive Jupyter notebooks and example scripts to help you get started quickly.
 
 ### 📓 Jupyter Notebooks
 

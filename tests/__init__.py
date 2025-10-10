@@ -1,1 +1,1 @@
-# Test suite for TradPal Indicator
+# Test suite for TradPal

@@ -1,7 +1,7 @@
 # Implementation Summary: Performance Enhancements
 
 ## Overview
-Successfully implemented three major performance enhancements for the TradPal Indicator project based on Grok feedback.
+Successfully implemented three major performance enhancements for the TradPal project based on Grok feedback.
 
 ## Features Implemented
 

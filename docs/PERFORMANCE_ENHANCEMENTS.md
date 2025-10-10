@@ -1,4 +1,4 @@
-# Performance Enhancements for TradPal Indicator
+# Performance Enhancements for TradPal
 
 This document describes the performance enhancements implemented based on Grok feedback.
 

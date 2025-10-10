@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Secrets Management Module für TradPal Indicator
+Secrets Management Module für TradPal
 Unterstützt verschiedene Secrets-Backends: Environment, Vault, AWS Secrets Manager
 """
 

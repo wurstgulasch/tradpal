@@ -1,7 +1,7 @@
 # Advanced ML and Optimization Implementation Summary
 
 ## Overview
-This document summarizes the implementation of advanced ML and optimization features for the TradPal Indicator system, addressing the requirements outlined in the problem statement.
+This document summarizes the implementation of advanced ML and optimization features for the TradPal system, addressing the requirements outlined in the problem statement.
 
 ## Problem Statement Requirements
 

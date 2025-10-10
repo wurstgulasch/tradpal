@@ -1,5 +1,5 @@
 """
-SMS Integration for TradPal Indicator
+SMS Integration for TradPal
 Sends trading signals via SMS             except Exception as e:
                 # Log error sending SMS
                 self.logger.error(f"Error sending SMS to {to_number}: {e}")io

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance Demo für TradPal Indicator
+Performance Demo für TradPal
 Vergleicht sequentielle vs. parallele Verarbeitung und zeigt Performance-Verbesserungen.
 """
 
@@ -150,7 +150,7 @@ class PerformanceDemo:
 
     def run_performance_comparison(self, num_rows: int = 5000):
         """Vollständigen Performance-Vergleich durchführen."""
-        print("🚀 TradPal Indicator Performance Demo")
+        print("🚀 TradPal Performance Demo")
         print("=" * 60)
 
         # Test-Daten generieren

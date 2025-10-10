@@ -1,5 +1,5 @@
 """
-Discord Integration for TradPal Indicator
+Discord Integration for TradPal
 Sends trading signals via Discord webhooks
 """
 
@@ -102,10 +102,10 @@ class DiscordIntegration(BaseIntegration):
             # Send a test message
             test_embed = {
                 "title": "🧪 Test Message",
-                "description": "This is a test message from TradPal Indicator",
+                "description": "This is a test message from TradPal",
                 "color": 0x3498db,  # Blue color
                 "footer": {
-                    "text": "TradPal Indicator Test"
+                    "text": "TradPal Test"
                 },
                 "timestamp": "2024-01-01T00:00:00.000Z"
             }
@@ -182,7 +182,7 @@ class DiscordIntegration(BaseIntegration):
                     }
                 ],
                 "footer": {
-                    "text": "TradPal Indicator - Bot Status: Active"
+                    "text": "TradPal - Bot Status: Active"
                 }
             }
 
@@ -209,7 +209,7 @@ class DiscordIntegration(BaseIntegration):
                 "description": "✅ Bot is now monitoring for trading signals",
                 "color": 0x28a745,
                 "footer": {
-                    "text": "TradPal Indicator - Bot Status: Active"
+                    "text": "TradPal - Bot Status: Active"
                 }
             }
 
@@ -294,7 +294,7 @@ class DiscordIntegration(BaseIntegration):
             "color": color,
             "fields": fields,
             "footer": {
-                "text": "TradPal Indicator"
+                "text": "TradPal"
             },
             "timestamp": signal_data.get('timestamp', '2024-01-01T00:00:00.000Z')
         }

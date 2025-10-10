@@ -1,5 +1,5 @@
 #!/bin/bash
-# TradPal Indicator EC2 User Data Script
+# TradPal EC2 User Data Script
 # This script runs on EC2 instance startup to configure the environment
 
 set -e
@@ -117,7 +117,7 @@ EOF
 # Create systemd service for TradPal
 cat > /etc/systemd/system/tradpal.service << EOF
 [Unit]
-Description=TradPal Indicator Trading System
+Description=TradPal Trading System
 After=docker.service
 Requires=docker.service
 
@@ -189,9 +189,9 @@ yum install -y htop iotop sysstat
 
 # Final setup message
 cat > /home/ec2-user/README.md << 'EOF'
-# TradPal Indicator - AWS Deployment
+# TradPal - AWS Deployment
 
-Your TradPal Indicator instance has been successfully deployed!
+Your TradPal instance has been successfully deployed!
 
 ## Access Information
 - Application: Running on port 8000

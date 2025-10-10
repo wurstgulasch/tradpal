@@ -1,5 +1,5 @@
 """
-SHAP Integration Example for TradPal Indicator
+SHAP Integration Example for TradPal
 
 This example demonstrates SHAP integration for PyTorch models.
 Note: This is a demonstration script. Full functionality requires PyTorch and SHAP.
@@ -7,7 +7,7 @@ Note: This is a demonstration script. Full functionality requires PyTorch and SH
 
 def main():
     """Main demonstration function."""
-    print("🧠 TradPal Indicator - SHAP Integration Demo")
+    print("🧠 TradPal - SHAP Integration Demo")
     print("=" * 50)
 
     print("📋 SHAP Integration Features:")

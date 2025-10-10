@@ -1,4 +1,4 @@
-# TradPal Indicator - Test Suite
+# TradPal - Test Suite
 
 ## 📁 Test Structure
 
@@ -132,4 +132,4 @@ The tests are optimized for automatic execution in CI/CD pipelines:
 
 ---
 
-*Automatically generated for TradPal Indicator v2.0*
+*Automatically generated for TradPal v2.0*

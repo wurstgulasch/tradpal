@@ -1,5 +1,5 @@
 """
-SHAP Integration for PyTorch Models in TradPal Indicator
+SHAP Integration for PyTorch Models in TradPal
 
 This module provides SHAP (SHapley Additive exPlanations) integration for PyTorch models,
 enabling explainable AI for trading signal predictions. SHAP helps understand which features
@@ -13,7 +13,7 @@ Features:
 - Integration with LSTM and Transformer models
 - Visualization support
 
-Author: TradPal Indicator Team
+Author: TradPal Team
 Version: 2.5.0
 """
 

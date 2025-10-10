@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TradPal Indicator - Integration Example
+TradPal - Integration Example
 Demonstrates how to use all available integrations
 """
 

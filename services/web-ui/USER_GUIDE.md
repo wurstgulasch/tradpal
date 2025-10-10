@@ -1,6 +1,6 @@
 # Web UI User Guide - Step by Step
 
-This guide walks you through using the TradPal Indicator Web UI, from first login to creating and testing your first strategy.
+This guide walks you through using the TradPal Web UI, from first login to creating and testing your first strategy.
 
 ## 📋 Table of Contents
 

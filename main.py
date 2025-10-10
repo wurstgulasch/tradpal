@@ -234,7 +234,7 @@ class AdaptiveOptimizer:
 
 def run_paper_trading_mode(args, performance_monitor=None):
     """Run paper trading mode with simulated orders."""
-    print("📈 Starting TradPal Indicator - Paper Trading Mode")
+    print("📈 Starting TradPal - Paper Trading Mode")
     print("💰 Virtual portfolio trading - NO REAL MONEY AT RISK")
     print("Press Ctrl+C to stop paper trading\n")
 
@@ -456,7 +456,7 @@ def run_paper_trading_mode(args, performance_monitor=None):
 
 def run_live_monitoring(performance_monitor=None):
     """Run continuous live monitoring mode."""
-    print("Starting TradPal Indicator - Continuous Monitoring Mode...")
+    print("Starting TradPal - Continuous Monitoring Mode...")
     print("Press Ctrl+C to stop monitoring\n")
 
     log_system_status("Live monitoring mode started")
@@ -588,7 +588,7 @@ def run_live_monitoring(performance_monitor=None):
             time.sleep(30)
 
         except KeyboardInterrupt:
-            print("\nStopping TradPal Indicator...")
+            print("\nStopping TradPal...")
             log_system_status("Live monitoring mode stopped by user")
             break
         except Exception as e:
@@ -917,7 +917,7 @@ def main():
     # Log system startup
     audit_logger.log_system_event(
         event_type="SYSTEM_STARTUP",
-        message="TradPal Indicator System started",
+        message="TradPal System started",
         details={
             "version": "2.0.0",
             "mode": "initialization",
@@ -971,7 +971,7 @@ def main():
     # Log system shutdown
     audit_logger.log_system_event(
         event_type="SYSTEM_SHUTDOWN",
-        message="TradPal Indicator System shutdown",
+        message="TradPal System shutdown",
         details={
             "mode": args.mode,
             "shutdown_reason": "normal_exit"

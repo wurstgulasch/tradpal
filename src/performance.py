@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance Optimization Module für TradPal Indicator
+Performance Optimization Module für TradPal
 Bietet parallele Verarbeitung, Vektorisierung und Speicheroptimierung.
 """
 
@@ -33,7 +33,7 @@ try:
     api_requests_total = Counter('tradpal_api_requests_total', 'Total API requests', ['method', 'status'])
     api_request_duration = Histogram('tradpal_api_request_duration_seconds', 'API request duration', ['method'])
     signal_generation_total = Counter('tradpal_signal_generation_total', 'Total signals generated', ['type'])
-    indicator_calculation_duration = Histogram('tradpal_indicator_calculation_duration_seconds', 'Indicator calculation time')
+    indicator_calculation_duration = Histogram('tradpal_calculation_duration_seconds', 'Indicator calculation time')
 
     # System Metrics
     cpu_usage_percent = Gauge('tradpal_cpu_usage_percent', 'CPU usage percentage')

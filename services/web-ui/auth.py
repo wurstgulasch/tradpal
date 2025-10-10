@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-JWT-based Authentication Module for TradPal Indicator Web UI
+JWT-based Authentication Module for TradPal Web UI
 
 Provides secure user authentication with JWT tokens, session management, and access control.
 Replaces insecure default credentials with proper token-based authentication.
@@ -83,7 +83,7 @@ def generate_token(username: str, role: str = "user") -> str:
         'role': role,
         'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS),
         'iat': datetime.now(timezone.utc),
-        'iss': 'tradpal_indicator'
+        'iss': 'tradpal'
     }
 
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -196,7 +196,7 @@ def logout_user():
 
 def login_page():
     """Display secure JWT-based login page."""
-    st.title("🔐 TradPal Indicator - Secure Login")
+    st.title("🔐 TradPal - Secure Login")
 
     # Center the login form
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -268,7 +268,7 @@ def login_page():
     st.divider()
     st.markdown("""
         <div style='text-align: center; color: gray;'>
-            <p>🔒 Secure JWT Authentication | TradPal Indicator v2.5</p>
+            <p>🔒 Secure JWT Authentication | TradPal v2.5</p>
             <p style='font-size: 0.8em;'>⚠️ Trading involves financial risk. This tool is for educational purposes only.</p>
         </div>
     """, unsafe_allow_html=True)

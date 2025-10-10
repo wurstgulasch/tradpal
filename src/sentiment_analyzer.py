@@ -1,5 +1,5 @@
 """
-Sentiment Analysis Module for TradPal Indicator
+Sentiment Analysis Module for TradPal
 
 This module provides sentiment analysis capabilities for cryptocurrency news and social media,
 specifically optimized for BTC/USDT trading signals.
@@ -11,7 +11,7 @@ Features:
 - Rate limiting and caching for API efficiency
 - Integration with trading signals for sentiment-enhanced decisions
 
-Author: TradPal Indicator Team
+Author: TradPal Team
 Version: 2.5.0
 """
 
@@ -163,7 +163,7 @@ class SentimentAnalyzer:
                 self.reddit_client = praw.Reddit(
                     client_id=self.api_keys['reddit_client_id'],
                     client_secret=self.api_keys['reddit_client_secret'],
-                    user_agent='TradPal Indicator v2.5.0'
+                    user_agent='TradPal v2.5.0'
                 )
                 logger.info("Reddit API client initialized")
             except ImportError:

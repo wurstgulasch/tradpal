@@ -132,7 +132,7 @@ def test_adaptive_config_loading():
 
 def main():
     """Run all tests."""
-    print("🚀 TradPal Indicator - Adaptive Configuration Test Suite")
+    print("🚀 TradPal - Adaptive Configuration Test Suite")
     print("=" * 60)
 
     test_configuration_modes()

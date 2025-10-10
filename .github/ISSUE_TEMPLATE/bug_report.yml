@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: Report a bug or issue with TradPal Indicator
+description: Report a bug or issue with TradPal
 title: "[BUG] "
 labels: ["bug", "triage"]
 assignees: []
@@ -15,7 +15,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: Which version of TradPal Indicator are you using?
+      description: Which version of TradPal are you using?
       options:
         - v2.5.0 (latest)
         - v2.4.x
@@ -31,7 +31,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: How are you running TradPal Indicator?
+      description: How are you running TradPal?
       options:
         - Local Python environment
         - Docker container

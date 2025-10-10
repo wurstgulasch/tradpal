@@ -1,5 +1,5 @@
 """
-Webhook Integration for TradPal Indicator
+Webhook Integration for TradPal
 Sends trading signals via HTTP webhooks to external services
 """
 
@@ -138,7 +138,7 @@ class WebhookIntegration(BaseIntegration):
                 # Send test payload
                 test_payload = {
                     "test": True,
-                    "message": "TradPal Indicator Webhook Test",
+                    "message": "TradPal Webhook Test",
                     "timestamp": "2024-01-01T00:00:00Z"
                 }
 
@@ -164,7 +164,7 @@ class WebhookIntegration(BaseIntegration):
         """Prepare payload for webhook"""
         # Add metadata
         payload = signal_data.copy()
-        payload['source'] = 'TradPal Indicator'
+        payload['source'] = 'TradPal'
         payload['version'] = '1.0'
 
         # Ensure timestamp is ISO format
@@ -209,7 +209,7 @@ class WebhookIntegration(BaseIntegration):
             # Prepare startup payload
             startup_payload = {
                 "event": "bot_started",
-                "message": "TradPal Indicator Bot Started",
+                "message": "TradPal Bot Started",
                 "configuration": {
                     "symbol": SYMBOL,
                     "exchange": EXCHANGE,
@@ -224,7 +224,7 @@ class WebhookIntegration(BaseIntegration):
                     "fibonacci_tp": FIBONACCI_ENABLED
                 },
                 "status": "active",
-                "source": "TradPal Indicator",
+                "source": "TradPal",
                 "version": "1.0",
                 "timestamp": "2024-01-01T00:00:00Z"  # Will be overridden by datetime
             }

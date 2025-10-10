@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sentiment Analysis Demo for TradPal Indicator
+Sentiment Analysis Demo for TradPal
 
 This script demonstrates how to use the sentiment analysis capabilities
 to enhance trading signals with real-time social and news sentiment.
@@ -259,7 +259,7 @@ def show_setup_instructions():
 
 def main():
     """Main demo function."""
-    print("🚀 TradPal Indicator - Sentiment Analysis Demo")
+    print("🚀 TradPal - Sentiment Analysis Demo")
     print("="*60)
     print("This demo shows how sentiment analysis can enhance trading signals")
     print("by analyzing social media, news, and community sentiment.")

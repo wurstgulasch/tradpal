@@ -100,7 +100,7 @@ def demo_redis_caching():
 def main():
     """Run demos."""
     print("\n" + "="*60)
-    print("TradPal Indicator - Performance Enhancements Demo")
+    print("TradPal - Performance Enhancements Demo")
     print("="*60)
     
     print(f"\nWebSocket: {'ON' if WEBSOCKET_DATA_ENABLED else 'OFF'}")

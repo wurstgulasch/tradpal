@@ -1,5 +1,5 @@
 name: ✨ Feature Request
-description: Suggest a new feature or enhancement for TradPal Indicator
+description: Suggest a new feature or enhancement for TradPal
 title: "[FEATURE] "
 labels: ["enhancement", "feature-request"]
 assignees: []
@@ -77,7 +77,7 @@ body:
     id: feature_areas
     attributes:
       label: Feature Areas
-      description: Which areas of TradPal Indicator would this feature affect?
+      description: Which areas of TradPal would this feature affect?
       options:
         - [ ] Data fetching (CCXT, WebSocket)
         - [ ] Technical indicators (EMA, RSI, BB, etc.)

@@ -14,7 +14,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
 print("=" * 80)
-print("TradPal Indicator - Web UI Component Tests")
+print("TradPal - Web UI Component Tests")
 print("=" * 80)
 
 # Test 1: Authentication Module

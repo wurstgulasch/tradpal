@@ -1,8 +1,8 @@
 #!/bin/bash
-# Quick start script for TradPal Indicator Web UI
+# Quick start script for TradPal Web UI
 
 echo "=================================="
-echo "TradPal Indicator - Web UI Launcher"
+echo "TradPal - Web UI Launcher"
 echo "=================================="
 echo ""
 
@@ -29,7 +29,7 @@ if ! command -v streamlit &> /dev/null; then
     echo "✅ Dependencies installed successfully!"
 fi
 
-echo "🚀 Starting TradPal Indicator Web UI..."
+echo "🚀 Starting TradPal Web UI..."
 echo ""
 echo "Access the Web UI at: http://localhost:8501"
 echo "Default credentials:"

@@ -223,7 +223,7 @@ class TestWebhookIntegration:
         assert payload['signal_type'] == 'BUY'
         assert payload['symbol'] == 'EUR/USD'
         assert payload['price'] == 1.0850
-        assert payload['source'] == 'TradPal Indicator'
+        assert payload['source'] == 'TradPal'
         assert payload['version'] == '1.0'
 
     @patch('integrations.webhook.requests.request')
@@ -374,7 +374,7 @@ class TestWebhookIntegration:
         call_args = mock_request.call_args
         payload = call_args[1]['json']
         assert payload['test'] == True
-        assert 'TradPal Indicator Webhook Test' in payload['message']
+        assert 'TradPal Webhook Test' in payload['message']
 
     @patch('integrations.webhook.requests.request')
     def test_webhook_test_connection_multiple_urls(self, mock_request):
@@ -478,7 +478,7 @@ class TestWebhookIntegration:
         assert payload['symbol'] == 'EUR/USD'
         assert payload['price'] == 1.0850
         assert payload['timestamp'] == '2024-01-15T10:30:00Z'
-        assert payload['source'] == 'TradPal Indicator'
+        assert payload['source'] == 'TradPal'
         assert payload['version'] == '1.0'
 
     def test_webhook_prepare_payload_with_datetime(self):
@@ -523,7 +523,7 @@ class TestWebhookIntegration:
         payload = integration._prepare_payload(signal_data)
 
         assert 'timestamp' not in payload
-        assert payload['source'] == 'TradPal Indicator'
+        assert payload['source'] == 'TradPal'
 
     @patch('integrations.webhook.requests.request')
     def test_webhook_custom_method_and_headers(self, mock_request):

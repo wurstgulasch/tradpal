@@ -53,7 +53,7 @@ class TradingLogger:
         log_dir.mkdir(exist_ok=True)
 
         # Configure logger
-        self.logger = logging.getLogger('tradpal_indicator')
+        self.logger = logging.getLogger('tradpal')
         self.logger.setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
 
         # Remove existing handlers to avoid duplicates

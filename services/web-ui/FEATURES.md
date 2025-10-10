@@ -335,4 +335,4 @@ Planned features for upcoming releases:
 
 **Documentation Version**: 1.0.0  
 **Last Updated**: October 2025  
-**Maintainer**: TradPal Indicator Team
+**Maintainer**: TradPal Team

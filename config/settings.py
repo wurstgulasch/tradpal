@@ -1,4 +1,4 @@
-# Configuration for TradPal Indicator
+# Configuration for TradPal
 
 import os
 import json
@@ -311,7 +311,7 @@ OUTPUT_FILE = 'output/signals.json'
 
 # Logging
 LOG_LEVEL = 'INFO'
-LOG_FILE = 'logs/tradpal_indicator.log'
+LOG_FILE = 'logs/tradpal.log'
 
 API_KEY = os.getenv('TRADPAL_API_KEY', '')
 API_SECRET = os.getenv('TRADPAL_API_SECRET', '')

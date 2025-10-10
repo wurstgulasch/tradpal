@@ -300,7 +300,7 @@ class TestLoggerSetup:
         assert trading_logger is not None
         assert isinstance(trading_logger, TradingLogger)
         assert logger is not None
-        assert logger.name == 'tradpal_indicator'
+        assert logger.name == 'tradpal'
 
     @patch('pathlib.Path.mkdir')
     @patch('logging.handlers.RotatingFileHandler')

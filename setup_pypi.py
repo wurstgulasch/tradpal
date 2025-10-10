@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PyPI Setup and Publishing Script for TradPal Indicator
+PyPI Setup and Publishing Script for TradPal
 
 This script helps with:
 - Building the package for PyPI
@@ -52,7 +52,7 @@ def check_dependencies():
 
 def build_package():
     """Build the package for distribution."""
-    print("📦 Building TradPal Indicator package...")
+    print("📦 Building TradPal package...")
 
     # Clean previous builds
     if os.path.exists('dist'):
@@ -191,7 +191,7 @@ def publish_to_pypi(test_pypi=False):
 
 def show_package_info():
     """Show information about the package."""
-    print("📋 TradPal Indicator Package Information")
+    print("📋 TradPal Package Information")
     print("=" * 50)
 
     try:
@@ -236,7 +236,7 @@ def show_package_info():
 
 def main():
     parser = argparse.ArgumentParser(
-        description='PyPI Setup and Publishing Script for TradPal Indicator',
+        description='PyPI Setup and Publishing Script for TradPal',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
@@ -257,7 +257,7 @@ Examples:
 
     args = parser.parse_args()
 
-    print("🚀 TradPal Indicator - PyPI Setup Script")
+    print("🚀 TradPal - PyPI Setup Script")
     print("=" * 50)
 
     if args.action in ['build', 'check', 'test', 'publish', 'test-publish']:

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-TradPal Indicator Tutorials Launcher
+TradPal Tutorials Launcher
 
-Starts the interactive Streamlit tutorials for the TradPal Indicator system.
+Starts the interactive Streamlit tutorials for the TradPal system.
 """
 
 import subprocess
@@ -51,7 +51,7 @@ def check_system_requirements():
 
 def start_tutorials(port: int = 8501):
     """Start the Streamlit tutorials."""
-    print("🚀 Starting TradPal Indicator Tutorials...")
+    print("🚀 Starting TradPal Tutorials...")
     print(f"📱 Tutorials will be available at: http://localhost:{port}")
     print("🛑 Press Ctrl+C to stop the server")
     print("-" * 50)
@@ -77,7 +77,7 @@ def start_tutorials(port: int = 8501):
 
 def main():
     """Main launcher function."""
-    print("🚀 TradPal Indicator - Interactive Tutorials")
+    print("🚀 TradPal - Interactive Tutorials")
     print("=" * 50)
     
     # Check requirements

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-TradPal Indicator Interactive Tutorials
+TradPal Interactive Tutorials
 
-A comprehensive Streamlit-based tutorial system for the TradPal Indicator trading system.
+A comprehensive Streamlit-based tutorial system for the TradPal trading system.
 """
 
 import streamlit as st
@@ -30,7 +30,7 @@ except ImportError as e:
 
 class TutorialManager:
     """
-    Manages interactive tutorials for the TradPal Indicator system.
+    Manages interactive tutorials for the TradPal system.
     """
     
     def __init__(self):
@@ -53,9 +53,9 @@ class TutorialManager:
     
     def tutorial_getting_started(self):
         """Getting started tutorial."""
-        st.header("🚀 Getting Started with TradPal Indicator")
+        st.header("🚀 Getting Started with TradPal")
         st.markdown("""
-        Welcome to TradPal Indicator! This tutorial will guide you through the basic setup and first steps.
+        Welcome to TradPal! This tutorial will guide you through the basic setup and first steps.
         """)
         
         # System overview
@@ -574,12 +574,12 @@ class TutorialManager:
 def main():
     """Main Streamlit app."""
     st.set_page_config(
-        page_title="TradPal Indicator Tutorials",
+        page_title="TradPal Tutorials",
         page_icon="🚀",
         layout="wide"
     )
     
-    st.title("🚀 TradPal Indicator - Interactive Tutorials")
+    st.title("🚀 TradPal - Interactive Tutorials")
     
     # Sidebar navigation
     st.sidebar.title("📚 Tutorial Navigation")
@@ -610,7 +610,7 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📖 About")
     st.sidebar.markdown("""
-    **TradPal Indicator** is a comprehensive trading system featuring:
+    **TradPal** is a comprehensive trading system featuring:
     
     - Multi-timeframe analysis
     - Advanced ML predictions

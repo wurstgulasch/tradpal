@@ -73,7 +73,7 @@ def test_email_integration(config: EmailConfig) -> bool:
         "indicators": {"test": 1.0},
         "risk_management": {"test": 1.0},
         "confidence": 1.0,
-        "reason": "This is a test message from TradPal Indicator"
+        "reason": "This is a test message from TradPal"
     }
 
     if integration.send_signal(test_signal):

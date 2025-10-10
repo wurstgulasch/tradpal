@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Alternative Test Runner for TradPal Indicator Project
+Alternative Test Runner for TradPal Project
 
 This is a simple wrapper around pytest. For full pytest functionality,
 use pytest directly:

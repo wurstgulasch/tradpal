@@ -1,6 +1,6 @@
 # Performance Profiles
 
-Das TradPal Indicator System unterstützt verschiedene Performance-Profile, die über den `--profile` Parameter ausgewählt werden können. Jedes Profil ist für unterschiedliche Hardware-Konfigurationen und Anforderungen optimiert.
+Das TradPal System unterstützt verschiedene Performance-Profile, die über den `--profile` Parameter ausgewählt werden können. Jedes Profil ist für unterschiedliche Hardware-Konfigurationen und Anforderungen optimiert.
 
 ## Verfügbare Profile
 
