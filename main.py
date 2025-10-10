@@ -242,7 +242,7 @@ def run_live_monitoring(performance_monitor=None):
     # Initialize adaptive optimizer only if enabled and config file exists
     from config.settings import ADAPTIVE_OPTIMIZATION_ENABLED_LIVE, ADAPTIVE_CONFIG_FILE_LIVE
     import os
-    if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE and os.path.exists(ADAPTIVE_CONFIG_FILE_LIVE):
+    if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE and ADAPTIVE_CONFIG_FILE_LIVE and os.path.exists(ADAPTIVE_CONFIG_FILE_LIVE):
         adaptive_optimizer = AdaptiveOptimizer()
     else:
         adaptive_optimizer = None

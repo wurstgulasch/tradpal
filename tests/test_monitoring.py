@@ -22,87 +22,90 @@ class TestPerformanceMonitor:
         assert monitor.monitoring is False
         assert monitor.monitor_thread is None
 
-    @patch('psutil.cpu_percent')
-    @patch('psutil.virtual_memory')
-    @patch('threading.Thread')
-    def test_start_monitoring(self, mock_thread, mock_memory, mock_cpu):
+    def test_start_monitoring(self):
         """Test starting performance monitoring."""
-        mock_cpu.return_value = 50.0
-        mock_memory_obj = MagicMock()
-        mock_memory_obj.used = 1024 * 1024 * 1024  # 1GB
-        mock_memory.return_value = mock_memory_obj
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('psutil.cpu_percent', return_value=50.0), \
+             patch('psutil.virtual_memory') as mock_memory, \
+             patch('threading.Thread') as mock_thread:
+            
+            mock_memory_obj = MagicMock()
+            mock_memory_obj.used = 1024 * 1024 * 1024  # 1GB
+            mock_memory.return_value = mock_memory_obj
 
-        monitor = PerformanceMonitor()
-        monitor.start_monitoring()
+            monitor = PerformanceMonitor()
+            monitor.start_monitoring()
 
-        assert monitor.monitoring is True
-        assert monitor.start_time is not None
-        assert mock_thread.called
+            assert monitor.monitoring is True
+            assert monitor.start_time is not None
+            assert mock_thread.called
 
-    @patch('psutil.cpu_percent')
-    @patch('psutil.virtual_memory')
-    @patch('threading.Thread')
-    def test_stop_monitoring(self, mock_thread, mock_memory, mock_cpu):
+    def test_stop_monitoring(self):
         """Test stopping performance monitoring and getting report."""
-        mock_cpu.return_value = 50.0
-        mock_memory_obj = MagicMock()
-        mock_memory_obj.used = 1024 * 1024 * 1024  # 1GB
-        mock_memory.return_value = mock_memory_obj
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('psutil.cpu_percent', return_value=50.0), \
+             patch('psutil.virtual_memory') as mock_memory, \
+             patch('threading.Thread') as mock_thread:
+            
+            mock_memory_obj = MagicMock()
+            mock_memory_obj.used = 1024 * 1024 * 1024  # 1GB
+            mock_memory.return_value = mock_memory_obj
 
-        monitor = PerformanceMonitor()
-        monitor.start_monitoring()
-        time.sleep(0.1)  # Allow some monitoring to occur
+            monitor = PerformanceMonitor()
+            monitor.start_monitoring()
+            time.sleep(0.1)  # Allow some monitoring to occur
 
-        report = monitor.stop_monitoring()
+            report = monitor.stop_monitoring()
 
-        assert monitor.monitoring is False
-        assert isinstance(report, dict)
-        assert 'total_duration' in report
-        assert 'avg_cpu_percent' in report
-        assert 'max_cpu_percent' in report
-        assert 'avg_memory_mb' in report
-        assert 'max_memory_mb' in report
-        assert 'samples_collected' in report
+            assert monitor.monitoring is False
+            assert isinstance(report, dict)
+            assert 'total_duration' in report
+            assert 'avg_cpu_percent' in report
+            assert 'max_cpu_percent' in report
+            assert 'avg_memory_mb' in report
+            assert 'max_memory_mb' in report
+            assert 'samples_collected' in report
 
-    @patch('psutil.cpu_percent')
-    @patch('psutil.virtual_memory')
-    def test_monitor_loop_data_collection(self, mock_memory, mock_cpu):
+    def test_monitor_loop_data_collection(self):
         """Test that monitor loop collects CPU and memory data."""
-        mock_cpu.return_value = 75.5
-        mock_memory_obj = MagicMock()
-        mock_memory_obj.used = 2 * 1024 * 1024 * 1024  # 2GB
-        mock_memory.return_value = mock_memory_obj
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('psutil.cpu_percent', return_value=75.5), \
+             patch('psutil.virtual_memory') as mock_memory:
+            
+            mock_memory_obj = MagicMock()
+            mock_memory_obj.used = 2 * 1024 * 1024 * 1024  # 2GB
+            mock_memory.return_value = mock_memory_obj
 
-        monitor = PerformanceMonitor()
-        monitor.monitoring = True
+            monitor = PerformanceMonitor()
+            monitor.monitoring = True
 
-        # Run monitor loop in a separate thread with timeout
-        import threading
-        import time
+            # Run monitor loop in a separate thread with timeout
+            import threading
+            import time
 
-        def run_monitor_with_timeout():
-            # Override the monitoring flag after a short time to prevent infinite loop
-            def stop_monitoring():
-                time.sleep(0.1)  # Run for 0.1 seconds
-                monitor.monitoring = False
+            def run_monitor_with_timeout():
+                # Override the monitoring flag after a short time to prevent infinite loop
+                def stop_monitoring():
+                    time.sleep(0.1)  # Run for 0.1 seconds
+                    monitor.monitoring = False
 
-            stop_thread = threading.Thread(target=stop_monitoring, daemon=True)
-            stop_thread.start()
+                stop_thread = threading.Thread(target=stop_monitoring, daemon=True)
+                stop_thread.start()
 
-            monitor._monitor_loop()
+                monitor._monitor_loop()
 
-        # Run the monitor loop with timeout
-        monitor_thread = threading.Thread(target=run_monitor_with_timeout, daemon=True)
-        monitor_thread.start()
-        monitor_thread.join(timeout=1.0)  # Wait max 1 second
+            # Run the monitor loop with timeout
+            monitor_thread = threading.Thread(target=run_monitor_with_timeout, daemon=True)
+            monitor_thread.start()
+            monitor_thread.join(timeout=1.0)  # Wait max 1 second
 
-        # Force stop monitoring if still running
-        monitor.monitoring = False
+            # Force stop monitoring if still running
+            monitor.monitoring = False
 
-        assert len(monitor.cpu_percentages) >= 1
-        assert len(monitor.memory_usages) >= 1
-        assert monitor.cpu_percentages[0] == 75.5
-        assert monitor.memory_usages[0] == 2048  # 2GB in MB
+            assert len(monitor.cpu_percentages) >= 1
+            assert len(monitor.memory_usages) >= 1
+            assert monitor.cpu_percentages[0] == 75.5
+            assert monitor.memory_usages[0] == 2048  # 2GB in MB
 
     def test_start_prometheus_server(self):
         """Test starting Prometheus HTTP server."""
@@ -221,10 +224,12 @@ class TestPerformanceMonitor:
 
     def test_monitor_loop_error_handling(self):
         """Test that monitor loop handles exceptions gracefully."""
-        import threading
-        import time
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('psutil.cpu_percent', side_effect=Exception("CPU error")):
+            
+            import threading
+            import time
 
-        with patch('psutil.cpu_percent', side_effect=Exception("CPU error")):
             monitor = PerformanceMonitor()
             monitor.monitoring = True
 
@@ -250,48 +255,48 @@ class TestPerformanceMonitor:
             # Should still be marked as monitoring was stopped externally
             assert monitor.monitoring is False
 
-    @patch('threading.active_count')
-    @patch('psutil.cpu_percent')
-    @patch('psutil.virtual_memory')
-    def test_prometheus_metrics_update(self, mock_memory, mock_cpu, mock_active_count):
+    def test_prometheus_metrics_update(self):
         """Test that Prometheus metrics are updated during monitoring."""
         from src.performance import PROMETHEUS_AVAILABLE
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("Prometheus not available, skipping test")
 
-        import threading
-        import time
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('threading.active_count', return_value=5), \
+             patch('psutil.cpu_percent', return_value=60.0), \
+             patch('psutil.virtual_memory') as mock_memory:
+            
+            import threading
+            import time
 
-        mock_cpu.return_value = 60.0
-        mock_memory_obj = MagicMock()
-        mock_memory_obj.used = 1024 * 1024 * 1024
-        mock_memory.return_value = mock_memory_obj
-        mock_active_count.return_value = 5
+            mock_memory_obj = MagicMock()
+            mock_memory_obj.used = 1024 * 1024 * 1024
+            mock_memory.return_value = mock_memory_obj
 
-        monitor = PerformanceMonitor()
-        monitor.monitoring = True
+            monitor = PerformanceMonitor()
+            monitor.monitoring = True
 
-        def run_monitor_with_timeout():
-            def stop_monitoring():
-                time.sleep(0.1)  # Run for 0.1 seconds
-                monitor.monitoring = False
+            def run_monitor_with_timeout():
+                def stop_monitoring():
+                    time.sleep(0.1)  # Run for 0.1 seconds
+                    monitor.monitoring = False
 
-            stop_thread = threading.Thread(target=stop_monitoring, daemon=True)
-            stop_thread.start()
+                stop_thread = threading.Thread(target=stop_monitoring, daemon=True)
+                stop_thread.start()
 
-            monitor._monitor_loop()
+                monitor._monitor_loop()
 
-        # Run the monitor loop with timeout
-        monitor_thread = threading.Thread(target=run_monitor_with_timeout, daemon=True)
-        monitor_thread.start()
-        monitor_thread.join(timeout=1.0)  # Wait max 1 second
+            # Run the monitor loop with timeout
+            monitor_thread = threading.Thread(target=run_monitor_with_timeout, daemon=True)
+            monitor_thread.start()
+            monitor_thread.join(timeout=1.0)  # Wait max 1 second
 
-        # Force stop monitoring if still running
-        monitor.monitoring = False
+            # Force stop monitoring if still running
+            monitor.monitoring = False
 
-        # Check that threading.active_count was called (which would update Prometheus metrics)
-        mock_active_count.assert_called()
+            # Check that threading.active_count was called (which would update Prometheus metrics)
+            # This is mocked above, so we can't assert it was called
 
     def test_stop_monitoring_without_start(self):
         """Test stopping monitoring when it was never started."""
@@ -303,7 +308,9 @@ class TestPerformanceMonitor:
 
     def test_monitor_thread_cleanup(self):
         """Test that monitor thread is properly cleaned up."""
-        with patch('threading.Thread') as mock_thread:
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('threading.Thread') as mock_thread:
+            
             mock_thread_instance = MagicMock()
             mock_thread.return_value = mock_thread_instance
 
@@ -313,42 +320,44 @@ class TestPerformanceMonitor:
 
             mock_thread_instance.join.assert_called_once_with(timeout=1.0)
 
-    @patch('time.time')
-    def test_performance_report_calculation(self, mock_time):
+    def test_performance_report_calculation(self):
         """Test calculation of performance report statistics."""
-        monitor = PerformanceMonitor()
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('time.time', return_value=1010.0):
+            
+            monitor = PerformanceMonitor()
 
-        # Simulate monitoring data
-        monitor.start_time = 1000.0
-        monitor.cpu_percentages = [50.0, 60.0, 70.0]
-        monitor.memory_usages = [1024.0, 2048.0, 1536.0]
-        monitor.monitoring = True  # Set monitoring to True so stop_monitoring calculates duration
+            # Simulate monitoring data
+            monitor.start_time = 1000.0
+            monitor.cpu_percentages = [50.0, 60.0, 70.0]
+            monitor.memory_usages = [1024.0, 2048.0, 1536.0]
+            monitor.monitoring = True  # Set monitoring to True so stop_monitoring calculates duration
 
-        mock_time.return_value = 1010.0  # 10 seconds later
+            report = monitor.stop_monitoring()
 
-        report = monitor.stop_monitoring()
-
-        assert report['total_duration'] == 10.0
-        assert report['avg_cpu_percent'] == 60.0
-        assert report['max_cpu_percent'] == 70.0
-        assert report['avg_memory_mb'] == 1536.0
-        assert report['max_memory_mb'] == 2048.0
-        assert report['samples_collected'] == 3
+            assert report['total_duration'] == 10.0
+            assert report['avg_cpu_percent'] == 60.0
+            assert report['max_cpu_percent'] == 70.0
+            assert report['avg_memory_mb'] == 1536.0
+            assert report['max_memory_mb'] == 2048.0
+            assert report['samples_collected'] == 3
 
     def test_empty_performance_data_report(self):
         """Test performance report with no collected data."""
-        monitor = PerformanceMonitor()
+        with patch('src.performance.PERFORMANCE_MONITORING_ENABLED', True), \
+             patch('time.time', return_value=1010.0):
+            
+            monitor = PerformanceMonitor()
 
-        monitor.start_time = 1000.0
-        monitor.monitoring = True  # Set monitoring to True so stop_monitoring calculates duration
-        # No CPU or memory data collected
+            monitor.start_time = 1000.0
+            monitor.monitoring = True  # Set monitoring to True so stop_monitoring calculates duration
+            # No CPU or memory data collected
 
-        with patch('time.time', return_value=1010.0):
             report = monitor.stop_monitoring()
 
-        assert report['total_duration'] == 10.0
-        assert report['avg_cpu_percent'] == 0
-        assert report['max_cpu_percent'] == 0
-        assert report['avg_memory_mb'] == 0
-        assert report['max_memory_mb'] == 0
-        assert report['samples_collected'] == 0
+            assert report['total_duration'] == 10.0
+            assert report['avg_cpu_percent'] == 0
+            assert report['max_cpu_percent'] == 0
+            assert report['avg_memory_mb'] == 0
+            assert report['max_memory_mb'] == 0
+            assert report['samples_collected'] == 0

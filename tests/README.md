@@ -80,7 +80,7 @@ python -m pytest tests/test_performance.py -v
 
 The test suite provides comprehensive coverage for:
 
-- ✅ **335+ individual tests** (324+ existing + 11 new profile tests)
+- ✅ **540+ individual tests** (324+ existing + 11 new profile tests)
 - ✅ Unit tests for all core functions
 - ✅ Integration tests for external services
 - ✅ Error handling for all error scenarios

@@ -5,6 +5,26 @@ import json
 from typing import Dict, Any
 from dotenv import load_dotenv
 
+# Environment variables (for security)
+
+def load_environment():
+    """Load appropriate environment file based on context"""
+    # Check if we're in a test environment
+    if os.getenv('TEST_ENVIRONMENT') == 'true' or 'pytest' in os.sys.argv[0]:
+        env_file = '.env.test'
+    else:
+        env_file = '.env'
+
+    # Load the environment file if it exists
+    if os.path.exists(env_file):
+        load_dotenv(env_file)
+    else:
+        # Fallback to default .env
+        load_dotenv()
+
+# Load environment on import
+load_environment()
+
 # Constants for hardcoded values
 DEFAULT_DATA_LIMIT = 200  # Default limit for data fetching
 HISTORICAL_DATA_LIMIT = 1000  # Default limit for historical data
@@ -292,26 +312,6 @@ OUTPUT_FILE = 'output/signals.json'
 # Logging
 LOG_LEVEL = 'INFO'
 LOG_FILE = 'logs/tradpal_indicator.log'
-
-# Environment variables (for security)
-
-def load_environment():
-    """Load appropriate environment file based on context"""
-    # Check if we're in a test environment
-    if os.getenv('TEST_ENVIRONMENT') == 'true' or 'pytest' in os.sys.argv[0]:
-        env_file = '.env.test'
-    else:
-        env_file = '.env'
-
-    # Load the environment file if it exists
-    if os.path.exists(env_file):
-        load_dotenv(env_file)
-    else:
-        # Fallback to default .env
-        load_dotenv()
-
-# Load environment on import
-load_environment()
 
 API_KEY = os.getenv('TRADPAL_API_KEY', '')
 API_SECRET = os.getenv('TRADPAL_API_SECRET', '')
