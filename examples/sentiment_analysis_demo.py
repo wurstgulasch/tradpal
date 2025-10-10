@@ -276,7 +276,7 @@ def main():
         print("💡 Configure at least one API key and run again.")
         return
 
-    print(f"✅ API Keys configured: {', '.join(configured_keys)}")
+    print("✅ API keys are configured.")
     print("🎭 Starting sentiment analysis demos...\n")
 
     # Run demos
