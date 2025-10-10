@@ -300,3 +300,15 @@ def log_trade_sell(symbol: str, timeframe: str, quantity: float, price: float,
         execution_reason=reason
     )
     audit_logger.log_trade_execution(execution)
+
+
+def audit_log(event_type: str, operation: str, data: Dict[str, Any]):
+    """
+    General audit logging function for various system events.
+    
+    Args:
+        event_type: Type of event (e.g., 'sentiment_analysis', 'signal_generation')
+        operation: Specific operation (e.g., 'twitter', 'news', 'aggregated')
+        data: Event data to log
+    """
+    audit_logger.log_system_event(event_type, operation, data)

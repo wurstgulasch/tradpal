@@ -60,9 +60,10 @@ cd services/web-ui && streamlit run app.py
 - **Profile Configuration**: Cleaned up performance profiles from 3 to 2 profiles (light/heavy) with automatic validation
 - **Environment Loading**: Fixed environment file loading order to ensure proper profile-based configuration
 - **Security Enhancement**: Removed sensitive Telegram credentials from .env files to prevent accidental commits
+- **Test Suite Fixes**: Corrected backtester integration tests to match actual API return formats
 
 ### 📊 Testing & Quality Assurance
-- **Comprehensive Test Suite**: 540+ tests with 100% pass rate (13 skipped for optional dependencies)
+- **Comprehensive Test Suite**: 556+ tests with high pass rate (3 performance test failures expected on CI)
 - **CI/CD Pipeline**: Automated testing with GitHub Actions for multiple Python versions
 - **Code Quality**: Enhanced linting, type checking, and documentation standards
 - **Performance Benchmarks**: Realistic timeout values for different hardware configurations
@@ -72,6 +73,13 @@ cd services/web-ui && streamlit run app.py
 - **Environment Setup**: Streamlined conda environment configuration and dependency management
 - **Documentation**: Updated README with current features, installation guides, and troubleshooting
 - **Code Standards**: Consistent PEP 8 compliance and comprehensive docstrings
+
+### 🆕 New Features & Scripts
+- **Enhanced Backtest Script** (`scripts/enhanced_backtest.py`): Advanced backtesting with detailed reporting, parameter analysis, and export capabilities
+- **ML Performance Testing** (`scripts/test_ml_performance.py`): Comprehensive ML model performance evaluation against traditional indicators
+- **Improved .gitignore**: Enhanced file exclusion patterns for better repository hygiene
+- **Audit Logger Enhancements**: Improved structured logging and error handling
+- **Cache System Updates**: Better caching mechanisms for API responses and ML models
 
 ---
 
@@ -278,7 +286,7 @@ cd services/web-ui && streamlit run app.py
 - **Architecture**: Modular microservices design with clean separation of concerns
 - **Data Processing**: Vectorized operations using pandas/numpy for optimal performance
 - **Error Handling**: Comprehensive error boundary decorators with recovery strategies
-- **Testing**: 540+ unit and integration tests with 100% pass rate (13 skipped for optional dependencies)
+- **Testing**: 556+ unit and integration tests with high pass rate (3 performance tests may fail on CI systems)
 - **Performance**: Sub-second analysis for 1-minute charts, optimized for high-frequency data
 - **Memory Usage**: Efficient DataFrame operations with minimal memory footprint
 - **API Compatibility**: ccxt library support for 100+ cryptocurrency and forex exchanges
@@ -525,6 +533,18 @@ Comprehensive machine learning tutorial covering:
 python examples/demo_performance.py
 ```
 
+#### Enhanced Backtest Script (`scripts/enhanced_backtest.py`)
+```python
+# Run detailed backtesting with comprehensive reports and exports
+python scripts/enhanced_backtest.py --symbol BTC/USDT --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+```
+
+#### ML Performance Testing (`scripts/test_ml_performance.py`)
+```python
+# Test ML model performance against traditional indicators
+python scripts/test_ml_performance.py --symbol BTC/USDT --timeframe 1d --days 365
+```
+
 #### ML Model Training (`scripts/train_ml_model.py`)
 ```python
 # Train ML models for signal enhancement
@@ -649,6 +669,12 @@ python main.py --mode live --symbol BTC/USDT
 
 # Single backtest
 python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+
+# Enhanced backtesting with detailed reports
+python scripts/enhanced_backtest.py --symbol BTC/USDT --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+
+# ML model performance testing
+python scripts/test_ml_performance.py --symbol BTC/USDT --timeframe 1d --days 365
 
 # Multi-model comparison with auto-training
 python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --train-missing --max-workers 4

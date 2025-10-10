@@ -132,8 +132,9 @@ dmypy.json
 
 # Project specific
 logs/
-output/*.json
+output/
 cache/
+test_cache/
 *.log
 
 # Adaptive optimization

@@ -9,11 +9,11 @@ Das TradPal System unterstützt verschiedene Performance-Profile, die über den 
 - ✅ Basis-Indikatoren (EMA, RSI, Bollinger Bands, ATR)
 - ✅ Risikomanagement
 - ✅ Rate Limiting
+- ❌ WebSocket Streaming
+- ❌ Monitoring Stack
 - ❌ Machine Learning Features
 - ❌ Adaptive Optimization
 - ❌ Multi-Timeframe Analysis
-- ❌ WebSocket Streaming
-- ❌ Monitoring Stack
 
 **Verwendung:**
 ```bash

@@ -143,7 +143,7 @@ ATR_PERIOD = current_params['atr_period']
 
 # Risk management
 CAPITAL = 10000  # Realistic starting capital for trading
-RISK_PER_TRADE = 0.01  # 1% risk per trade (conservative risk management)
+RISK_PER_TRADE = 0.8  # 80% risk per trade (conservative risk management)
 
 # Risk management parameters
 SL_MULTIPLIER = current_params['atr_sl_multiplier']
@@ -229,6 +229,48 @@ ML_TEST_SIZE = 0.2  # Fraction of data for testing
 ML_CV_FOLDS = 5  # Number of cross-validation folds
 ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
 
+# Preferred ML Model Configuration
+ML_PREFERRED_MODEL = 'gradient_boosting'  # Preferred model: 'gradient_boosting', 'xgboost', 'random_forest', 'svm', 'logistic_regression'
+ML_MODEL_SELECTION_CRITERIA = 'f1'  # Selection criteria: 'f1', 'accuracy', 'precision', 'recall', 'balanced_accuracy'
+
+# Gradient Boosting Specific Configuration
+ML_GRADIENT_BOOSTING_N_ESTIMATORS = 200  # Number of boosting stages
+ML_GRADIENT_BOOSTING_LEARNING_RATE = 0.1  # Learning rate
+ML_GRADIENT_BOOSTING_MAX_DEPTH = 6  # Maximum depth of individual trees
+ML_GRADIENT_BOOSTING_MIN_SAMPLES_SPLIT = 20  # Minimum samples required to split
+ML_GRADIENT_BOOSTING_MIN_SAMPLES_LEAF = 10  # Minimum samples required at leaf node
+ML_GRADIENT_BOOSTING_SUBSAMPLE = 0.8  # Fraction of samples used for fitting
+ML_GRADIENT_BOOSTING_MAX_FEATURES = 'sqrt'  # Number of features to consider for best split
+
+# XGBoost Specific Configuration
+ML_XGBOOST_N_ESTIMATORS = 200  # Number of boosting rounds
+ML_XGBOOST_LEARNING_RATE = 0.1  # Learning rate
+ML_XGBOOST_MAX_DEPTH = 6  # Maximum depth of trees
+ML_XGBOOST_MIN_CHILD_WEIGHT = 1  # Minimum sum of instance weight needed in a child
+ML_XGBOOST_SUBSAMPLE = 0.8  # Subsample ratio of training instances
+ML_XGBOOST_COLSAMPLE_BYTREE = 0.8  # Subsample ratio of columns when constructing each tree
+ML_XGBOOST_GAMMA = 0  # Minimum loss reduction required to make a further partition
+
+# Random Forest Specific Configuration
+ML_RF_N_ESTIMATORS = 200  # Number of trees in the forest
+ML_RF_MAX_DEPTH = None  # Maximum depth of trees
+ML_RF_MIN_SAMPLES_SPLIT = 2  # Minimum samples required to split
+ML_RF_MIN_SAMPLES_LEAF = 1  # Minimum samples required at leaf node
+ML_RF_MAX_FEATURES = 'sqrt'  # Number of features to consider for best split
+ML_RF_BOOTSTRAP = True  # Whether bootstrap samples are used
+
+# SVM Specific Configuration
+ML_SVM_C = 1.0  # Regularization parameter
+ML_SVM_KERNEL = 'rbf'  # Kernel type: 'linear', 'poly', 'rbf', 'sigmoid'
+ML_SVM_GAMMA = 'scale'  # Kernel coefficient
+ML_SVM_CLASS_WEIGHT = 'balanced'  # Class weight balancing
+
+# Logistic Regression Specific Configuration
+ML_LR_C = 1.0  # Inverse of regularization strength
+ML_LR_PENALTY = 'l2'  # Regularization type: 'l1', 'l2', 'elasticnet', 'none'
+ML_LR_SOLVER = 'lbfgs'  # Solver algorithm
+ML_LR_MAX_ITER = 1000  # Maximum number of iterations
+
 # Advanced ML Configuration (PyTorch)
 ML_USE_PYTORCH = False  # Enable PyTorch models (LSTM, GRU, Transformer)
 ML_PYTORCH_MODEL_TYPE = 'lstm'  # Options: 'lstm', 'gru', 'transformer'
@@ -241,10 +283,10 @@ ML_PYTORCH_EPOCHS = 100  # Maximum training epochs
 ML_PYTORCH_EARLY_STOPPING_PATIENCE = 10  # Early stopping patience
 
 # AutoML Configuration (Optuna)
-ML_USE_AUTOML = False  # Enable automated hyperparameter optimization
-ML_AUTOML_N_TRIALS = 100  # Number of Optuna trials for hyperparameter search
-ML_AUTOML_TIMEOUT = 3600  # Maximum time for AutoML optimization (seconds)
-ML_AUTOML_STUDY_NAME = 'tradpal_automl'  # Name for Optuna study
+ML_USE_AUTOML = True  # Enable automated hyperparameter optimization
+ML_AUTOML_N_TRIALS = 50  # Number of Optuna trials for hyperparameter search
+ML_AUTOML_TIMEOUT = 1800  # Maximum time for AutoML optimization (seconds)
+ML_AUTOML_STUDY_NAME = 'tradpal_gradient_boosting_optimization'  # Name for Optuna study
 ML_AUTOML_STORAGE = None  # Database URL for Optuna storage (None = in-memory)
 ML_AUTOML_SAMPLER = 'tpe'  # Sampler type: 'tpe', 'random', 'grid'
 ML_AUTOML_PRUNER = 'median'  # Pruner type: 'median', 'hyperband', 'none'

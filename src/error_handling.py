@@ -86,6 +86,16 @@ class ValidationError(TradingError):
     pass
 
 
+class APIError(NetworkError):
+    """API-related errors."""
+    pass
+
+
+class RateLimitError(NetworkError):
+    """Rate limiting errors."""
+    pass
+
+
 class ErrorHandler:
     """Centralized error handling and recovery."""
 
@@ -412,6 +422,37 @@ def graceful_degradation(supported_features: List[str] = None):
 
         return wrapper
     return decorator
+
+
+def handle_api_errors(func: Callable) -> Callable:
+    """
+    Decorator for handling API errors with automatic retry and rate limiting.
+
+    Args:
+        func: The function to decorate
+
+    Returns:
+        Decorated function with error handling
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        context = ErrorContext(
+            operation=f"{func.__module__}.{func.__name__}",
+            parameters={"args": args, "kwargs": kwargs},
+            timestamp=time.time(),
+            max_retries=3
+        )
+
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            # Check if it's a rate limit error
+            if "rate limit" in str(e).lower() or "429" in str(e):
+                raise RateLimitError(f"Rate limit exceeded: {e}", context, e)
+            else:
+                raise APIError(f"API error: {e}", context, e)
+
+    return wrapper
 
 
 # Import pandas here to avoid circular imports

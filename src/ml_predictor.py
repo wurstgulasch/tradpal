@@ -31,14 +31,48 @@ except ImportError:
 
 try:
     import xgboost as xgb
+    from xgboost import XGBClassifier
     XGBOOST_AVAILABLE = True
 except ImportError:
     XGBOOST_AVAILABLE = False
     xgb = None
+    XGBClassifier = None
     print("⚠️  XGBoost not available. Enhanced ensemble methods will be limited.")
     print("   Install with: pip install xgboost")
 
-from config.settings import SYMBOL, TIMEFRAME, LOOKBACK_DAYS
+try:
+    import optuna
+    from optuna.pruners import MedianPruner, HyperbandPruner
+    from optuna.samplers import TPESampler, RandomSampler, GridSampler
+    OPTUNA_AVAILABLE = True
+except ImportError:
+    OPTUNA_AVAILABLE = False
+    optuna = None
+    TPESampler = None
+    RandomSampler = None
+    GridSampler = None
+    MedianPruner = None
+    HyperbandPruner = None
+    print("⚠️  Optuna not available. AutoML features will be disabled.")
+    print("   Install with: pip install optuna")
+
+from config.settings import (
+    SYMBOL, TIMEFRAME, LOOKBACK_DAYS,
+    ML_PREFERRED_MODEL, ML_MODEL_SELECTION_CRITERIA,
+    ML_GRADIENT_BOOSTING_N_ESTIMATORS, ML_GRADIENT_BOOSTING_LEARNING_RATE,
+    ML_GRADIENT_BOOSTING_MAX_DEPTH, ML_GRADIENT_BOOSTING_MIN_SAMPLES_SPLIT,
+    ML_GRADIENT_BOOSTING_MIN_SAMPLES_LEAF, ML_GRADIENT_BOOSTING_SUBSAMPLE,
+    ML_GRADIENT_BOOSTING_MAX_FEATURES,
+    ML_XGBOOST_N_ESTIMATORS, ML_XGBOOST_LEARNING_RATE, ML_XGBOOST_MAX_DEPTH,
+    ML_XGBOOST_MIN_CHILD_WEIGHT, ML_XGBOOST_SUBSAMPLE, ML_XGBOOST_COLSAMPLE_BYTREE,
+    ML_XGBOOST_GAMMA,
+    ML_RF_N_ESTIMATORS, ML_RF_MAX_DEPTH, ML_RF_MIN_SAMPLES_SPLIT,
+    ML_RF_MIN_SAMPLES_LEAF, ML_RF_MAX_FEATURES, ML_RF_BOOTSTRAP,
+    ML_SVM_C, ML_SVM_KERNEL, ML_SVM_GAMMA, ML_SVM_CLASS_WEIGHT,
+    ML_LR_C, ML_LR_PENALTY, ML_LR_SOLVER, ML_LR_MAX_ITER,
+    ML_USE_AUTOML, ML_AUTOML_N_TRIALS, ML_AUTOML_TIMEOUT, ML_AUTOML_STUDY_NAME,
+    ML_AUTOML_STORAGE, ML_AUTOML_SAMPLER, ML_AUTOML_PRUNER
+)
 from src.audit_logger import audit_logger
 
 
@@ -72,14 +106,16 @@ class MLSignalPredictor:
         self.symbol = symbol
         self.timeframe = timeframe
 
-        # Model configurations
+        # Model configurations with optimized hyperparameters
         self.models = {
             'random_forest': {
                 'model': RandomForestClassifier(
-                    n_estimators=100,
-                    max_depth=10,
-                    min_samples_split=10,
-                    min_samples_leaf=5,
+                    n_estimators=ML_RF_N_ESTIMATORS,
+                    max_depth=ML_RF_MAX_DEPTH,
+                    min_samples_split=ML_RF_MIN_SAMPLES_SPLIT,
+                    min_samples_leaf=ML_RF_MIN_SAMPLES_LEAF,
+                    max_features=ML_RF_MAX_FEATURES,
+                    bootstrap=ML_RF_BOOTSTRAP,
                     random_state=42,
                     n_jobs=-1
                 ),
@@ -87,18 +123,26 @@ class MLSignalPredictor:
             },
             'gradient_boosting': {
                 'model': GradientBoostingClassifier(
-                    n_estimators=100,
-                    learning_rate=0.1,
-                    max_depth=5,
+                    n_estimators=ML_GRADIENT_BOOSTING_N_ESTIMATORS,
+                    learning_rate=ML_GRADIENT_BOOSTING_LEARNING_RATE,
+                    max_depth=ML_GRADIENT_BOOSTING_MAX_DEPTH,
+                    min_samples_split=ML_GRADIENT_BOOSTING_MIN_SAMPLES_SPLIT,
+                    min_samples_leaf=ML_GRADIENT_BOOSTING_MIN_SAMPLES_LEAF,
+                    subsample=ML_GRADIENT_BOOSTING_SUBSAMPLE,
+                    max_features=ML_GRADIENT_BOOSTING_MAX_FEATURES,
                     random_state=42
                 ),
                 'name': 'Gradient Boosting'
             },
             'xgboost': {
                 'model': xgb.XGBClassifier(
-                    n_estimators=100,
-                    learning_rate=0.1,
-                    max_depth=6,
+                    n_estimators=ML_XGBOOST_N_ESTIMATORS,
+                    learning_rate=ML_XGBOOST_LEARNING_RATE,
+                    max_depth=ML_XGBOOST_MAX_DEPTH,
+                    min_child_weight=ML_XGBOOST_MIN_CHILD_WEIGHT,
+                    subsample=ML_XGBOOST_SUBSAMPLE,
+                    colsample_bytree=ML_XGBOOST_COLSAMPLE_BYTREE,
+                    gamma=ML_XGBOOST_GAMMA,
                     random_state=42,
                     n_jobs=-1
                 ) if XGBOOST_AVAILABLE else None,
@@ -107,14 +151,27 @@ class MLSignalPredictor:
             'svm': {
                 'model': Pipeline([
                     ('scaler', StandardScaler()),
-                    ('svm', SVC(kernel='rbf', C=1.0, gamma='scale', probability=True, random_state=42))
+                    ('svm', SVC(
+                        kernel=ML_SVM_KERNEL,
+                        C=ML_SVM_C,
+                        gamma=ML_SVM_GAMMA,
+                        class_weight=ML_SVM_CLASS_WEIGHT,
+                        probability=True,
+                        random_state=42
+                    ))
                 ]),
                 'name': 'Support Vector Machine'
             },
             'logistic_regression': {
                 'model': Pipeline([
                     ('scaler', StandardScaler()),
-                    ('lr', LogisticRegression(random_state=42, max_iter=1000))
+                    ('lr', LogisticRegression(
+                        C=ML_LR_C,
+                        penalty=ML_LR_PENALTY,
+                        solver=ML_LR_SOLVER,
+                        max_iter=ML_LR_MAX_ITER,
+                        random_state=42
+                    ))
                 ]),
                 'name': 'Logistic Regression'
             }
@@ -145,6 +202,11 @@ class MLSignalPredictor:
             features.append(df['close'].pct_change().fillna(0))  # Price change
             features.append(df['close'].rolling(window=5).mean().fillna(0))  # Short MA
             features.append(df['close'].rolling(window=20).mean().fillna(0))  # Long MA
+            features.append(df['close'].rolling(window=50).mean().fillna(0))  # Very Long MA
+
+            # Volatility features
+            features.append(df['close'].rolling(window=20).std().fillna(0))  # Rolling volatility
+            features.append((df['close'] - df['close'].rolling(window=20).mean()).fillna(0))  # Price deviation from MA
 
         # Technical indicators
         indicator_features = [
@@ -158,28 +220,82 @@ class MLSignalPredictor:
                 features.append(df[indicator].fillna(0))
                 # Add rate of change
                 features.append(df[indicator].pct_change(fill_method=None).fillna(0))
+                # Add lag features (1, 2, 3 periods back)
+                for lag in [1, 2, 3]:
+                    features.append(df[indicator].shift(lag).fillna(0))
 
-        # Volatility features
+        # Advanced technical features
         if 'ATR' in df.columns and 'close' in df.columns:
             features.append((df['ATR'] / df['close']).fillna(0))  # Normalized ATR
 
-        # Trend features
         if 'EMA9' in df.columns and 'EMA21' in df.columns:
             features.append((df['EMA9'] - df['EMA21']).fillna(0))  # EMA spread
             features.append(((df['EMA9'] - df['EMA21']) / df['close']).fillna(0))  # Normalized spread
+            features.append((df['EMA9'] / df['EMA21'] - 1).fillna(0))  # EMA ratio
 
-        # Momentum features
         if 'RSI' in df.columns:
             features.append(df['RSI'].rolling(window=5).mean().fillna(50))  # RSI MA
+            features.append(df['RSI'].rolling(window=14).std().fillna(0))  # RSI volatility
+
+        # Bollinger Band features
+        if 'BB_upper' in df.columns and 'BB_lower' in df.columns and 'close' in df.columns:
+            bb_width = (df['BB_upper'] - df['BB_lower']) / df['close']
+            bb_position = (df['close'] - df['BB_lower']) / (df['BB_upper'] - df['BB_lower'])
+            features.append(bb_width.fillna(0))  # BB width normalized
+            features.append(bb_position.fillna(0.5))  # BB position (0-1)
+
+        # MACD features
+        if 'MACD' in df.columns and 'MACD_signal' in df.columns:
+            macd_crossover = (df['MACD'] - df['MACD_signal']).fillna(0)
+            features.append(macd_crossover)  # MACD crossover signal
+            features.append(macd_crossover.diff().fillna(0))  # MACD crossover change
+
+        # Stochastic features
+        if 'Stoch_K' in df.columns and 'Stoch_D' in df.columns:
+            stoch_divergence = (df['Stoch_K'] - df['Stoch_D']).fillna(0)
+            features.append(stoch_divergence)  # Stochastic divergence
+
+        # Volume features (if available)
+        if 'volume' in df.columns:
+            features.append(df['volume'].pct_change().fillna(0))  # Volume change
+            features.append(df['volume'].rolling(window=20).mean().fillna(0))  # Volume MA
+
+        # Statistical features
+        if 'close' in df.columns:
+            # Rolling statistics
+            for window in [5, 10, 20]:
+                features.append(df['close'].rolling(window=window).skew().fillna(0))  # Skewness
+                features.append(df['close'].rolling(window=window).kurt().fillna(0))  # Kurtosis
 
         # Create feature names
         feature_names = []
-        base_indicators = ['close_pct', 'close_ma5', 'close_ma20'] + indicator_features
+        base_indicators = ['close_pct', 'close_ma5', 'close_ma20', 'close_ma50', 'close_vol20', 'close_dev_ma20'] + indicator_features
+
+        # Add names for basic indicators with value and ROC
         for name in base_indicators:
             feature_names.extend([f"{name}_value", f"{name}_roc"])
 
+        # Add lag feature names
+        for name in indicator_features:
+            for lag in [1, 2, 3]:
+                feature_names.extend([f"{name}_lag{lag}"])
+
         # Additional features
-        feature_names.extend(['atr_normalized', 'ema_spread', 'ema_spread_norm', 'rsi_ma5'])
+        additional_features = [
+            'atr_normalized', 'ema_spread', 'ema_spread_norm', 'ema_ratio',
+            'rsi_ma5', 'rsi_vol14', 'bb_width_norm', 'bb_position',
+            'macd_crossover', 'macd_crossover_change', 'stoch_divergence'
+        ]
+
+        # Volume features
+        if 'volume' in df.columns:
+            additional_features.extend(['volume_pct', 'volume_ma20'])
+
+        # Statistical features
+        for window in [5, 10, 20]:
+            additional_features.extend([f'close_skew_{window}', f'close_kurt_{window}'])
+
+        feature_names.extend(additional_features)
 
         # Combine features
         if features:
@@ -188,7 +304,104 @@ class MLSignalPredictor:
             # Fallback if no features available
             feature_matrix = np.zeros((len(df), 1))
 
+        # Replace infinities and NaN with 0
+        feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
+
         return feature_matrix, feature_names[:feature_matrix.shape[1]]
+
+    def scale_features(self, X: np.ndarray) -> np.ndarray:
+        """
+        Scale features using StandardScaler.
+
+        Args:
+            X: Feature matrix
+
+        Returns:
+            Scaled feature matrix
+        """
+        if not hasattr(self, 'scaler') or self.scaler is None:
+            self.scaler = StandardScaler()
+
+        return self.scaler.fit_transform(X)
+
+    def select_features(self, X: np.ndarray, y: np.ndarray, feature_names: List[str],
+                       max_features: int = 50) -> Tuple[np.ndarray, List[str]]:
+        """
+        Select most important features using statistical tests and model-based selection.
+
+        Args:
+            X: Scaled feature matrix
+            y: Target labels
+            feature_names: Original feature names
+            max_features: Maximum number of features to select
+
+        Returns:
+            Tuple of (selected_features, selected_feature_names)
+        """
+        try:
+            from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
+            from sklearn.feature_selection import RFECV
+            from sklearn.linear_model import LogisticRegression
+
+            n_features = X.shape[1]
+            if n_features <= max_features:
+                return X, feature_names
+
+            # Method 1: Statistical selection using f_classif
+            selector_stat = SelectKBest(score_func=f_classif, k=min(max_features, n_features))
+            X_stat = selector_stat.fit_transform(X, y)
+            stat_mask = selector_stat.get_support()
+
+            # Method 2: Mutual information
+            selector_mi = SelectKBest(score_func=mutual_info_classif, k=min(max_features, n_features))
+            X_mi = selector_mi.fit_transform(X, y)
+            mi_mask = selector_mi.get_support()
+
+            # Combine masks (features selected by either method)
+            combined_mask = stat_mask | mi_mask
+
+            # If we have too many features, use RFE with logistic regression
+            selected_count = np.sum(combined_mask)
+            if selected_count > max_features:
+                # Use only features selected by both methods for RFE
+                strict_mask = stat_mask & mi_mask
+                if np.sum(strict_mask) >= 10:  # Need at least 10 features for RFE
+                    X_strict = X[:, strict_mask]
+                    rfe_selector = RFECV(
+                        LogisticRegression(random_state=42, max_iter=1000),
+                        step=1,
+                        cv=3,
+                        min_features_to_select=min(10, X_strict.shape[1])
+                    )
+                    X_rfe = rfe_selector.fit_transform(X_strict, y)
+                    rfe_mask = rfe_selector.get_support()
+
+                    # Map back to original feature space
+                    final_mask = np.zeros(n_features, dtype=bool)
+                    strict_indices = np.where(strict_mask)[0]
+                    final_mask[strict_indices[rfe_mask]] = True
+                else:
+                    # Fallback: select top features by combined score
+                    stat_scores = selector_stat.scores_
+                    mi_scores = selector_mi.scores_
+                    combined_scores = (stat_scores + mi_scores) / 2
+                    top_indices = np.argsort(combined_scores)[-max_features:]
+                    final_mask = np.zeros(n_features, dtype=bool)
+                    final_mask[top_indices] = True
+            else:
+                final_mask = combined_mask
+
+            # Apply selection
+            X_selected = X[:, final_mask]
+            selected_feature_names = [name for name, selected in zip(feature_names, final_mask) if selected]
+
+            print(f"✅ Feature selection: {n_features} -> {X_selected.shape[1]} features")
+
+            return X_selected, selected_feature_names
+
+        except Exception as e:
+            print(f"⚠️  Feature selection failed: {e}, using all features")
+            return X, feature_names
 
     def create_labels(self, df: pd.DataFrame, prediction_horizon: int = 5) -> np.ndarray:
         """
@@ -241,17 +454,36 @@ class MLSignalPredictor:
             if len(X) < 100:
                 raise ValueError(f"Insufficient data for training: {len(X)} samples")
 
+            # Feature scaling and selection
+            X_scaled = self.scale_features(X)
+            X_selected, selected_feature_names = self.select_features(X_scaled, y, feature_names)
+
+            # Store feature selection info for prediction
+            self.selected_feature_indices = None
+            if len(selected_feature_names) < len(feature_names):
+                self.selected_feature_indices = [feature_names.index(name) for name in selected_feature_names]
+
             # Split data
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42, stratify=y
+                X_selected, y, test_size=test_size, random_state=42, stratify=y
             )
 
-            self.feature_columns = feature_names
+            self.feature_columns = selected_feature_names
 
             # Train and evaluate all models
             results = {}
             best_score = 0
             best_model_name = None
+
+            # Optimize models if AutoML is enabled
+            if ML_USE_AUTOML and OPTUNA_AVAILABLE:
+                print("🤖 Running AutoML optimization for all models...")
+                for model_name in self.models.keys():
+                    if model_name == 'xgboost' and not XGBOOST_AVAILABLE:
+                        continue
+                    optimization_result = self.optimize_model_hyperparameters(model_name, X_train, X_test, y_train, y_test)
+                    if optimization_result:
+                        print(f"✅ {model_name} optimized: F1={optimization_result['best_score']:.4f}")
 
             for model_name, model_config in self.models.items():
                 # Skip XGBoost if not available
@@ -289,9 +521,17 @@ class MLSignalPredictor:
                         'model': model
                     }
 
-                    # Select best model based on F1 score
-                    if f1 > best_score:
-                        best_score = f1
+                    # Select best model based on preferred criteria
+                    score = {
+                        'f1': f1,
+                        'accuracy': accuracy,
+                        'precision': precision,
+                        'recall': recall,
+                        'balanced_accuracy': (accuracy + recall) / 2  # Simple balanced accuracy
+                    }.get(ML_MODEL_SELECTION_CRITERIA, f1)
+
+                    if score > best_score:
+                        best_score = score
                         best_model_name = model_name
 
                     print(f"✅ {model_config['name']}: F1={f1:.3f}, CV-F1={cv_scores.mean():.3f}±{cv_scores.std():.3f}")
@@ -300,6 +540,16 @@ class MLSignalPredictor:
                     print(f"❌ Failed to train {model_config['name']}: {e}")
                     results[model_name] = {'error': str(e)}
 
+            # If preferred model is available and performs reasonably well, use it
+            if ML_PREFERRED_MODEL in results and 'error' not in results[ML_PREFERRED_MODEL]:
+                preferred_score = results[ML_PREFERRED_MODEL]['f1_score']
+                if preferred_score >= best_score * 0.9:  # Within 90% of best score
+                    best_model_name = ML_PREFERRED_MODEL
+                    best_score = preferred_score
+                    print(f"✅ Using preferred model: {ML_PREFERRED_MODEL} (F1={preferred_score:.3f})")
+                else:
+                    print(f"ℹ️  Preferred model {ML_PREFERRED_MODEL} underperforms (F1={preferred_score:.3f} vs {best_score:.3f}), using best model instead")
+
             if best_model_name:
                 self.best_model = results[best_model_name]['model']
                 self.model_performance = results
@@ -307,8 +557,9 @@ class MLSignalPredictor:
 
                 # Try to create stacking ensemble if multiple models are available
                 self.stacking_ensemble = None
+                self.weighted_ensemble = None
                 if len([m for m in results.keys() if 'error' not in results[m]]) >= 3:
-                    self.create_stacking_ensemble(X_train, X_test, y_train, y_test)
+                    self.create_advanced_ensembles(X_train, X_test, y_train, y_test)
 
                 # Save the best model
                 self.save_model()
@@ -347,25 +598,56 @@ class MLSignalPredictor:
 
             return {'success': False, 'error': str(e)}
 
-    def create_stacking_ensemble(self, X_train, X_test, y_train, y_test):
+    def create_advanced_ensembles(self, X_train, X_test, y_train, y_test):
         """
-        Create a stacking ensemble using the trained base models.
+        Create advanced ensemble methods: stacking and weighted voting.
 
         Args:
             X_train, X_test: Training and test features
             y_train, y_test: Training and test labels
         """
         try:
-            from sklearn.ensemble import StackingClassifier
+            from sklearn.ensemble import VotingClassifier, StackingClassifier
 
             # Get successful base models
             base_models = []
+            model_weights = []
             for model_name, result in self.model_performance.items():
-                if 'error' not in result and 'model' in result:
+                if 'error' not in result and 'model' in result and 'f1_score' in result:
                     base_models.append((model_name, result['model']))
+                    # Weight by F1 score
+                    model_weights.append(max(result['f1_score'], 0.1))  # Minimum weight of 0.1
 
             if len(base_models) < 3:
-                return  # Not enough models for stacking
+                return  # Not enough models for advanced ensembles
+
+            # Normalize weights
+            total_weight = sum(model_weights)
+            model_weights = [w / total_weight for w in model_weights]
+
+            # Create weighted voting ensemble
+            self.weighted_ensemble = VotingClassifier(
+                estimators=base_models,
+                voting='soft',  # Use probability-based voting
+                weights=model_weights
+            )
+
+            # Train weighted ensemble
+            self.weighted_ensemble.fit(X_train, y_train)
+
+            # Evaluate weighted ensemble
+            weighted_pred = self.weighted_ensemble.predict(X_test)
+            weighted_f1 = f1_score(y_test, weighted_pred, zero_division=0)
+
+            # Add to performance results
+            self.model_performance['weighted_ensemble'] = {
+                'accuracy': accuracy_score(y_test, weighted_pred),
+                'precision': precision_score(y_test, weighted_pred, zero_division=0),
+                'recall': recall_score(y_test, weighted_pred, zero_division=0),
+                'f1_score': weighted_f1,
+                'model': self.weighted_ensemble,
+                'weights': dict(zip([name for name, _ in base_models], model_weights))
+            }
 
             # Create stacking ensemble
             self.stacking_ensemble = StackingClassifier(
@@ -391,19 +673,31 @@ class MLSignalPredictor:
                 'model': self.stacking_ensemble
             }
 
-            # Use stacking if it's better than the best individual model
-            best_f1 = max([result.get('f1_score', 0) for result in self.model_performance.values()
-                          if isinstance(result, dict) and 'f1_score' in result])
+            # Compare ensembles and select the best
+            best_individual_f1 = max([result.get('f1_score', 0) for result in self.model_performance.values()
+                                    if isinstance(result, dict) and 'f1_score' in result and 'ensemble' not in result.get('model', '').__class__.__name__.lower()])
 
-            if stacking_f1 > best_f1:
-                self.best_model = self.stacking_ensemble
-                print(f"✅ Stacking ensemble selected (F1={stacking_f1:.3f} > {best_f1:.3f})")
+            ensemble_scores = {
+                'weighted': weighted_f1,
+                'stacking': stacking_f1
+            }
+
+            best_ensemble = max(ensemble_scores, key=ensemble_scores.get)
+            best_ensemble_score = ensemble_scores[best_ensemble]
+
+            if best_ensemble_score > best_individual_f1:
+                if best_ensemble == 'weighted':
+                    self.best_model = self.weighted_ensemble
+                else:
+                    self.best_model = self.stacking_ensemble
+                print(f"✅ {best_ensemble.title()} ensemble selected (F1={best_ensemble_score:.3f} > {best_individual_f1:.3f})")
             else:
-                print(f"ℹ️  Stacking ensemble trained (F1={stacking_f1:.3f}) but individual model kept")
+                print(f"ℹ️  Ensembles trained (Weighted F1={weighted_f1:.3f}, Stacking F1={stacking_f1:.3f}) but individual model kept")
 
         except Exception as e:
-            print(f"⚠️  Stacking ensemble creation failed: {e}")
+            print(f"⚠️  Advanced ensemble creation failed: {e}")
             self.stacking_ensemble = None
+            self.weighted_ensemble = None
 
     def predict_signal(self, df: pd.DataFrame, threshold: float = 0.6) -> Dict[str, Any]:
         """
@@ -433,7 +727,39 @@ class MLSignalPredictor:
                     'reason': 'No features available'
                 }
 
-            last_features = X[-1:].reshape(1, -1)
+            # Apply scaling and feature selection
+            X_scaled = self.scaler.transform(X) if hasattr(self, 'scaler') and self.scaler else X
+            if hasattr(self, 'selected_feature_indices') and self.selected_feature_indices is not None:
+                X_scaled = X_scaled[:, self.selected_feature_indices]
+
+            last_features = X_scaled[-1:].reshape(1, -1)
+
+            # Check feature count compatibility before prediction
+            expected_features = getattr(self.best_model, 'n_features_in_', None)
+            if expected_features is None and hasattr(self, 'expected_features'):
+                expected_features = self.expected_features
+
+            if expected_features is not None and last_features.shape[1] != expected_features:
+                error_msg = f"Feature count mismatch: model expects {expected_features} features, got {last_features.shape[1]} features"
+                print(f"❌ {error_msg}")
+
+                audit_logger.log_error(
+                    error_type="FEATURE_COUNT_MISMATCH",
+                    message=error_msg,
+                    context={
+                        'symbol': self.symbol,
+                        'timeframe': self.timeframe,
+                        'expected_features': expected_features,
+                        'actual_features': last_features.shape[1],
+                        'stored_feature_columns': len(self.feature_columns)
+                    }
+                )
+
+                return {
+                    'signal': 'HOLD',
+                    'confidence': 0.0,
+                    'reason': f'Feature mismatch: expected {expected_features}, got {last_features.shape[1]}'
+                }
 
             # Get prediction and probability
             prediction = self.best_model.predict(last_features)[0]
@@ -629,9 +955,13 @@ class MLSignalPredictor:
         if not self.is_trained or self.best_model is None:
             return
 
+        # Get expected feature count from the model
+        expected_features = getattr(self.best_model, 'n_features_in_', None)
+
         model_data = {
             'model': self.best_model,
             'feature_columns': self.feature_columns,
+            'expected_features': expected_features,
             'model_performance': self.model_performance,
             'training_timestamp': datetime.now().isoformat(),
             'symbol': self.symbol,
@@ -660,6 +990,7 @@ class MLSignalPredictor:
 
             self.best_model = model_data['model']
             self.feature_columns = model_data.get('feature_columns', [])
+            self.expected_features = model_data.get('expected_features', None)
             self.model_performance = model_data.get('model_performance', {})
             self.is_trained = True
 
@@ -683,22 +1014,245 @@ class MLSignalPredictor:
             'performance': self.model_performance
         }
 
-    def retrain_model(self, df: pd.DataFrame, force: bool = False) -> Dict[str, Any]:
+    def optimize_gradient_boosting(self, X_train, X_test, y_train, y_test) -> Dict[str, Any]:
         """
-        Retrain the model with new data.
+        Optimize Gradient Boosting hyperparameters using Optuna.
 
         Args:
-            df: New DataFrame for training
-            force: Force retraining even if model exists
+            X_train, X_test: Training and test features
+            y_train, y_test: Training and test labels
 
         Returns:
-            Training results
+            Dictionary with optimized parameters and performance
         """
-        if not force and self.is_trained:
-            return {'success': False, 'message': 'Model already trained. Use force=True to retrain.'}
+        if not OPTUNA_AVAILABLE:
+            print("⚠️  Optuna not available, using default parameters")
+            return {}
 
-        print(f"🔄 Retraining ML model for {self.symbol} {self.timeframe}...")
-        return self.train_models(df)
+        def objective(trial):
+            """Optuna objective function for Gradient Boosting optimization."""
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                'max_depth': trial.suggest_int('max_depth', 3, 10),
+                'min_samples_split': trial.suggest_int('min_samples_split', 2, 50),
+                'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20),
+                'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', None]),
+                'random_state': 42
+            }
+
+            model = GradientBoostingClassifier(**params)
+            model.fit(X_train, y_train)
+
+            # Use F1 score as optimization target
+            y_pred = model.predict(X_test)
+            f1 = f1_score(y_test, y_pred, zero_division=0)
+
+            return f1
+
+        # Set up Optuna study
+        sampler = {
+            'tpe': TPESampler(),
+            'random': RandomSampler(),
+            'grid': GridSampler({})
+        }.get(ML_AUTOML_SAMPLER, TPESampler())
+
+        pruner = {
+            'median': MedianPruner(),
+            'hyperband': HyperbandPruner()
+        }.get(ML_AUTOML_PRUNER, MedianPruner())
+
+        study = optuna.create_study(
+            study_name=ML_AUTOML_STUDY_NAME,
+            direction='maximize',
+            sampler=sampler,
+            pruner=pruner,
+            storage=ML_AUTOML_STORAGE
+        )
+
+        print(f"🎯 Starting Optuna optimization with {ML_AUTOML_N_TRIALS} trials...")
+
+        # Run optimization
+        study.optimize(objective, n_trials=ML_AUTOML_N_TRIALS, timeout=ML_AUTOML_TIMEOUT)
+
+        # Get best parameters
+        best_params = study.best_params
+        best_score = study.best_value
+
+        print(f"✅ Optimization completed! Best F1: {best_score:.4f}")
+        print(f"   Best parameters: {best_params}")
+
+        # Update model with best parameters
+        self.models['gradient_boosting']['model'] = GradientBoostingClassifier(
+            **best_params,
+            random_state=42
+        )
+
+        return {
+            'best_params': best_params,
+            'best_score': best_score,
+            'study': study
+        }
+
+    def optimize_model_hyperparameters(self, model_name: str, X_train, X_test, y_train, y_test) -> Dict[str, Any]:
+        """
+        Optimize hyperparameters for any ML model using Optuna.
+
+        Args:
+            model_name: Name of the model to optimize
+            X_train, X_test: Training and test features
+            y_train, y_test: Training and test labels
+
+        Returns:
+            Dictionary with optimized parameters and performance
+        """
+        if not OPTUNA_AVAILABLE or model_name not in self.models:
+            return {}
+
+        def objective(trial):
+            """Generic Optuna objective function."""
+            if model_name == 'gradient_boosting':
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 50),
+                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 20),
+                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                    'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', None]),
+                    'random_state': 42
+                }
+                model = GradientBoostingClassifier(**params)
+
+            elif model_name == 'random_forest':
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'max_depth': trial.suggest_int('max_depth', 3, 20),
+                    'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+                    'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 10),
+                    'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', None]),
+                    'bootstrap': trial.suggest_categorical('bootstrap', [True, False]),
+                    'random_state': 42
+                }
+                model = RandomForestClassifier(**params)
+
+            elif model_name == 'xgboost' and XGBOOST_AVAILABLE:
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
+                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+                    'gamma': trial.suggest_float('gamma', 0, 5),
+                    'random_state': 42
+                }
+                model = XGBClassifier(**params)
+
+            elif model_name == 'svm':
+                # SVM parameters - define all parameters statically to avoid Optuna dynamic issues
+                kernel = trial.suggest_categorical('kernel', ['rbf', 'linear', 'poly'])
+                C = trial.suggest_float('C', 0.1, 100, log=True)
+                gamma = trial.suggest_categorical('gamma', ['scale', 'auto'])
+                degree = trial.suggest_int('degree', 2, 5)
+
+                params = {
+                    'C': C,
+                    'kernel': kernel,
+                    'gamma': gamma,
+                    'degree': degree,
+                    'random_state': 42
+                }
+
+                # Remove gamma if kernel is linear
+                if params['kernel'] == 'linear':
+                    params.pop('gamma', None)
+                model = SVC(**params, probability=True)
+
+            elif model_name == 'logistic_regression':
+                params = {
+                    'C': trial.suggest_float('C', 0.01, 100, log=True),
+                    'penalty': trial.suggest_categorical('penalty', ['l1', 'l2', 'elasticnet', 'none']),
+                    'solver': trial.suggest_categorical('solver', ['liblinear', 'saga', 'lbfgs']),
+                    'max_iter': 1000,
+                    'random_state': 42
+                }
+                # Adjust solver based on penalty
+                if params['penalty'] == 'l1' and params['solver'] not in ['liblinear', 'saga']:
+                    params['solver'] = 'liblinear'
+                elif params['penalty'] == 'elasticnet' and params['solver'] != 'saga':
+                    params['solver'] = 'saga'
+                elif params['penalty'] == 'none':
+                    params['solver'] = 'lbfgs'
+                model = LogisticRegression(**params)
+
+            else:
+                return 0.0  # Skip unsupported models
+
+            try:
+                model.fit(X_train, y_train)
+                y_pred = model.predict(X_test)
+                f1 = f1_score(y_test, y_pred, zero_division=0)
+                return f1
+            except Exception:
+                return 0.0
+
+        # Set up Optuna study
+        sampler = {
+            'tpe': TPESampler(),
+            'random': RandomSampler(),
+            'grid': GridSampler({})
+        }.get(ML_AUTOML_SAMPLER, TPESampler())
+
+        pruner = {
+            'median': MedianPruner(),
+            'hyperband': HyperbandPruner()
+        }.get(ML_AUTOML_PRUNER, MedianPruner())
+
+        study_name = f'tradpal_{model_name}_optimization'
+        study = optuna.create_study(
+            study_name=study_name,
+            direction='maximize',
+            sampler=sampler,
+            pruner=pruner,
+            storage=ML_AUTOML_STORAGE
+        )
+
+        print(f"🎯 Optimizing {model_name} with {ML_AUTOML_N_TRIALS} trials...")
+
+        # Run optimization
+        study.optimize(objective, n_trials=ML_AUTOML_N_TRIALS, timeout=ML_AUTOML_TIMEOUT)
+
+        # Get best parameters
+        best_params = study.best_params
+        best_score = study.best_value
+
+        print(f"✅ {model_name} optimization completed! Best F1: {best_score:.4f}")
+
+        # Update model with best parameters
+        if model_name == 'gradient_boosting':
+            self.models[model_name]['model'] = GradientBoostingClassifier(**best_params, random_state=42)
+        elif model_name == 'random_forest':
+            self.models[model_name]['model'] = RandomForestClassifier(**best_params, random_state=42)
+        elif model_name == 'xgboost' and XGBOOST_AVAILABLE:
+            self.models[model_name]['model'] = XGBClassifier(**best_params, random_state=42)
+        elif model_name == 'svm':
+            # Handle SVM parameters
+            svm_params = best_params.copy()
+            if svm_params.get('kernel') == 'linear':
+                svm_params.pop('gamma', None)
+            self.models[model_name]['model'] = SVC(**svm_params, probability=True, random_state=42)
+        elif model_name == 'logistic_regression':
+            # Handle LogisticRegression parameters
+            lr_params = best_params.copy()
+            self.models[model_name]['model'] = LogisticRegression(**lr_params, max_iter=1000, random_state=42)
+
+        return {
+            'best_params': best_params,
+            'best_score': best_score,
+            'study': study
+        }
 
 
 # Global ML predictor instance
@@ -739,8 +1293,9 @@ try:
     SHAP_AVAILABLE = True
 except ImportError:
     SHAP_AVAILABLE = False
-    print("⚠️  SHAP not available. Model explanations will be disabled.")
-    print("   Install with: pip install shap")
+    shap = None
+    print("⚠️  SHAP not available. Install with: pip install shap")
+    print("   SHAP integration will be disabled.")
 
 
 if TENSORFLOW_AVAILABLE:
@@ -1012,7 +1567,7 @@ if TENSORFLOW_AVAILABLE:
                 return {
                     'signal': signal,
                     'confidence': float(confidence),
-                    'predicted_prob': float(prediction_prob),
+                    'predicted_prob': float(predicted_class_prob),
                     'threshold': threshold,
                     'reason': f'LSTM prediction with {confidence:.2f} confidence'
                 }
@@ -1148,6 +1703,9 @@ if TENSORFLOW_AVAILABLE:
             else:
                 # Fallback if no features available
                 feature_matrix = np.zeros((len(df), 1))
+
+            # Replace infinities and NaN with 0
+            feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
             return feature_matrix, feature_names[:feature_matrix.shape[1]]
 
@@ -1732,6 +2290,9 @@ if TENSORFLOW_AVAILABLE:
             else:
                 # Fallback if no features available
                 feature_matrix = np.zeros((len(df), 1))
+
+            # Replace infinities and NaN with 0
+            feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
             return feature_matrix, feature_names[:feature_matrix.shape[1]]
 

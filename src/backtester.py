@@ -46,41 +46,81 @@ class Backtester:
         self.trades = []
         self.portfolio_values = []
 
-    def run_backtest(self):
+    def run_backtest(self, df=None, strategy='traditional', symbol=None, timeframe=None,
+                     initial_capital=None, commission=0.001):
         """
-        Run historical backtest and return performance metrics.
+        Run historical backtest with specified strategy.
+
+        Args:
+            df: DataFrame with data (if None, fetches data)
+            strategy: Strategy type ('traditional', 'ml_enhanced', 'lstm_enhanced', 'transformer_enhanced')
+            symbol: Trading symbol
+            timeframe: Timeframe
+            initial_capital: Initial capital
+            commission: Commission per trade
+
+        Returns:
+            Dictionary with backtest results and metrics
         """
-        print(f"Running backtest for {self.symbol} on {self.timeframe} timeframe")
-        print(f"Period: {self.start_date.date()} to {self.end_date.date()}")
+        try:
+            # Update instance variables if provided
+            if symbol:
+                self.symbol = symbol
+            if timeframe:
+                self.timeframe = timeframe
+            if initial_capital:
+                self.initial_capital = initial_capital
+                self.current_capital = initial_capital
 
-        # Fetch historical data
-        data = self._fetch_data()
+            self.commission = commission
 
-        # Check if data fetch failed (returned error string)
-        if isinstance(data, str):
-            return {"error": f"Data fetch failed: {data}"}
+            print(f"Running {strategy} backtest for {self.symbol} on {self.timeframe} timeframe")
+            print(f"Period: {self.start_date.date()} to {self.end_date.date()}")
 
-        if data.empty:
-            return {"error": "No data available for backtest period"}
+            # Fetch or use provided data
+            if df is None:
+                data = self._fetch_data()
+                if isinstance(data, str):
+                    return {"success": False, "error": f"Data fetch failed: {data}"}
+                if data.empty:
+                    return {"success": False, "error": "No data available for backtest period"}
+            else:
+                data = df.copy()
 
-        # Calculate indicators and signals (skip if already processed)
-        required_cols = ['EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Buy_Signal', 'Sell_Signal', 'Position_Size_Absolute']
-        if not all(col in data.columns for col in required_cols):
-            data = calculate_indicators(data)
-            data = generate_signals(data)
-            data = calculate_risk_management(data)
+            # Calculate indicators and signals based on strategy
+            if strategy == 'traditional':
+                data = self._prepare_traditional_signals(data)
+            elif strategy == 'ml_enhanced':
+                data = self._prepare_ml_enhanced_signals(data)
+            elif strategy == 'lstm_enhanced':
+                data = self._prepare_lstm_enhanced_signals(data)
+            elif strategy == 'transformer_enhanced':
+                data = self._prepare_transformer_enhanced_signals(data)
+            else:
+                return {"success": False, "error": f"Unknown strategy: {strategy}"}
 
-        # Simulate trades
-        results = self._simulate_trades(data)
-        self.trades = results
+            # Simulate trades
+            trades = self._simulate_trades(data)
+            self.trades = trades
 
-        # Calculate performance metrics
-        metrics = self._calculate_metrics()
+            # Calculate performance metrics
+            metrics = self._calculate_metrics()
 
-        # Save backtest results
-        self._save_results(metrics)
+            # Add strategy info
+            metrics['strategy'] = strategy
+            metrics['total_return_pct'] = metrics.get('return_pct', 0)
 
-        return metrics
+            return {
+                "success": True,
+                "metrics": metrics,
+                "trades": trades,
+                "trades_count": len(trades)
+            }
+
+        except Exception as e:
+            error_msg = f"Backtest failed: {str(e)}"
+            print(f"❌ {error_msg}")
+            return {"success": False, "error": error_msg}
 
     def _fetch_data(self):
         """Fetch historical data for backtest period."""
@@ -328,6 +368,138 @@ class Backtester:
             json.dump(results, f, indent=4, default=str)
 
         print(f"Backtest results saved to {output_file}")
+
+    def _prepare_traditional_signals(self, data):
+        """Prepare data with traditional indicators and signals."""
+        # Calculate indicators and signals (skip if already processed)
+        required_cols = ['EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Buy_Signal', 'Sell_Signal', 'Position_Size_Absolute']
+        if not all(col in data.columns for col in required_cols):
+            data = calculate_indicators(data)
+            data = generate_signals(data)
+            data = calculate_risk_management(data)
+        return data
+
+    def _prepare_ml_enhanced_signals(self, data):
+        """Prepare data with ML-enhanced signals."""
+        from src.ml_predictor import get_ml_predictor, is_ml_available
+
+        # First prepare traditional signals
+        data = self._prepare_traditional_signals(data)
+
+        # Add ML enhancement if available
+        if is_ml_available():
+            predictor = get_ml_predictor(symbol=self.symbol, timeframe=self.timeframe)
+            if predictor and predictor.is_trained:
+                print("🤖 Applying ML signal enhancement...")
+                data = self._apply_ml_enhancement(data, predictor, 'ml_enhanced')
+            else:
+                print("⚠️  ML predictor not available or not trained, using traditional signals")
+
+        return data
+
+    def _prepare_lstm_enhanced_signals(self, data):
+        """Prepare data with LSTM-enhanced signals."""
+        from src.ml_predictor import get_lstm_predictor, is_lstm_available
+
+        # First prepare traditional signals
+        data = self._prepare_traditional_signals(data)
+
+        # Add LSTM enhancement if available
+        if is_lstm_available():
+            predictor = get_lstm_predictor(symbol=self.symbol, timeframe=self.timeframe)
+            if predictor and predictor.is_trained:
+                print("🧠 Applying LSTM signal enhancement...")
+                data = self._apply_ml_enhancement(data, predictor, 'lstm_enhanced')
+            else:
+                print("⚠️  LSTM predictor not available or not trained, using traditional signals")
+
+        return data
+
+    def _prepare_transformer_enhanced_signals(self, data):
+        """Prepare data with Transformer-enhanced signals."""
+        from src.ml_predictor import get_transformer_predictor, is_transformer_available
+
+        # First prepare traditional signals
+        data = self._prepare_traditional_signals(data)
+
+        # Add Transformer enhancement if available
+        if is_transformer_available():
+            predictor = get_transformer_predictor(symbol=self.symbol, timeframe=self.timeframe)
+            if predictor and predictor.is_trained:
+                print("🔄 Applying Transformer signal enhancement...")
+                data = self._apply_ml_enhancement(data, predictor, 'transformer_enhanced')
+            else:
+                print("⚠️  Transformer predictor not available or not trained, using traditional signals")
+
+        return data
+
+    def _apply_ml_enhancement(self, data, predictor, strategy_name):
+        """Apply ML enhancement to signals."""
+        from config.settings import ML_CONFIDENCE_THRESHOLD
+
+        # Add ML signal columns
+        data['ML_Signal'] = 'HOLD'
+        data['ML_Confidence'] = 0.0
+        data['ML_Reason'] = ''
+        data['Enhanced_Signal'] = 'HOLD'
+        data['Signal_Source'] = 'TRADITIONAL'
+
+        print(f"🔬 Processing {len(data)} rows for {strategy_name}...")
+
+        # Process each row for ML prediction
+        for idx, row in data.iterrows():
+            try:
+                # Create single-row DataFrame for prediction
+                row_df = pd.DataFrame([row])
+
+                # Get prediction from the model
+                prediction = predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
+
+                # Update DataFrame
+                data.at[idx, 'ML_Signal'] = prediction['signal']
+                data.at[idx, 'ML_Confidence'] = prediction['confidence']
+                data.at[idx, 'ML_Reason'] = prediction.get('reason', '')
+                data.at[idx, 'Signal_Source'] = strategy_name.upper()
+
+                # Determine traditional signal
+                traditional_signal = 'HOLD'
+                if row.get('Buy_Signal', 0) == 1:
+                    traditional_signal = 'BUY'
+                elif row.get('Sell_Signal', 0) == 1:
+                    traditional_signal = 'SELL'
+
+                # Enhancement logic: use ML if confidence is high enough
+                if prediction['confidence'] >= ML_CONFIDENCE_THRESHOLD:
+                    enhanced_signal = prediction['signal']
+                    source = strategy_name.upper()
+                else:
+                    enhanced_signal = traditional_signal
+                    source = 'TRADITIONAL'
+
+                data.at[idx, 'Enhanced_Signal'] = enhanced_signal
+                data.at[idx, 'Signal_Source'] = source
+
+                # Override original signals if enhanced
+                if source == strategy_name.upper():
+                    if enhanced_signal == 'BUY':
+                        data.at[idx, 'Buy_Signal'] = 1
+                        data.at[idx, 'Sell_Signal'] = 0
+                    elif enhanced_signal == 'SELL':
+                        data.at[idx, 'Buy_Signal'] = 0
+                        data.at[idx, 'Sell_Signal'] = 1
+                    else:
+                        data.at[idx, 'Buy_Signal'] = 0
+                        data.at[idx, 'Sell_Signal'] = 0
+
+            except Exception as e:
+                # On prediction error, keep traditional signals
+                continue
+
+        # Count enhanced signals
+        enhanced_count = (data['Signal_Source'] == strategy_name.upper()).sum()
+        print(f"✅ Applied {strategy_name} to {enhanced_count} signals")
+
+        return data
 
 def run_backtest(symbol=SYMBOL, timeframe=TIMEFRAME, start_date=None, end_date=None):
     """

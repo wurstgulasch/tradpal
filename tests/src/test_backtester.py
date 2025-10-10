@@ -223,10 +223,14 @@ class TestBacktester:
             end_date='2023-01-02'
         )
 
-        assert 'backtest_results' in results
-        assert 'trades' in results
+        # The function returns {'backtest_results': {...}, 'trades': DataFrame}
+        backtest_results = results['backtest_results']
+        
+        assert 'success' in backtest_results
+        assert 'metrics' in backtest_results
+        assert 'trades' in backtest_results
 
-        metrics = results['backtest_results']
+        metrics = backtest_results['metrics']
         assert 'total_trades' in metrics
         assert 'win_rate' in metrics
         assert 'total_pnl' in metrics
@@ -361,6 +365,10 @@ class TestBacktesterIntegration:
         assert 'backtest_results' in results
         assert 'trades' in results
         assert isinstance(results['trades'], pd.DataFrame)
+        
+        backtest_results = results['backtest_results']
+        assert 'success' in backtest_results
+        assert 'metrics' in backtest_results
 
 
 if __name__ == "__main__":

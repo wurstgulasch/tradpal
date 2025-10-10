@@ -360,6 +360,16 @@ class HybridCache:
         self.file_cache.clear()
 
 
+class CacheManager(HybridCache):
+    """
+    CacheManager class for backward compatibility with sentiment analysis module.
+    
+    This is an alias for HybridCache to maintain compatibility with existing code
+    that expects a CacheManager class.
+    """
+    pass
+
+
 # Global cache instances
 _indicator_cache = HybridCache(cache_dir="cache/indicators", ttl_seconds=REDIS_TTL_INDICATORS)
 _api_cache = HybridCache(cache_dir="cache/api", ttl_seconds=REDIS_TTL_API)
