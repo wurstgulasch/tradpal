@@ -106,6 +106,8 @@ cd services/web-ui && streamlit run app.py
 - **ML Signal Enhancement**: Machine learning models for signal prediction and confidence scoring
 - **Audit Logging System**: Complete audit trails with structured JSON logging
 - **Performance Monitoring**: Advanced performance tracking and optimization tools
+- **Multi-Model Backtesting**: Parallel comparison of multiple ML models (traditional ML, LSTM, Transformer, ensemble)
+- **Automatic Model Training**: Smart training of missing ML models before backtesting
 
 ### Recent Optimizations
 - **PyTorch Neural Networks**: Advanced LSTM, GRU, and Transformer models with attention mechanisms and residual connections
@@ -244,6 +246,16 @@ cd services/web-ui && streamlit run app.py
 - **Confidence-Based Decisions**: Minimum confidence thresholds for signal generation
 - **Persistent History**: Track and save ensemble performance over time
 
+### Multi-Model Backtesting 🤖
+- **Parallel Model Comparison**: Simultaneously test traditional ML, LSTM, Transformer, and ensemble models
+- **Automatic Model Training**: Smart training of missing/untrained models before backtesting
+- **Performance Ranking**: Compare models by Sharpe ratio, win rate, P&L, profit factor, and CAGR
+- **Detailed Analytics**: Comprehensive performance metrics and statistical analysis
+- **Force Retraining**: Option to retrain all models for fresh comparison
+- **Scalable Execution**: Configurable parallel workers for faster processing
+- **Model Status Checking**: Automatic detection of trained vs untrained models
+- **Error Handling**: Graceful handling of failed models with partial results
+
 ### Genetic Algorithm Discovery Mode 🧬
 - **GA Optimization**: Evolutionary algorithm to find optimal indicator combinations
 - **Parameter Tuning**: Automatic optimization of EMA periods, RSI thresholds, BB settings
@@ -307,6 +319,7 @@ tradpal/
 │   ├── test_portfolio_manager.py # Portfolio management tests
 │   ├── test_shap_integration.py  # SHAP explainability tests
 │   ├── test_sentiment_analysis.py # Sentiment analysis tests
+│   ├── test_multi_model_backtesting.py # Multi-model backtesting tests
 │   └── ...                # Additional test files
 ├── output/                # Generated signals and backtest results
 ├── cache/                 # ML models and API cache storage
@@ -518,11 +531,21 @@ python examples/demo_performance.py
 python scripts/train_ml_model.py --symbol BTC/USDT --timeframe 1h --start-date 2024-01-01
 ```
 
-#### Performance Demonstration (`scripts/demo_performance.py`)
-```python
-# See TradPal in action with live performance metrics
-python scripts/demo_performance.py
+#### Multi-Model Backtesting
+```bash
+# Compare multiple ML models in parallel
+python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --models traditional_ml lstm transformer --max-workers 4
+
+# Auto-train missing models before backtesting
+python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --train-missing
+
+# Force retrain all models before comparison
+python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --retrain-all
 ```
+- Compares performance of different ML architectures (traditional ML, LSTM, Transformer, ensemble)
+- Automatic parallel execution for faster results
+- Detailed performance comparison with rankings by multiple metrics
+- Smart model training with status checking and automatic retraining
 
 #### Sentiment Analysis Mode
 ```bash
@@ -592,4 +615,47 @@ export NEWS_API_KEY="your_news_api_key"
 # Reddit API (for community sentiment)
 export REDDIT_CLIENT_ID="your_client_id"
 export REDDIT_CLIENT_SECRET="your_client_secret"
+```
+
+## 🎯 Command Line Options
+
+TradPal supports various command-line options for different use cases:
+
+### Core Options
+- `--mode`: Operation mode (`live`, `backtest`, `analysis`, `discovery`, `paper`, `multi-model`)
+- `--symbol`: Trading symbol (default: BTC/USDT)
+- `--timeframe`: Chart timeframe (default: 1m)
+- `--profile`: Performance profile (`light`, `heavy`, default: default .env)
+
+### Backtesting Options
+- `--start-date`: Backtest start date (YYYY-MM-DD)
+- `--end-date`: Backtest end date (YYYY-MM-DD)
+- `--clear-cache`: Clear all caches before running
+
+### Multi-Model Backtesting Options
+- `--models`: ML models to test (`traditional_ml`, `lstm`, `transformer`, `ensemble`)
+- `--max-workers`: Maximum parallel workers (default: 4)
+- `--train-missing`: Automatically train missing ML models before backtesting
+- `--retrain-all`: Force retrain all ML models before backtesting
+
+### Discovery Mode Options
+- `--population`: GA population size (default: 50)
+- `--generations`: GA generations (default: 20)
+
+### Examples
+```bash
+# Live monitoring
+python main.py --mode live --symbol BTC/USDT
+
+# Single backtest
+python main.py --mode backtest --symbol EUR/USD --timeframe 1h --start-date 2024-01-01 --end-date 2024-12-31
+
+# Multi-model comparison with auto-training
+python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --train-missing --max-workers 4
+
+# Genetic algorithm optimization
+python main.py --mode discovery --symbol BTC/USDT --timeframe 1h --population 100 --generations 30
+
+# Paper trading simulation
+python main.py --mode paper --symbol BTC/USDT --timeframe 1m
 ```

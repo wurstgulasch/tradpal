@@ -660,3 +660,431 @@ def run_multi_symbol_backtest(symbols, exchange=EXCHANGE, timeframe=TIMEFRAME,
         return {
             'error': f'Multi-symbol backtest failed: {str(e)}'
         }
+
+def run_multi_model_backtest(symbol=SYMBOL, exchange=EXCHANGE, timeframe=TIMEFRAME,
+                            start_date=None, end_date=None, initial_capital=10000,
+                            models_to_test=None, max_workers=None):
+    """
+    Run parallel backtests for multiple ML models and compare their performance.
+    
+    Args:
+        symbol: Trading symbol (e.g., 'BTC/USDT')
+        exchange: Exchange name
+        timeframe: Timeframe for backtesting
+        start_date: Start date for backtest period
+        end_date: End date for backtest period
+        initial_capital: Initial capital for each backtest
+        models_to_test: List of model types to test ('traditional_ml', 'lstm', 'transformer', 'ensemble')
+                        If None, tests all available models
+        max_workers: Maximum number of parallel workers
+        
+    Returns:
+        Dictionary with comparison results and best performing model
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time
+    
+    # Available model types
+    available_models = ['traditional_ml', 'lstm', 'transformer', 'ensemble']
+    
+    if models_to_test is None:
+        models_to_test = available_models
+    else:
+        # Validate model types
+        models_to_test = [m for m in models_to_test if m in available_models]
+        if not models_to_test:
+            return {"error": "No valid models specified for testing"}
+    
+    # Filter to only trained models
+    trained_models = []
+    for model_type in models_to_test:
+        if model_type == 'ensemble':
+            # Ensemble is always available (uses multiple models)
+            trained_models.append(model_type)
+        elif _is_model_trained(model_type):
+            trained_models.append(model_type)
+        else:
+            print(f"⚠️  Skipping {model_type} - model not trained")
+    
+    if not trained_models:
+        return {"error": "No trained models available for testing"}
+    
+    print(f"🚀 Starting multi-model backtest for {len(trained_models)} models: {trained_models}")
+    print(f"📊 Testing on {symbol} {timeframe} from {start_date} to {end_date}")
+    
+    results = {}
+    futures = {}
+    
+    # Use ThreadPoolExecutor for parallel execution
+    max_workers = max_workers or min(len(trained_models), 4)  # Limit to 4 concurrent workers
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit backtest tasks for each model
+        for model_type in trained_models:
+            future = executor.submit(
+                _run_single_model_backtest,
+                symbol, exchange, timeframe, start_date, end_date, 
+                initial_capital, model_type
+            )
+            futures[future] = model_type
+        
+        # Collect results as they complete
+        for future in as_completed(futures):
+            model_type = futures[future]
+            try:
+                result = future.result()
+                results[model_type] = result
+                print(f"✅ Completed backtest for {model_type}")
+            except Exception as e:
+                print(f"❌ Failed backtest for {model_type}: {e}")
+                results[model_type] = {"error": str(e)}
+    
+    # Compare results and determine best model
+    comparison = _compare_model_results(results)
+    
+    # Save comparison results
+    _save_multi_model_results(comparison, symbol, timeframe, start_date, end_date)
+    
+    return comparison
+
+
+def _is_model_trained(model_type):
+    """
+    Check if a specific ML model is trained and available.
+    
+    Args:
+        model_type: Type of model to check ('traditional_ml', 'lstm', 'transformer')
+        
+    Returns:
+        Boolean indicating if model is trained
+    """
+    try:
+        if model_type == 'traditional_ml':
+            from src.ml_predictor import get_ml_predictor, is_ml_available
+            if is_ml_available():
+                predictor = get_ml_predictor()
+                return predictor and predictor.is_trained
+        elif model_type == 'lstm':
+            from src.ml_predictor import get_lstm_predictor, is_lstm_available
+            if is_lstm_available():
+                predictor = get_lstm_predictor()
+                return predictor and predictor.is_trained
+        elif model_type == 'transformer':
+            from src.ml_predictor import get_transformer_predictor, is_transformer_available
+            if is_transformer_available():
+                predictor = get_transformer_predictor()
+                return predictor and predictor.is_trained
+    except Exception as e:
+        print(f"⚠️  Error checking {model_type} status: {e}")
+    
+    return False
+
+
+def _run_single_model_backtest(symbol, exchange, timeframe, start_date, end_date, 
+                              initial_capital, model_type):
+    """
+    Run backtest for a single ML model type.
+    
+    Args:
+        model_type: Type of model to use ('traditional_ml', 'lstm', 'transformer', 'ensemble')
+        
+    Returns:
+        Dictionary with backtest results for this model
+    """
+    from config.settings import ML_ENABLED
+    
+    print(f"🔍 Starting backtest for {model_type} on {symbol} {timeframe}")
+    
+    try:
+        # Create backtester instance
+        backtester = Backtester(symbol, exchange, timeframe, start_date, end_date, initial_capital)
+        
+        # Modify signal generation to use only the specified model
+        if model_type != 'ensemble':
+            # For single models, we'll need to modify the signal generation temporarily
+            # This requires monkey-patching the apply_ml_signal_enhancement function
+            import src.signal_generator as sg_module
+            
+            # Store original function
+            original_apply_ml = sg_module.apply_ml_signal_enhancement
+            
+            # Create model-specific version
+            def model_specific_enhancement(df):
+                return _apply_single_model_enhancement(df, model_type)
+            
+            # Monkey patch for this backtest
+            sg_module.apply_ml_signal_enhancement = model_specific_enhancement
+            
+            # Run backtest
+            print(f"📊 Running backtest with {model_type} model...")
+            metrics = backtester.run_backtest()
+            
+            # Restore original function
+            sg_module.apply_ml_signal_enhancement = original_apply_ml
+            
+        else:
+            # For ensemble, use the normal enhancement
+            print(f"📊 Running backtest with ensemble model...")
+            metrics = backtester.run_backtest()
+        
+        # Check if backtest was successful
+        if 'error' in metrics:
+            print(f"❌ Backtest failed for {model_type}: {metrics['error']}")
+            return metrics
+        
+        # Add model info to results
+        metrics['model_type'] = model_type
+        metrics['trades_count'] = len(backtester.trades)
+        
+        print(f"✅ Backtest completed for {model_type}: {metrics.get('total_trades', 0)} trades, "
+              f"P&L: ${metrics.get('total_pnl', 0):.2f}, Win Rate: {metrics.get('win_rate', 0)}%")
+        
+        return metrics
+        
+    except Exception as e:
+        error_msg = f"Backtest failed for {model_type}: {str(e)}"
+        print(f"❌ {error_msg}")
+        return {
+            "error": error_msg,
+            "model_type": model_type
+        }
+
+
+def _apply_single_model_enhancement(df, model_type):
+    """
+    Apply enhancement using only a specific ML model type.
+    
+    Args:
+        df: DataFrame with signals
+        model_type: Type of model to use ('traditional_ml', 'lstm', 'transformer')
+        
+    Returns:
+        Enhanced DataFrame
+    """
+    from config.settings import ML_ENABLED, ML_CONFIDENCE_THRESHOLD
+    
+    # Check if ML is enabled and available
+    if not ML_ENABLED:
+        print(f"⚠️  ML disabled in config, using traditional signals only for {model_type}")
+        return df
+    
+    try:
+        # Initialize specific model predictor
+        predictor = None
+        predictor_name = ""
+        
+        if model_type == 'traditional_ml':
+            from src.ml_predictor import get_ml_predictor, is_ml_available
+            if is_ml_available():
+                predictor = get_ml_predictor()
+                predictor_name = "traditional_ml"
+                
+        elif model_type == 'lstm':
+            from src.ml_predictor import get_lstm_predictor, is_lstm_available
+            if is_lstm_available():
+                predictor = get_lstm_predictor()
+                predictor_name = "lstm"
+                
+        elif model_type == 'transformer':
+            from src.ml_predictor import get_transformer_predictor, is_transformer_available
+            if is_transformer_available():
+                predictor = get_transformer_predictor()
+                predictor_name = "transformer"
+        
+        # If model not available or not trained, return original dataframe with warning
+        if not predictor or not predictor.is_trained:
+            print(f"⚠️  {model_type} model not available or not trained, using traditional signals only")
+            return df
+        
+        print(f"🔬 Using single {model_type} model for signal enhancement")
+        
+        # Add ML signal columns
+        df['ML_Signal'] = 'HOLD'
+        df['ML_Confidence'] = 0.0
+        df['ML_Reason'] = ''
+        df['Enhanced_Signal'] = 'HOLD'
+        df['Signal_Source'] = 'TRADITIONAL'
+        
+        # Process each row for ML prediction
+        for idx, row in df.iterrows():
+            try:
+                # Create single-row DataFrame for prediction
+                row_df = pd.DataFrame([row])
+                
+                # Get prediction from the specific model
+                prediction = predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
+                
+                # Update DataFrame
+                df.at[idx, 'ML_Signal'] = prediction['signal']
+                df.at[idx, 'ML_Confidence'] = prediction['confidence']
+                df.at[idx, 'ML_Reason'] = prediction.get('reason', '')
+                df.at[idx, 'Signal_Source'] = predictor_name.upper()
+                
+                # Determine traditional signal
+                traditional_signal = 'HOLD'
+                if row.get('Buy_Signal', 0) == 1:
+                    traditional_signal = 'BUY'
+                elif row.get('Sell_Signal', 0) == 1:
+                    traditional_signal = 'SELL'
+                
+                # Simple enhancement logic
+                if prediction['confidence'] > ML_CONFIDENCE_THRESHOLD:
+                    enhanced_signal = prediction['signal']
+                    source = predictor_name.upper()
+                else:
+                    enhanced_signal = traditional_signal
+                    source = 'TRADITIONAL'
+                
+                df.at[idx, 'Enhanced_Signal'] = enhanced_signal
+                df.at[idx, 'Signal_Source'] = source
+                
+                # Override original signals if enhanced
+                if source == predictor_name.upper():
+                    if enhanced_signal == 'BUY':
+                        df.at[idx, 'Buy_Signal'] = 1
+                        df.at[idx, 'Sell_Signal'] = 0
+                    elif enhanced_signal == 'SELL':
+                        df.at[idx, 'Buy_Signal'] = 0
+                        df.at[idx, 'Sell_Signal'] = 1
+                    else:
+                        df.at[idx, 'Buy_Signal'] = 0
+                        df.at[idx, 'Sell_Signal'] = 0
+                        
+            except Exception as e:
+                print(f"⚠️  Prediction failed for row {idx} in {model_type}: {e}")
+                continue
+        
+        return df
+        
+    except Exception as e:
+        # Return original dataframe if enhancement fails
+        print(f"⚠️  ML enhancement failed for {model_type}: {e}, using traditional signals")
+        return df
+
+
+def _compare_model_results(results):
+    """
+    Compare results from different models and determine the best performer.
+    
+    Args:
+        results: Dictionary with results for each model
+        
+    Returns:
+        Dictionary with comparison and ranking
+    """
+    # Filter out failed backtests
+    successful_results = {k: v for k, v in results.items() if 'error' not in v}
+    failed_results = {k: v for k, v in results.items() if 'error' in v}
+    
+    print(f"📊 Backtest Summary: {len(successful_results)} successful, {len(failed_results)} failed")
+    
+    if failed_results:
+        print("❌ Failed models:")
+        for model, error_info in failed_results.items():
+            print(f"   - {model}: {error_info.get('error', 'Unknown error')}")
+    
+    if not successful_results:
+        return {"error": "All model backtests failed"}
+    
+    # Define metrics for comparison (higher is better)
+    comparison_metrics = {
+        'sharpe_ratio': 'Sharpe Ratio',
+        'win_rate': 'Win Rate (%)',
+        'total_pnl': 'Total P&L',
+        'profit_factor': 'Profit Factor',
+        'cagr': 'CAGR (%)'
+    }
+    
+    # Create comparison DataFrame
+    comparison_data = []
+    
+    for model_type, metrics in successful_results.items():
+        row = {'Model': model_type}
+        for metric_key, metric_name in comparison_metrics.items():
+            value = metrics.get(metric_key, 0)
+            # Handle infinite profit factor
+            if metric_key == 'profit_factor' and value == float('inf'):
+                value = 999.0  # Large finite number for comparison
+            row[metric_name] = value
+        comparison_data.append(row)
+    
+    comparison_df = pd.DataFrame(comparison_data)
+    
+    # Rank models for each metric
+    rankings = {}
+    for metric_name in comparison_metrics.values():
+        if metric_name in comparison_df.columns:
+            # Sort by metric (descending for all metrics)
+            sorted_df = comparison_df.sort_values(metric_name, ascending=False)
+            rankings[metric_name] = sorted_df['Model'].tolist()
+    
+    # Calculate composite score (weighted average of rankings)
+    model_scores = {}
+    for model in successful_results.keys():
+        score = 0
+        count = 0
+        for metric_name, ranking in rankings.items():
+            if model in ranking:
+                # Lower rank number is better (1st place = 1, 2nd place = 2, etc.)
+                rank = ranking.index(model) + 1
+                score += rank
+                count += 1
+        model_scores[model] = score / count if count > 0 else float('inf')
+    
+    # Find best model (lowest average rank)
+    best_model = min(model_scores, key=model_scores.get)
+    
+    return {
+        'comparison': comparison_df.to_dict('records'),
+        'rankings': rankings,
+        'model_scores': model_scores,
+        'best_model': best_model,
+        'best_metrics': successful_results[best_model],
+        'all_results': results,
+        'successful_models': list(successful_results.keys()),
+        'failed_models': list(failed_results.keys())
+    }
+
+
+def _save_multi_model_results(comparison, symbol, timeframe, start_date, end_date):
+    """
+    Save multi-model backtest comparison results to file.
+    """
+    import json
+    from datetime import datetime
+    
+    if 'error' in comparison:
+        return
+    
+    # Create results dictionary
+    results = {
+        'multi_model_backtest_info': {
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'start_date': str(start_date) if start_date else None,
+            'end_date': str(end_date) if end_date else None,
+            'timestamp': datetime.now().isoformat(),
+            'best_model': comparison.get('best_model'),
+            'models_tested': comparison.get('successful_models', [])
+        },
+        'comparison': comparison.get('comparison', []),
+        'rankings': comparison.get('rankings', {}),
+        'model_scores': comparison.get('model_scores', {}),
+        'best_model_metrics': comparison.get('best_metrics', {})
+    }
+    
+    # Save to JSON file
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"output/multi_model_backtest_{symbol.replace('/', '_')}_{timeframe}_{timestamp}.json"
+    
+    with open(filename, 'w') as f:
+        json.dump(results, f, indent=4, default=str)
+    
+    print(f"📊 Multi-model backtest results saved to {filename}")
+    
+    # Also save comparison as CSV for easy viewing
+    if comparison.get('comparison'):
+        comparison_df = pd.DataFrame(comparison['comparison'])
+        csv_filename = f"output/multi_model_comparison_{symbol.replace('/', '_')}_{timeframe}_{timestamp}.csv"
+        comparison_df.to_csv(csv_filename, index=False)
+        print(f"📊 Comparison table saved to {csv_filename}")

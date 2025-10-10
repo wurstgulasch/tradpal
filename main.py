@@ -930,7 +930,7 @@ def main():
     )
 
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
-    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery', 'paper'],
+    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
                        default='live', help='Operation mode (default: live)')
     parser.add_argument('--profile', choices=['light', 'heavy'],
                        default='default', help='Performance profile (default: default .env)')
@@ -941,6 +941,15 @@ def main():
     parser.add_argument('--clear-cache', action='store_true', help='Clear all caches before running')
     parser.add_argument('--population', type=int, default=50, help='GA population size (default: 50)')
     parser.add_argument('--generations', type=int, default=20, help='GA generations (default: 20)')
+    parser.add_argument('--models', nargs='+', 
+                       choices=['traditional_ml', 'lstm', 'transformer', 'ensemble'],
+                       help='ML models to test in multi-model backtest (default: all available)')
+    parser.add_argument('--max-workers', type=int, default=4,
+                       help='Maximum parallel workers for multi-model backtest (default: 4)')
+    parser.add_argument('--train-missing', action='store_true',
+                       help='Automatically train missing ML models before backtesting')
+    parser.add_argument('--retrain-all', action='store_true',
+                       help='Retrain all ML models before backtesting (forces complete retraining)')
 
     args = parser.parse_args()
 
@@ -965,6 +974,464 @@ def main():
         run_discovery_mode(args)
     elif args.mode == 'paper':
         run_paper_trading_mode(args, performance_monitor)
+    elif args.mode == 'multi-model':
+        run_multi_model_backtest_mode(args, performance_monitor)
+    else:
+        print(f"Unknown mode: {args.mode}")
+
+    # Log system shutdown
+    audit_logger.log_system_event(
+        event_type="SYSTEM_SHUTDOWN",
+        message="TradPal System shutdown",
+        details={
+            "mode": args.mode,
+            "shutdown_reason": "normal_exit"
+        }
+    )
+    audit_logger.log_performance_metrics()
+
+def run_multi_model_backtest_mode(args, performance_monitor=None):
+    """Run multi-model backtesting mode to compare ML models."""
+    from config.settings import LOOKBACK_DAYS
+    from datetime import datetime, timedelta
+    from src.backtester import run_multi_model_backtest
+    
+    # Set default dates if not provided
+    start_date = args.start_date
+    end_date = args.end_date
+    if not start_date:
+        end_date_dt = datetime.now()
+        start_date_dt = end_date_dt - timedelta(days=LOOKBACK_DAYS)
+        start_date = start_date_dt.strftime('%Y-%m-%d')
+        end_date = end_date_dt.strftime('%Y-%m-%d')
+    
+    print(f"🚀 Running multi-model backtest for {args.symbol} on {args.timeframe} timeframe")
+    print(f"📊 Testing models: {args.models or 'all available'}")
+    print(f"⏱️  Period: {start_date} to {end_date}")
+    print(f"🔄 Max workers: {args.max_workers}")
+    if hasattr(args, 'train_missing') and args.train_missing:
+        print("🤖 Auto-training missing models: ENABLED")
+    if hasattr(args, 'retrain_all') and args.retrain_all:
+        print("🔄 Force retraining all models: ENABLED")
+    
+    log_system_status(f"Multi-model backtest started for {args.symbol} {args.timeframe}")
+    
+    # Auto-train models if requested
+    if hasattr(args, 'retrain_all') and args.retrain_all:
+        print("\n🔄 Force retraining all ML models...")
+        _auto_train_models(args.models, force_retrain=True, symbol=args.symbol, timeframe=args.timeframe)
+    elif hasattr(args, 'train_missing') and args.train_missing:
+        print("\n🤖 Auto-training missing ML models...")
+        _auto_train_models(args.models, force_retrain=False, symbol=args.symbol, timeframe=args.timeframe)
+    
+    try:
+        # Run multi-model backtest
+        results = run_multi_model_backtest(
+            symbol=args.symbol,
+            exchange='kraken',  # Default exchange
+            timeframe=args.timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            models_to_test=args.models,
+            max_workers=args.max_workers
+        )
+        
+        if 'error' in results:
+            print(f"❌ Multi-model backtest failed: {results['error']}")
+            log_error(f"Multi-model backtest error: {results['error']}")
+            return
+        
+        # Display results
+        print("\n🏆 Multi-Model Backtest Results:")
+        print("=" * 80)
+        print(f"Best Model: {results.get('best_model', 'N/A')}")
+        print(f"Models Tested: {', '.join(results.get('successful_models', []))}")
+        
+        if results.get('failed_models'):
+            print(f"Failed Models: {', '.join(results['failed_models'])}")
+        
+        print("\n📊 Performance Comparison:")
+        print("-" * 80)
+        
+        # Display comparison table
+        if 'comparison' in results:
+            comparison_data = results['comparison']
+            if comparison_data:
+                # Print header
+                headers = list(comparison_data[0].keys())
+                print(f"{headers[0]:<15} {' | '.join(f'{h:<12}' for h in headers[1:])}")
+                print("-" * (15 + 13 * (len(headers) - 1)))
+                
+                # Print data rows
+                for row in comparison_data:
+                    values = [f"{row[h]:<12.2f}" if isinstance(row[h], (int, float)) else f"{row[h]:<12}" for h in headers[1:]]
+                    print(f"{row[headers[0]]:<15} {' | '.join(values)}")
+        
+        print("\n🏅 Rankings by Metric:")
+        rankings = results.get('rankings', {})
+        for metric, ranking in rankings.items():
+            print(f"  {metric}: {' > '.join(ranking)}")
+        
+        print(f"\n🎯 Best Model Metrics:")
+        best_metrics = results.get('best_metrics', {})
+        if best_metrics and 'error' not in best_metrics:
+            print(f"  Total Trades: {best_metrics.get('total_trades', 0)}")
+            print(f"  Win Rate: {best_metrics.get('win_rate', 0)}%")
+            print(f"  Total P&L: ${best_metrics.get('total_pnl', 0):.2f}")
+            print(f"  Sharpe Ratio: {best_metrics.get('sharpe_ratio', 0):.2f}")
+            print(f"  Max Drawdown: {best_metrics.get('max_drawdown', 0):.2f}%")
+            print(f"  CAGR: {best_metrics.get('cagr', 0):.2f}%")
+            print(f"  Final Capital: ${best_metrics.get('final_capital', 0):.2f}")
+            
+            # Record best model metrics in performance monitor
+            if performance_monitor:
+                performance_monitor.record_trade(
+                    symbol=args.symbol,
+                    trade_type='backtest',
+                    pnl=best_metrics.get('total_pnl', 0)
+                )
+        
+        log_system_status(f"Multi-model backtest completed: Best model is {results.get('best_model', 'N/A')}")
+        
+    except Exception as e:
+        print(f"❌ Multi-model backtest failed: {e}")
+        log_error(f"Multi-model backtest error: {e}")
+
+
+def _auto_train_models(models_to_test=None, force_retrain=False, symbol='BTC/USDT', timeframe='1m'):
+    """
+    Automatically train missing ML models or retrain all models.
+    
+    Args:
+        models_to_test: List of models to check/train
+        force_retrain: If True, retrain all models regardless of current status
+        symbol: Trading symbol for training data
+        timeframe: Timeframe for training data
+    """
+    from scripts.train_ml_model import train_ml_model as train_traditional_ml
+    from src.ml_predictor import (
+        get_ml_predictor, is_ml_available,
+        get_lstm_predictor, is_lstm_available,
+        get_transformer_predictor, is_transformer_available
+    )
+    
+    # Available models to potentially train
+    available_models = ['traditional_ml', 'lstm', 'transformer']
+    
+    if models_to_test is None:
+        models_to_train = available_models
+    else:
+        models_to_train = [m for m in models_to_test if m in available_models]
+    
+    print(f"🔍 Checking models: {models_to_train}")
+    
+    trained_count = 0
+    failed_count = 0
+    
+    for model_type in models_to_train:
+        try:
+            needs_training = force_retrain
+            
+            if not needs_training:
+                # Check if model is already trained
+                if model_type == 'traditional_ml' and is_ml_available():
+                    predictor = get_ml_predictor()
+                    needs_training = not (predictor and predictor.is_trained)
+                elif model_type == 'lstm' and is_lstm_available():
+                    predictor = get_lstm_predictor()
+                    needs_training = not (predictor and predictor.is_trained)
+                elif model_type == 'transformer' and is_transformer_available():
+                    predictor = get_transformer_predictor()
+                    needs_training = not (predictor and predictor.is_trained)
+            
+            if needs_training:
+                print(f"🤖 Training {model_type} model...")
+                
+                if model_type == 'traditional_ml':
+                    success = train_traditional_ml(symbol=symbol, timeframe=timeframe, force_retrain=force_retrain)
+                elif model_type == 'lstm':
+                    # For LSTM, we need to implement training logic here
+                    success = _train_lstm_model(symbol, timeframe, force_retrain)
+                elif model_type == 'transformer':
+                    # For Transformer, we need to implement training logic here
+                    success = _train_transformer_model(symbol, timeframe, force_retrain)
+                else:
+                    print(f"⚠️  Unknown model type: {model_type}")
+                    continue
+                
+                if success:
+                    print(f"✅ {model_type} training completed successfully")
+                    trained_count += 1
+                else:
+                    print(f"❌ {model_type} training failed")
+                    failed_count += 1
+            else:
+                print(f"✅ {model_type} already trained")
+                
+        except Exception as e:
+            print(f"❌ Error training {model_type}: {e}")
+            failed_count += 1
+    
+    print(f"\n📊 Training Summary: {trained_count} trained, {failed_count} failed")
+    
+    if failed_count > 0:
+        print("⚠️  Some models failed to train. Backtest will only use successfully trained models.")
+    
+    return trained_count, failed_count
+
+
+def _train_lstm_model(symbol: str, timeframe: str, force_retrain: bool = False):
+    """
+    Train LSTM model for signal prediction.
+    
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe for training
+        force_retrain: Force retraining even if model exists
+        
+    Returns:
+        bool: True if training successful, False otherwise
+    """
+    from src.ml_predictor import get_lstm_predictor, is_lstm_available
+    from src.data_fetcher import fetch_historical_data
+    from src.indicators import calculate_indicators
+    from config.settings import LOOKBACK_DAYS
+    from datetime import datetime, timedelta
+    
+    if not is_lstm_available():
+        print("❌ TensorFlow not available for LSTM training")
+        return False
+    
+    try:
+        lstm_predictor = get_lstm_predictor()
+        if lstm_predictor is None:
+            print("❌ Failed to initialize LSTM predictor")
+            return False
+        
+        # Check if already trained
+        if lstm_predictor.is_trained and not force_retrain:
+            print("ℹ️  LSTM model already trained")
+            return True
+        
+        # Fetch historical data
+        print("📊 Fetching data for LSTM training...")
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=LOOKBACK_DAYS)
+        
+        df = fetch_historical_data(
+            symbol=symbol,
+            exchange_name='kraken',
+            timeframe=timeframe,
+            start_date=start_date,
+            limit=5000
+        )
+        
+        if df.empty or len(df) < 200:
+            print(f"❌ Insufficient data for LSTM training: {len(df)} samples")
+            return False
+        
+        # Calculate indicators
+        df = calculate_indicators(df)
+        df_clean = df.dropna()
+        
+        if len(df_clean) < 100:
+            print(f"❌ Insufficient clean data for LSTM training: {len(df_clean)} samples")
+            return False
+        
+        # Train the model
+        print("🎯 Training LSTM model...")
+        result = lstm_predictor.train_model(df_clean)
+        
+        if result and result.get('success', False):
+            print("✅ LSTM training completed successfully")
+            return True
+        else:
+            print(f"❌ LSTM training failed: {result.get('error', 'Unknown error') if result else 'No result'}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ LSTM training error: {e}")
+        return False
+
+
+def _train_transformer_model(symbol: str, timeframe: str, force_retrain: bool = False):
+    """
+    Train Transformer model for signal prediction.
+    
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe for training
+        force_retrain: Force retraining even if model exists
+        
+    Returns:
+        bool: True if training successful, False otherwise
+    """
+    from src.ml_predictor import get_transformer_predictor, is_transformer_available
+    from src.data_fetcher import fetch_historical_data
+    from src.indicators import calculate_indicators
+    from config.settings import LOOKBACK_DAYS
+    from datetime import datetime, timedelta
+    
+    if not is_transformer_available():
+        print("❌ PyTorch not available for Transformer training")
+        return False
+    
+    try:
+        transformer_predictor = get_transformer_predictor()
+        if transformer_predictor is None:
+            print("❌ Failed to initialize Transformer predictor")
+            return False
+        
+        # Check if already trained
+        if transformer_predictor.is_trained and not force_retrain:
+            print("ℹ️  Transformer model already trained")
+            return True
+        
+        # Fetch historical data
+        print("📊 Fetching data for Transformer training...")
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=LOOKBACK_DAYS)
+        
+        df = fetch_historical_data(
+            symbol=symbol,
+            exchange_name='kraken',
+            timeframe=timeframe,
+            start_date=start_date,
+            limit=5000
+        )
+        
+        if df.empty or len(df) < 200:
+            print(f"❌ Insufficient data for Transformer training: {len(df)} samples")
+            return False
+        
+        # Calculate indicators
+        df = calculate_indicators(df)
+        df_clean = df.dropna()
+        
+        if len(df_clean) < 100:
+            print(f"❌ Insufficient clean data for Transformer training: {len(df_clean)} samples")
+            return False
+        
+        # Train the model
+        print("🎯 Training Transformer model...")
+        result = transformer_predictor.train_model(df_clean)
+        
+        if result and result.get('success', False):
+            print("✅ Transformer training completed successfully")
+            return True
+        else:
+            print(f"❌ Transformer training failed: {result.get('error', 'Unknown error') if result else 'No result'}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Transformer training error: {e}")
+        return False
+
+def main():
+    # Validate configuration at startup
+    print("Validating configuration...")
+    if not validate_configuration_at_startup():
+        print("❌ Configuration validation failed. Please fix the errors above and restart.")
+        sys.exit(1)
+    print("✅ Configuration validation passed.\n")
+
+    # Show profile information
+    print_profile_info()
+
+    # Initialize secrets manager for secure API key handling
+    if SECRETS_AVAILABLE:
+        print("Initializing secrets manager...")
+        try:
+            initialize_secrets_manager()
+            print("✅ Secrets manager initialized.")
+        except Exception as e:
+            print(f"⚠️  Secrets manager initialization failed: {e}")
+            print("   Continuing with environment variables...")
+    else:
+        print("ℹ️  Secrets manager not available (optional feature).")
+
+    # Initialize performance monitoring
+    performance_monitor = None
+    if PERFORMANCE_AVAILABLE:
+        print("Initializing performance monitoring...")
+        try:
+            performance_monitor = PerformanceMonitor()
+            performance_monitor.start_monitoring()
+            print("✅ Performance monitoring initialized.")
+        except Exception as e:
+            print(f"⚠️  Performance monitoring initialization failed: {e}")
+            print("   Continuing without monitoring...")
+    else:
+        print("ℹ️  Performance monitoring not available (optional feature).")
+
+    # Initialize monitoring stack (Prometheus, Grafana, Redis)
+    monitoring_stack_started = initialize_monitoring_stack()
+
+    # Initialize adaptive rate limiting
+    rate_limiting_enabled = initialize_rate_limiting()
+
+    # Log system startup
+    audit_logger.log_system_event(
+        event_type="SYSTEM_STARTUP",
+        message="TradPal System started",
+        details={
+            "version": "2.0.0",
+            "mode": "initialization",
+            "config_validated": True,
+            "secrets_manager": SECRETS_AVAILABLE,
+            "performance_monitoring": PERFORMANCE_AVAILABLE,
+            "monitoring_stack": monitoring_stack_started,
+            "rate_limiting": rate_limiting_enabled
+        }
+    )
+
+    parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
+    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
+                       default='live', help='Operation mode (default: live)')
+    parser.add_argument('--profile', choices=['light', 'heavy'],
+                       default='default', help='Performance profile (default: default .env)')
+    parser.add_argument('--symbol', default=SYMBOL, help=f'Trading symbol (default: {SYMBOL})')
+    parser.add_argument('--timeframe', default='1m', help='Timeframe (default: 1m)')
+    parser.add_argument('--start-date', help='Backtest start date (YYYY-MM-DD)')
+    parser.add_argument('--end-date', help='Backtest end date (YYYY-MM-DD)')
+    parser.add_argument('--clear-cache', action='store_true', help='Clear all caches before running')
+    parser.add_argument('--population', type=int, default=50, help='GA population size (default: 50)')
+    parser.add_argument('--generations', type=int, default=20, help='GA generations (default: 20)')
+    parser.add_argument('--models', nargs='+', 
+                       choices=['traditional_ml', 'lstm', 'transformer', 'ensemble'],
+                       help='ML models to test in multi-model backtest (default: all available)')
+    parser.add_argument('--max-workers', type=int, default=4,
+                       help='Maximum parallel workers for multi-model backtest (default: 4)')
+    parser.add_argument('--train-missing', action='store_true',
+                       help='Automatically train missing ML models before backtesting')
+    parser.add_argument('--retrain-all', action='store_true',
+                       help='Retrain all ML models before backtesting (forces complete retraining)')
+
+    args = parser.parse_args()
+
+    # Validate profile configuration if a specific profile was selected
+    if hasattr(args, 'profile') and args.profile in ['light', 'heavy']:
+        validate_profile_config(args.profile)
+
+    # Handle cache clearing
+    if args.clear_cache:
+        print("Clearing all caches...")
+        clear_all_caches()
+        cache_stats = get_cache_stats()
+        print(f"Caches cleared. Stats: {cache_stats}")
+
+    if args.mode == 'live':
+        run_live_monitoring(performance_monitor)
+    elif args.mode == 'backtest':
+        run_backtest_mode(args, performance_monitor)
+    elif args.mode == 'analysis':
+        run_single_analysis(performance_monitor)
+    elif args.mode == 'discovery':
+        run_discovery_mode(args)
+    elif args.mode == 'paper':
+        run_paper_trading_mode(args, performance_monitor)
+    elif args.mode == 'multi-model':
+        run_multi_model_backtest_mode(args, performance_monitor)
     else:
         print(f"Unknown mode: {args.mode}")
 
