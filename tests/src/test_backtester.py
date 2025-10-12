@@ -248,8 +248,8 @@ class TestBacktester:
 
         metrics = calculate_performance_metrics(trades, 100)  # Small capital
 
-        assert metrics['total_pnl'] == 0.01  # $0.01 profit (1% of position value)
-        assert metrics['final_capital'] == 100.01
+        assert metrics['total_pnl'] == 1.0  # $1.00 profit (1 unit * $1 price change)
+        assert metrics['final_capital'] == 101.0
 
     def test_simulate_trades_multiple_signals(self):
         """Test simulation with multiple buy/sell signals."""
@@ -291,13 +291,16 @@ class TestBacktester:
 
     def test_run_backtest_invalid_dates(self):
         """Test backtest with invalid date range."""
-        with pytest.raises(ValueError):
-            run_backtest(
-                symbol='EUR/USD',
-                timeframe='1m',
-                start_date='2023-12-31',  # Start after end
-                end_date='2023-01-01'
-            )
+        results = run_backtest(
+            symbol='EUR/USD',
+            timeframe='1m',
+            start_date='2023-12-31',  # Start after end
+            end_date='2023-01-01'
+        )
+
+        assert 'backtest_results' in results
+        assert results['backtest_results']['success'] == False
+        assert 'error' in results['backtest_results']
 
     def test_simulate_trades_empty_data(self):
         """Test trade simulation with empty data."""

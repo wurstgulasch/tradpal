@@ -10,11 +10,11 @@ import sys
 import os
 import time
 import json
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from src.discovery import load_adaptive_config, save_adaptive_config, apply_adaptive_config
+from discovery import load_adaptive_config, save_adaptive_config, apply_adaptive_config
 from main import AdaptiveOptimizer
-from src.logging_config import logger
+from logging_config import logger
 
 def test_adaptive_optimizer():
     """Test the adaptive optimizer functionality."""

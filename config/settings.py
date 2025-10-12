@@ -181,7 +181,11 @@ CONSERVATIVE_CONFIG = {
     'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0},
     'atr': {'enabled': True, 'period': 14},
     'adx': {'enabled': False, 'period': 14},
-    'fibonacci': {'enabled': False}
+    'fibonacci': {'enabled': False},
+    'macd': {'enabled': True, 'fast_period': 12, 'slow_period': 26, 'signal_period': 9},
+    'obv': {'enabled': True},
+    'stochastic': {'enabled': True, 'k_period': 14, 'd_period': 3},
+    'cmf': {'enabled': False, 'period': 21}
 }
 
 # Discovery Configuration (adaptive parameters)
@@ -191,7 +195,11 @@ DISCOVERY_CONFIG = {
     'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0},
     'atr': {'enabled': True, 'period': 14},
     'adx': {'enabled': False, 'period': 14},
-    'fibonacci': {'enabled': False}
+    'fibonacci': {'enabled': False},
+    'macd': {'enabled': True, 'fast_period': 12, 'slow_period': 26, 'signal_period': 9},
+    'obv': {'enabled': True},
+    'stochastic': {'enabled': True, 'k_period': 14, 'd_period': 3},
+    'cmf': {'enabled': False, 'period': 21}
 }
 
 # Discovery Mode Parameters
@@ -230,11 +238,11 @@ ML_CV_FOLDS = 5  # Number of cross-validation folds
 ML_FEATURE_ENGINEERING = True  # Enable advanced feature engineering
 
 # Preferred ML Model Configuration
-ML_PREFERRED_MODEL = 'gradient_boosting'  # Preferred model: 'gradient_boosting', 'xgboost', 'random_forest', 'svm', 'logistic_regression'
+ML_PREFERRED_MODEL = 'random_forest'  # Preferred model: 'gradient_boosting', 'xgboost', 'random_forest', 'svm', 'logistic_regression' - CHANGED TO FASTER MODEL
 ML_MODEL_SELECTION_CRITERIA = 'f1'  # Selection criteria: 'f1', 'accuracy', 'precision', 'recall', 'balanced_accuracy'
 
 # Gradient Boosting Specific Configuration
-ML_GRADIENT_BOOSTING_N_ESTIMATORS = 200  # Number of boosting stages
+ML_GRADIENT_BOOSTING_N_ESTIMATORS = 50  # Number of boosting stages - REDUCED FOR FASTER TESTS
 ML_GRADIENT_BOOSTING_LEARNING_RATE = 0.1  # Learning rate
 ML_GRADIENT_BOOSTING_MAX_DEPTH = 6  # Maximum depth of individual trees
 ML_GRADIENT_BOOSTING_MIN_SAMPLES_SPLIT = 20  # Minimum samples required to split
@@ -243,7 +251,7 @@ ML_GRADIENT_BOOSTING_SUBSAMPLE = 0.8  # Fraction of samples used for fitting
 ML_GRADIENT_BOOSTING_MAX_FEATURES = 'sqrt'  # Number of features to consider for best split
 
 # XGBoost Specific Configuration
-ML_XGBOOST_N_ESTIMATORS = 200  # Number of boosting rounds
+ML_XGBOOST_N_ESTIMATORS = 50  # Number of boosting rounds - REDUCED FOR FASTER TESTS
 ML_XGBOOST_LEARNING_RATE = 0.1  # Learning rate
 ML_XGBOOST_MAX_DEPTH = 6  # Maximum depth of trees
 ML_XGBOOST_MIN_CHILD_WEIGHT = 1  # Minimum sum of instance weight needed in a child
@@ -252,7 +260,7 @@ ML_XGBOOST_COLSAMPLE_BYTREE = 0.8  # Subsample ratio of columns when constructin
 ML_XGBOOST_GAMMA = 0  # Minimum loss reduction required to make a further partition
 
 # Random Forest Specific Configuration
-ML_RF_N_ESTIMATORS = 200  # Number of trees in the forest
+ML_RF_N_ESTIMATORS = 50  # Number of trees in the forest - REDUCED FOR FASTER TESTS
 ML_RF_MAX_DEPTH = None  # Maximum depth of trees
 ML_RF_MIN_SAMPLES_SPLIT = 2  # Minimum samples required to split
 ML_RF_MIN_SAMPLES_LEAF = 1  # Minimum samples required at leaf node
@@ -283,9 +291,9 @@ ML_PYTORCH_EPOCHS = 100  # Maximum training epochs
 ML_PYTORCH_EARLY_STOPPING_PATIENCE = 10  # Early stopping patience
 
 # AutoML Configuration (Optuna)
-ML_USE_AUTOML = True  # Enable automated hyperparameter optimization
-ML_AUTOML_N_TRIALS = 50  # Number of Optuna trials for hyperparameter search
-ML_AUTOML_TIMEOUT = 1800  # Maximum time for AutoML optimization (seconds)
+ML_USE_AUTOML = False  # Enable automated hyperparameter optimization - DISABLED FOR FASTER TESTS
+ML_AUTOML_N_TRIALS = 5  # Number of Optuna trials for hyperparameter search - REDUCED FOR TESTS
+ML_AUTOML_TIMEOUT = 300  # Maximum time for AutoML optimization (seconds) - REDUCED FOR TESTS
 ML_AUTOML_STUDY_NAME = 'tradpal_gradient_boosting_optimization'  # Name for Optuna study
 ML_AUTOML_STORAGE = None  # Database URL for Optuna storage (None = in-memory)
 ML_AUTOML_SAMPLER = 'tpe'  # Sampler type: 'tpe', 'random', 'grid'
@@ -296,6 +304,69 @@ ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
 ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
 ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
 ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
+
+# Kelly Criterion Configuration
+KELLY_ENABLED = os.getenv('KELLY_ENABLED', 'false').lower() == 'true'  # Enable Kelly Criterion position sizing
+KELLY_FRACTION = float(os.getenv('KELLY_FRACTION', '0.5'))  # Fractional Kelly (0.5 = half Kelly)
+KELLY_LOOKBACK_TRADES = int(os.getenv('KELLY_LOOKBACK_TRADES', '100'))  # Lookback period for win rate calculation
+KELLY_MIN_TRADES = int(os.getenv('KELLY_MIN_TRADES', '20'))  # Minimum trades required for Kelly calculation
+
+# Sentiment Analysis Configuration
+SENTIMENT_ENABLED = os.getenv('SENTIMENT_ENABLED', 'false').lower() == 'true'  # Enable sentiment analysis
+SENTIMENT_SOURCES = os.getenv('SENTIMENT_SOURCES', 'twitter,news,reddit').split(',')  # Data sources to use
+SENTIMENT_UPDATE_INTERVAL = int(os.getenv('SENTIMENT_UPDATE_INTERVAL', '300'))  # Update interval in seconds
+SENTIMENT_CACHE_TTL = int(os.getenv('SENTIMENT_CACHE_TTL', '1800'))  # Cache TTL for sentiment data (seconds)
+SENTIMENT_WEIGHT = float(os.getenv('SENTIMENT_WEIGHT', '0.2'))  # Weight of sentiment in signal generation (0-1)
+SENTIMENT_THRESHOLD = float(os.getenv('SENTIMENT_THRESHOLD', '0.1'))  # Minimum sentiment score for signal influence
+
+# Twitter Sentiment Configuration
+TWITTER_API_KEY = os.getenv('TWITTER_API_KEY', '')
+TWITTER_API_SECRET = os.getenv('TWITTER_API_SECRET', '')
+TWITTER_ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN', '')
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET', '')
+TWITTER_BEARER_TOKEN = os.getenv('TWITTER_BEARER_TOKEN', '')
+TWITTER_SEARCH_TERMS = os.getenv('TWITTER_SEARCH_TERMS', 'BTC,Bitcoin,crypto').split(',')  # Search terms for sentiment
+TWITTER_MAX_TWEETS = int(os.getenv('TWITTER_MAX_TWEETS', '100'))  # Max tweets to analyze per update
+TWITTER_LANGUAGE = os.getenv('TWITTER_LANGUAGE', 'en')  # Language filter for tweets
+
+# News Sentiment Configuration
+NEWS_API_KEY = os.getenv('NEWS_API_KEY', '')
+NEWS_SOURCES = os.getenv('NEWS_SOURCES', 'coindesk,cointelegraph,bitcoinmagazine').split(',')  # News sources
+NEWS_SEARCH_TERMS = os.getenv('NEWS_SEARCH_TERMS', 'Bitcoin,BTC,cryptocurrency').split(',')  # Search terms
+NEWS_MAX_ARTICLES = int(os.getenv('NEWS_MAX_ARTICLES', '50'))  # Max articles to analyze per update
+NEWS_LANGUAGE = os.getenv('NEWS_LANGUAGE', 'en')  # Language filter for news
+
+# Reddit Sentiment Configuration
+REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID', '')
+REDDIT_CLIENT_SECRET = os.getenv('REDDIT_CLIENT_SECRET', '')
+REDDIT_USER_AGENT = os.getenv('REDDIT_USER_AGENT', 'TradPal/1.0')
+REDDIT_SUBREDDITS = os.getenv('REDDIT_SUBREDDITS', 'bitcoin,crypto,cryptocurrency').split(',')  # Subreddits to monitor
+REDDIT_MAX_POSTS = int(os.getenv('REDDIT_MAX_POSTS', '50'))  # Max posts to analyze per update
+REDDIT_TIME_FILTER = os.getenv('REDDIT_TIME_FILTER', 'day')  # Time filter: hour, day, week, month, year, all
+
+# Sentiment Analysis Model Configuration
+SENTIMENT_MODEL_TYPE = os.getenv('SENTIMENT_MODEL_TYPE', 'vader')  # Options: 'vader', 'textblob', 'transformers'
+SENTIMENT_MODEL_CACHE_DIR = 'cache/sentiment_models'  # Directory for sentiment models
+SENTIMENT_PREPROCESSING_ENABLED = os.getenv('SENTIMENT_PREPROCESSING_ENABLED', 'true').lower() == 'true'  # Enable text preprocessing
+SENTIMENT_REMOVE_STOPWORDS = os.getenv('SENTIMENT_REMOVE_STOPWORDS', 'true').lower() == 'true'  # Remove stopwords
+SENTIMENT_LEMMATIZE = os.getenv('SENTIMENT_LEMMATIZE', 'false').lower() == 'true'  # Apply lemmatization
+
+# Paper Trading Configuration
+PAPER_TRADING_ENABLED = os.getenv('PAPER_TRADING_ENABLED', 'false').lower() == 'true'  # Enable paper trading mode
+PAPER_TRADING_INITIAL_BALANCE = float(os.getenv('PAPER_TRADING_INITIAL_BALANCE', '10000'))  # Starting balance in USD
+PAPER_TRADING_FEE_RATE = float(os.getenv('PAPER_TRADING_FEE_RATE', '0.001'))  # Trading fee rate (0.1%)
+PAPER_TRADING_SLIPPAGE = float(os.getenv('PAPER_TRADING_SLIPPAGE', '0.0005'))  # Price slippage (0.05%)
+PAPER_TRADING_MAX_POSITION_SIZE = float(os.getenv('PAPER_TRADING_MAX_POSITION_SIZE', '0.1'))  # Max position size as % of balance
+PAPER_TRADING_DATA_SOURCE = os.getenv('PAPER_TRADING_DATA_SOURCE', 'live')  # 'live' or 'historical'
+PAPER_TRADING_SAVE_TRADES = os.getenv('PAPER_TRADING_SAVE_TRADES', 'true').lower() == 'true'  # Save trades to file
+PAPER_TRADING_TRADE_LOG_FILE = os.getenv('PAPER_TRADING_TRADE_LOG_FILE', 'output/paper_trades.json')  # Trade log file
+PAPER_TRADING_PERFORMANCE_LOG_FILE = os.getenv('PAPER_TRADING_PERFORMANCE_LOG_FILE', 'output/paper_performance.json')  # Performance log file
+
+# Paper Trading Risk Management
+PAPER_TRADING_STOP_LOSS_ENABLED = os.getenv('PAPER_TRADING_STOP_LOSS_ENABLED', 'true').lower() == 'true'
+PAPER_TRADING_TAKE_PROFIT_ENABLED = os.getenv('PAPER_TRADING_TAKE_PROFIT_ENABLED', 'true').lower() == 'true'
+PAPER_TRADING_MAX_DRAWDOWN = float(os.getenv('PAPER_TRADING_MAX_DRAWDOWN', '0.2'))  # Max drawdown before stopping (20%)
+PAPER_TRADING_MAX_TRADES_PER_DAY = int(os.getenv('PAPER_TRADING_MAX_TRADES_PER_DAY', '10'))  # Max trades per day
 
 # Secrets Management Configuration
 SECRETS_BACKEND = os.getenv('SECRETS_BACKEND', 'env')  # Options: 'env', 'vault', 'aws-secretsmanager'

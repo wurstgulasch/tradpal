@@ -2,7 +2,16 @@ import pandas as pd
 import numpy as np
 from typing import Tuple
 from config.settings import EMA_SHORT, EMA_LONG, RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD
-from .cache import cache_indicators
+# Import cache functionality
+try:
+    from .cache import cache_indicators
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+    def cache_indicators(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 # Check if TA-Lib is available
 try:
@@ -171,6 +180,121 @@ def fibonacci_extensions(high, low, close, trend='bullish'):
 
     return fib_161, fib_262, fib_424
 
+@cache_indicators()
+def macd(series: pd.Series, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    Calculate MACD (Moving Average Convergence Divergence).
+    Returns: macd_line, signal_line, histogram
+    Uses TA-Lib if available, otherwise pandas implementation.
+    """
+    if TALIB_AVAILABLE:
+        try:
+            values = series.values.astype(float)
+            macd_line, signal_line, histogram = talib.MACD(values, fastperiod=fast_period,
+                                                          slowperiod=slow_period, signalperiod=signal_period)
+            return pd.Series(macd_line, index=series.index), pd.Series(signal_line, index=series.index), pd.Series(histogram, index=series.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
+    fast_ema = ema(series, fast_period)
+    slow_ema = ema(series, slow_period)
+    macd_line = fast_ema - slow_ema
+    signal_line = ema(macd_line, signal_period)
+    histogram = macd_line - signal_line
+
+    return macd_line, signal_line, histogram
+
+@cache_indicators()
+def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """
+    Calculate On-Balance Volume (OBV).
+    Uses TA-Lib if available, otherwise pandas implementation.
+    """
+    if TALIB_AVAILABLE:
+        try:
+            close_values = close.values.astype(float)
+            volume_values = volume.values.astype(float)
+            obv_values = talib.OBV(close_values, volume_values)
+            return pd.Series(obv_values, index=close.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
+    obv_series = pd.Series(0, index=close.index)
+    for i in range(1, len(close)):
+        if close.iloc[i] > close.iloc[i-1]:
+            obv_series.iloc[i] = obv_series.iloc[i-1] + volume.iloc[i]
+        elif close.iloc[i] < close.iloc[i-1]:
+            obv_series.iloc[i] = obv_series.iloc[i-1] - volume.iloc[i]
+        else:
+            obv_series.iloc[i] = obv_series.iloc[i-1]
+
+    return obv_series
+
+@cache_indicators()
+def stochastic(high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 14, d_period: int = 3) -> Tuple[pd.Series, pd.Series]:
+    """
+    Calculate Stochastic Oscillator.
+    Returns: %K, %D (smoothed %K)
+    Uses TA-Lib if available, otherwise pandas implementation.
+    """
+    if TALIB_AVAILABLE:
+        try:
+            high_values = high.values.astype(float)
+            low_values = low.values.astype(float)
+            close_values = close.values.astype(float)
+            k_values, d_values = talib.STOCH(high_values, low_values, close_values,
+                                           fastk_period=k_period, slowk_period=d_period, slowd_period=d_period)
+            return pd.Series(k_values, index=high.index), pd.Series(d_values, index=high.index)
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
+    lowest_low = low.rolling(window=k_period).min()
+    highest_high = high.rolling(window=k_period).max()
+
+    k_percent = 100 * ((close - lowest_low) / (highest_high - lowest_low))
+    d_percent = k_percent.rolling(window=d_period).mean()
+
+    return k_percent, d_percent
+
+@cache_indicators()
+def chaikin_money_flow(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, period: int = 21) -> pd.Series:
+    """
+    Calculate Chaikin Money Flow (CMF).
+    Uses TA-Lib if available, otherwise pandas implementation.
+    """
+    if TALIB_AVAILABLE:
+        try:
+            high_values = high.values.astype(float)
+            low_values = low.values.astype(float)
+            close_values = close.values.astype(float)
+            volume_values = volume.values.astype(float)
+            cmf_values = talib.AD(high_values, low_values, close_values, volume_values)
+            # CMF is accumulation/distribution normalized by volume
+            cmf = pd.Series(cmf_values, index=high.index)
+            return cmf.rolling(window=period).mean() / volume.rolling(window=period).mean()
+        except Exception as e:
+            # Fallback to pandas if TA-Lib fails
+            pass
+
+    # Pandas implementation (fallback)
+    # Money Flow Multiplier
+    mfm = ((close - low) - (high - close)) / (high - low).replace(0, np.nan)
+    mfm = mfm.fillna(0)  # Handle division by zero
+
+    # Money Flow Volume
+    mfv = mfm * volume
+
+    # Chaikin Money Flow
+    cmf = mfv.rolling(window=period).sum() / volume.rolling(window=period).sum()
+
+    return cmf
+
 def calculate_indicators(df, config=None):
     """
     Calculate all technical indicators for the dataset based on configuration.
@@ -214,6 +338,28 @@ def calculate_indicators(df, config=None):
         if 'EMA9' in df.columns and 'EMA21' in df.columns:
             trend = 'bullish' if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1] else 'bearish'
         df['Fib_161'], df['Fib_262'], df['Fib_424'] = fibonacci_extensions(df['high'], df['low'], df['close'], trend)
+
+    # MACD (optional)
+    if config.get('macd', {}).get('enabled', False):
+        fast_period = config['macd'].get('fast_period', 12)
+        slow_period = config['macd'].get('slow_period', 26)
+        signal_period = config['macd'].get('signal_period', 9)
+        df['MACD'], df['MACD_signal'], df['MACD_hist'] = macd(df['close'], fast_period, slow_period, signal_period)
+
+    # OBV (optional)
+    if config.get('obv', {}).get('enabled', False):
+        df['OBV'] = obv(df['close'], df['volume'])
+
+    # Stochastic Oscillator (optional)
+    if config.get('stochastic', {}).get('enabled', False):
+        k_period = config['stochastic'].get('k_period', 14)
+        d_period = config['stochastic'].get('d_period', 3)
+        df['Stoch_K'], df['Stoch_D'] = stochastic(df['high'], df['low'], df['close'], k_period, d_period)
+
+    # Chaikin Money Flow (optional)
+    if config.get('cmf', {}).get('enabled', False):
+        period = config['cmf'].get('period', 21)
+        df['CMF'] = chaikin_money_flow(df['high'], df['low'], df['close'], df['volume'], period)
 
     return df
 

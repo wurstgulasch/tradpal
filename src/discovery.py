@@ -23,22 +23,17 @@ except ImportError:
     print("⚠️  DEAP library not available. Discovery mode will not function.")
     print("   Install with: pip install deap")
 
-# Import dependencies with fallback for direct execution
-try:
-    from .backtester import run_backtest
-    from .data_fetcher import fetch_historical_data
-    from .indicators import calculate_indicators
-    from .signal_generator import generate_signals, calculate_risk_management
-    from .error_handling import error_boundary
-    from .logging_config import logger
-except ImportError:
-    # Fallback for direct execution
-    from backtester import run_backtest
-    from data_fetcher import fetch_historical_data
-    from indicators import calculate_indicators
-    from signal_generator import generate_signals, calculate_risk_management
-    from error_handling import error_boundary
-    from logging_config import logger
+# Import dependencies
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+
+from backtester import run_backtest
+from data_fetcher import fetch_historical_data
+from indicators import calculate_indicators
+from signal_generator import generate_signals, calculate_risk_management
+from error_handling import error_boundary
+from logging_config import logger
 
 from config.settings import SYMBOL, EXCHANGE, TIMEFRAME
 
@@ -78,7 +73,8 @@ class DiscoveryOptimizer:
                  population_size: int = 50,
                  generations: int = 20,
                  mutation_rate: float = 0.2,
-                 crossover_rate: float = 0.8):
+                 crossover_rate: float = 0.8,
+                 initial_capital: float = 10000.0):
         """
         Initialize the discovery optimizer.
 
@@ -92,6 +88,7 @@ class DiscoveryOptimizer:
             generations: Number of GA generations
             mutation_rate: Probability of mutation
             crossover_rate: Probability of crossover
+            initial_capital: Initial capital for backtesting
         """
         if not DEAP_AVAILABLE:
             raise ImportError("Discovery module requires 'deap' package. Install with: pip install deap")
@@ -105,6 +102,7 @@ class DiscoveryOptimizer:
         self.generations = generations
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
+        self.initial_capital = initial_capital
 
         # GA setup
         self._setup_ga()
@@ -143,22 +141,41 @@ class DiscoveryOptimizer:
         # ATR period: 5-30
         self.toolbox.register("atr_period", random.randint, 5, 30)
 
+        # MACD parameters: fast(8-20), slow(20-40), signal(5-15)
+        self.toolbox.register("macd_fast", random.randint, 8, 20)
+        self.toolbox.register("macd_slow", random.randint, 20, 40)
+        self.toolbox.register("macd_signal", random.randint, 5, 15)
+
+        # Stochastic parameters: k(5-21), d(3-8)
+        self.toolbox.register("stoch_k", random.randint, 5, 21)
+        self.toolbox.register("stoch_d", random.randint, 3, 8)
+
         # Boolean attributes for enabling indicators
         self.toolbox.register("enable_ema", random.choice, [True, False])
         self.toolbox.register("enable_rsi", random.choice, [True, False])
         self.toolbox.register("enable_bb", random.choice, [True, False])
         self.toolbox.register("enable_atr", random.choice, [True, False])
         self.toolbox.register("enable_adx", random.choice, [True, False])
+        self.toolbox.register("enable_macd", random.choice, [True, False])
+        self.toolbox.register("enable_obv", random.choice, [True, False])
+        self.toolbox.register("enable_stoch", random.choice, [True, False])
+        self.toolbox.register("enable_cmf", random.choice, [True, False])
 
         # Structure: [ema_short, ema_long, rsi_period, rsi_oversold, rsi_overbought,
-        #             bb_period, bb_std_dev, atr_period,
-        #             rsi_enabled, bb_enabled, atr_enabled, adx_enabled]
+        #             bb_period, bb_std_dev, atr_period, macd_fast, macd_slow, macd_signal,
+        #             stoch_k, stoch_d,
+        #             rsi_enabled, bb_enabled, atr_enabled, adx_enabled, macd_enabled,
+        #             obv_enabled, stoch_enabled, cmf_enabled]
         # Note: EMA is always enabled as it's core to the strategy
         self.toolbox.register("individual", tools.initCycle, creator.Individual,
                             (self.toolbox.ema_short, self.toolbox.ema_long,
                              self.toolbox.rsi_period, self.toolbox.rsi_oversold, self.toolbox.rsi_overbought,
                              self.toolbox.bb_period, self.toolbox.bb_std_dev, self.toolbox.atr_period,
-                             self.toolbox.enable_rsi, self.toolbox.enable_bb, self.toolbox.enable_atr, self.toolbox.enable_adx), n=1)
+                             self.toolbox.macd_fast, self.toolbox.macd_slow, self.toolbox.macd_signal,
+                             self.toolbox.stoch_k, self.toolbox.stoch_d,
+                             self.toolbox.enable_rsi, self.toolbox.enable_bb, self.toolbox.enable_atr,
+                             self.toolbox.enable_adx, self.toolbox.enable_macd, self.toolbox.enable_obv,
+                             self.toolbox.enable_stoch, self.toolbox.enable_cmf), n=1)
 
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
 
@@ -188,7 +205,17 @@ class DiscoveryOptimizer:
                     individual[i] = random.uniform(1.5, 3.0)
                 elif i == 7:  # atr_period
                     individual[i] = random.randint(5, 30)
-                else:  # boolean attributes (indices 8-11)
+                elif i == 8:  # macd_fast
+                    individual[i] = random.randint(8, 20)
+                elif i == 9:  # macd_slow
+                    individual[i] = random.randint(20, 40)
+                elif i == 10:  # macd_signal
+                    individual[i] = random.randint(5, 15)
+                elif i == 11:  # stoch_k
+                    individual[i] = random.randint(5, 21)
+                elif i == 12:  # stoch_d
+                    individual[i] = random.randint(3, 8)
+                else:  # boolean attributes (indices 13-20)
                     individual[i] = random.choice([True, False])
         return individual,
 
@@ -200,23 +227,40 @@ class DiscoveryOptimizer:
                 'periods': [individual[0], individual[1]]
             },
             'rsi': {
-                'enabled': individual[8],
+                'enabled': individual[13],
                 'period': individual[2],
                 'oversold': individual[3],
                 'overbought': individual[4]
             },
             'bb': {
-                'enabled': individual[9],
+                'enabled': individual[14],
                 'period': individual[5],
                 'std_dev': individual[6]
             },
             'atr': {
-                'enabled': individual[10],
+                'enabled': individual[15],
                 'period': individual[7]
             },
             'adx': {
-                'enabled': individual[11],
+                'enabled': individual[16],
                 'period': 14  # Fixed for simplicity
+            },
+            'macd': {
+                'enabled': individual[17],
+                'fast_period': individual[8],
+                'slow_period': individual[9],
+                'signal_period': individual[10]
+            },
+            'obv': {
+                'enabled': individual[18]
+            },
+            'stochastic': {
+                'enabled': individual[19],
+                'k_period': individual[11],
+                'd_period': individual[12]
+            },
+            'cmf': {
+                'enabled': individual[20]
             },
             'fibonacci': {
                 'enabled': False  # Disabled for optimization
@@ -231,7 +275,9 @@ class DiscoveryOptimizer:
         df['Buy_Signal'] = 0
         df['Sell_Signal'] = 0
 
-        # EMA signals
+        # EMA signals (core strategy)
+        ema_buy_signal = False
+        ema_sell_signal = False
         if config.get('ema', {}).get('enabled', False) and len(config['ema'].get('periods', [])) >= 2:
             short_period, long_period = config['ema']['periods'][:2]
             ema_short_col = f'EMA{short_period}'
@@ -239,27 +285,63 @@ class DiscoveryOptimizer:
 
             if ema_short_col in df.columns and ema_long_col in df.columns:
                 df['EMA_crossover'] = np.where(df[ema_short_col] > df[ema_long_col], 1, -1)
+                ema_buy_signal = df['EMA_crossover'] == 1
+                ema_sell_signal = df['EMA_crossover'] == -1
 
-                # RSI filter
-                rsi_condition_buy = True
-                rsi_condition_sell = True
-                if config.get('rsi', {}).get('enabled', False) and 'RSI' in df.columns:
-                    rsi_oversold = config['rsi'].get('oversold', 30)
-                    rsi_overbought = config['rsi'].get('overbought', 70)
-                    rsi_condition_buy = df['RSI'] < rsi_oversold
-                    rsi_condition_sell = df['RSI'] > rsi_overbought
+        # RSI filter
+        rsi_buy_filter = True
+        rsi_sell_filter = True
+        if config.get('rsi', {}).get('enabled', False) and 'RSI' in df.columns:
+            rsi_oversold = config['rsi'].get('oversold', 30)
+            rsi_overbought = config['rsi'].get('overbought', 70)
+            rsi_buy_filter = df['RSI'] < rsi_oversold
+            rsi_sell_filter = df['RSI'] > rsi_overbought
 
-                # BB filter
-                bb_condition_buy = True
-                bb_condition_sell = True
-                if config.get('bb', {}).get('enabled', False):
-                    if 'BB_lower' in df.columns and 'BB_upper' in df.columns:
-                        bb_condition_buy = df['close'] > df['BB_lower']
-                        bb_condition_sell = df['close'] < df['BB_upper']
+        # BB filter
+        bb_buy_filter = True
+        bb_sell_filter = True
+        if config.get('bb', {}).get('enabled', False):
+            if 'BB_lower' in df.columns and 'BB_upper' in df.columns:
+                bb_buy_filter = df['close'] > df['BB_lower']
+                bb_sell_filter = df['close'] < df['BB_upper']
 
-                # Generate signals
-                df['Buy_Signal'] = ((df['EMA_crossover'] == 1) & rsi_condition_buy & bb_condition_buy).astype(int)
-                df['Sell_Signal'] = ((df['EMA_crossover'] == -1) & rsi_condition_sell & bb_condition_sell).astype(int)
+        # MACD filter
+        macd_buy_filter = True
+        macd_sell_filter = True
+        if config.get('macd', {}).get('enabled', False):
+            if 'MACD_histogram' in df.columns:
+                macd_buy_filter = df['MACD_histogram'] > 0
+                macd_sell_filter = df['MACD_histogram'] < 0
+
+        # Stochastic filter
+        stoch_buy_filter = True
+        stoch_sell_filter = True
+        if config.get('stochastic', {}).get('enabled', False):
+            if 'Stoch_K' in df.columns and 'Stoch_D' in df.columns:
+                stoch_buy_filter = (df['Stoch_K'] < 20) & (df['Stoch_D'] < 20)
+                stoch_sell_filter = (df['Stoch_K'] > 80) & (df['Stoch_D'] > 80)
+
+        # OBV filter (momentum confirmation)
+        obv_buy_filter = True
+        obv_sell_filter = True
+        if config.get('obv', {}).get('enabled', False) and 'OBV' in df.columns:
+            obv_ma = df['OBV'].rolling(window=20).mean()
+            obv_buy_filter = df['OBV'] > obv_ma
+            obv_sell_filter = df['OBV'] < obv_ma
+
+        # CMF filter (volume confirmation)
+        cmf_buy_filter = True
+        cmf_sell_filter = True
+        if config.get('cmf', {}).get('enabled', False) and 'CMF' in df.columns:
+            cmf_buy_filter = df['CMF'] > 0
+            cmf_sell_filter = df['CMF'] < 0
+
+        # Combine all filters for final signals
+        buy_conditions = ema_buy_signal & rsi_buy_filter & bb_buy_filter & macd_buy_filter & stoch_buy_filter & obv_buy_filter & cmf_buy_filter
+        sell_conditions = ema_sell_signal & rsi_sell_filter & bb_sell_filter & macd_sell_filter & stoch_sell_filter & obv_sell_filter & cmf_sell_filter
+
+        df['Buy_Signal'] = buy_conditions.astype(int)
+        df['Sell_Signal'] = sell_conditions.astype(int)
 
         return df
 
@@ -371,16 +453,51 @@ class DiscoveryOptimizer:
 
         total_pnl = trades_df['pnl'].sum()
         win_rate = (trades_df['pnl'] > 0).mean()
-        sharpe_ratio = total_pnl / trades_df['pnl'].std() if trades_df['pnl'].std() > 0 else 0
-        max_drawdown = 0  # Simplified
+
+        # Calculate Sharpe Ratio properly (annualized, risk-adjusted returns)
+        if len(trades_df) > 1:
+            returns = trades_df['pnl'] / self.initial_capital
+            sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
+        else:
+            sharpe_ratio = 0
+
+        # Calculate Max Drawdown
+        cumulative_returns = (1 + trades_df['pnl'] / self.initial_capital).cumprod()
+        running_max = cumulative_returns.expanding().max()
+        drawdown = (cumulative_returns - running_max) / running_max
+        max_drawdown = abs(drawdown.min()) if len(drawdown) > 0 else 0
+
         total_trades = len(trades_df)
 
-        # Fitness function with tie-breakers
-        pnl_score = total_pnl * 1.0
-        win_rate_score = win_rate * 0.001
-        sharpe_score = sharpe_ratio * 0.0001
-        trade_score = total_trades * 0.00001
-        fitness = pnl_score + win_rate_score + sharpe_score + trade_score
+        # Enhanced Fitness function prioritizing Sharpe Ratio (risk-adjusted returns)
+        # Primary metric: Sharpe Ratio (higher = better risk-adjusted performance)
+        # Secondary: Total P&L (absolute returns)
+        # Tertiary: Win Rate (consistency)
+        # Quaternary: Trade Count (activity, but penalized for overtrading)
+
+        sharpe_weight = 100.0  # Primary weight for risk-adjusted performance
+        pnl_weight = 1.0       # Secondary weight for absolute returns
+        win_rate_weight = 10.0 # Tertiary weight for consistency
+        trade_penalty = -0.01  # Penalty for excessive trading (overtrading)
+
+        # Normalize Sharpe Ratio (typically 0-3 is good, penalize negative)
+        sharpe_score = max(sharpe_ratio, -5) * sharpe_weight
+
+        # P&L score (penalize losses heavily)
+        pnl_score = total_pnl * pnl_weight
+
+        # Win rate bonus (reward consistency)
+        win_rate_score = win_rate * win_rate_weight
+
+        # Trade count penalty (avoid overtrading)
+        trade_score = total_trades * trade_penalty
+
+        # Total fitness (Sharpe-focused with risk management)
+        fitness = sharpe_score + pnl_score + win_rate_score + trade_score
+
+        # Additional penalty for excessive drawdown (>20%)
+        if max_drawdown > 0.20:
+            fitness *= 0.5  # 50% penalty for high drawdown
 
         metrics = {
             'total_pnl': total_pnl,
@@ -500,9 +617,20 @@ class DiscoveryOptimizer:
         atr_enabled = config.get('atr', {}).get('enabled', False)
         atr_period = config.get('atr', {}).get('period', 14)
         adx_enabled = config.get('adx', {}).get('enabled', False)
+        macd_enabled = config.get('macd', {}).get('enabled', False)
+        macd_fast = config.get('macd', {}).get('fast_period', 12)
+        macd_slow = config.get('macd', {}).get('slow_period', 26)
+        macd_signal = config.get('macd', {}).get('signal_period', 9)
+        obv_enabled = config.get('obv', {}).get('enabled', False)
+        stoch_enabled = config.get('stochastic', {}).get('enabled', False)
+        stoch_k = config.get('stochastic', {}).get('k_period', 14)
+        stoch_d = config.get('stochastic', {}).get('d_period', 3)
+        cmf_enabled = config.get('cmf', {}).get('enabled', False)
 
         return (ema_periods, rsi_enabled, rsi_period, rsi_oversold, rsi_overbought,
-                bb_enabled, bb_period, bb_std_dev, atr_enabled, atr_period, adx_enabled)
+                bb_enabled, bb_period, bb_std_dev, atr_enabled, atr_period, adx_enabled,
+                macd_enabled, macd_fast, macd_slow, macd_signal, obv_enabled,
+                stoch_enabled, stoch_k, stoch_d, cmf_enabled)
 
     def save_results(self, results: List[IndividualResult], output_file: str = 'output/discovery_results.json'):
         """Save optimization results to JSON file."""

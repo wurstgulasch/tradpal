@@ -41,6 +41,17 @@ except ImportError:
     print("   Install with: pip install xgboost")
 
 try:
+    import lightgbm as lgb
+    from lightgbm import LGBMClassifier
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
+    lgb = None
+    LGBMClassifier = None
+    print("⚠️  LightGBM not available. Enhanced ensemble methods will be limited.")
+    print("   Install with: pip install lightgbm")
+
+try:
     import optuna
     from optuna.pruners import MedianPruner, HyperbandPruner
     from optuna.samplers import TPESampler, RandomSampler, GridSampler
@@ -148,6 +159,20 @@ class MLSignalPredictor:
                 ) if XGBOOST_AVAILABLE else None,
                 'name': 'XGBoost'
             },
+            'lightgbm': {
+                'model': LGBMClassifier(
+                    n_estimators=100,
+                    learning_rate=0.1,
+                    max_depth=6,
+                    num_leaves=31,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    random_state=42,
+                    n_jobs=-1,
+                    verbosity=-1
+                ) if LIGHTGBM_AVAILABLE else None,
+                'name': 'LightGBM'
+            },
             'svm': {
                 'model': Pipeline([
                     ('scaler', StandardScaler()),
@@ -197,117 +222,84 @@ class MLSignalPredictor:
         """
         features = []
 
-        # Basic price features
-        if 'close' in df.columns:
-            features.append(df['close'].pct_change().fillna(0))  # Price change
-            features.append(df['close'].rolling(window=5).mean().fillna(0))  # Short MA
-            features.append(df['close'].rolling(window=20).mean().fillna(0))  # Long MA
-            features.append(df['close'].rolling(window=50).mean().fillna(0))  # Very Long MA
-
-            # Volatility features
-            features.append(df['close'].rolling(window=20).std().fillna(0))  # Rolling volatility
-            features.append((df['close'] - df['close'].rolling(window=20).mean()).fillna(0))  # Price deviation from MA
-
-        # Technical indicators
-        indicator_features = [
-            'EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_lower', 'ATR', 'ADX',
-            'MACD', 'MACD_signal', 'MACD_hist', 'Stoch_K', 'Stoch_D'
+        # Expected features from trained models - maintain compatibility
+        expected_features = [
+            'close_pct_roc',      # Price change rate of change
+            'close_ma20_roc',     # 20-period MA rate of change
+            'close_ma50_value',   # 50-period MA value
+            'close_dev_ma20_roc', # Price deviation from MA rate of change
+            'EMA9_value',         # EMA9 value
+            'BB_upper_value',     # Bollinger Band upper value
+            'BB_lower_roc',       # Bollinger Band lower rate of change
+            'MACD_hist_roc',      # MACD histogram rate of change
+            'Stoch_K_roc',        # Stochastic K rate of change
+            'Stoch_D_roc',        # Stochastic D rate of change
+            'BB_upper_lag1'       # Bollinger Band upper lagged by 1 period
         ]
 
-        for indicator in indicator_features:
-            if indicator in df.columns:
-                # Add the indicator value
-                features.append(df[indicator].fillna(0))
-                # Add rate of change
-                features.append(df[indicator].pct_change(fill_method=None).fillna(0))
-                # Add lag features (1, 2, 3 periods back)
-                for lag in [1, 2, 3]:
-                    features.append(df[indicator].shift(lag).fillna(0))
-
-        # Advanced technical features
-        if 'ATR' in df.columns and 'close' in df.columns:
-            features.append((df['ATR'] / df['close']).fillna(0))  # Normalized ATR
-
-        if 'EMA9' in df.columns and 'EMA21' in df.columns:
-            features.append((df['EMA9'] - df['EMA21']).fillna(0))  # EMA spread
-            features.append(((df['EMA9'] - df['EMA21']) / df['close']).fillna(0))  # Normalized spread
-            features.append((df['EMA9'] / df['EMA21'] - 1).fillna(0))  # EMA ratio
-
-        if 'RSI' in df.columns:
-            features.append(df['RSI'].rolling(window=5).mean().fillna(50))  # RSI MA
-            features.append(df['RSI'].rolling(window=14).std().fillna(0))  # RSI volatility
-
-        # Bollinger Band features
-        if 'BB_upper' in df.columns and 'BB_lower' in df.columns and 'close' in df.columns:
-            bb_width = (df['BB_upper'] - df['BB_lower']) / df['close']
-            bb_position = (df['close'] - df['BB_lower']) / (df['BB_upper'] - df['BB_lower'])
-            features.append(bb_width.fillna(0))  # BB width normalized
-            features.append(bb_position.fillna(0.5))  # BB position (0-1)
-
-        # MACD features
-        if 'MACD' in df.columns and 'MACD_signal' in df.columns:
-            macd_crossover = (df['MACD'] - df['MACD_signal']).fillna(0)
-            features.append(macd_crossover)  # MACD crossover signal
-            features.append(macd_crossover.diff().fillna(0))  # MACD crossover change
-
-        # Stochastic features
-        if 'Stoch_K' in df.columns and 'Stoch_D' in df.columns:
-            stoch_divergence = (df['Stoch_K'] - df['Stoch_D']).fillna(0)
-            features.append(stoch_divergence)  # Stochastic divergence
-
-        # Volume features (if available)
-        if 'volume' in df.columns:
-            features.append(df['volume'].pct_change().fillna(0))  # Volume change
-            features.append(df['volume'].rolling(window=20).mean().fillna(0))  # Volume MA
-
-        # Statistical features
+        # Build features in the exact order expected by trained models
         if 'close' in df.columns:
-            # Rolling statistics
-            for window in [5, 10, 20]:
-                features.append(df['close'].rolling(window=window).skew().fillna(0))  # Skewness
-                features.append(df['close'].rolling(window=window).kurt().fillna(0))  # Kurtosis
+            # close_pct_roc: Price change rate of change
+            price_change = df['close'].pct_change().fillna(0)
+            features.append(price_change.pct_change().fillna(0))
 
-        # Create feature names
-        feature_names = []
-        base_indicators = ['close_pct', 'close_ma5', 'close_ma20', 'close_ma50', 'close_vol20', 'close_dev_ma20'] + indicator_features
+            # close_ma20_roc: 20-period MA rate of change
+            ma20 = df['close'].rolling(window=20).mean().fillna(0)
+            features.append(ma20.pct_change().fillna(0))
 
-        # Add names for basic indicators with value and ROC
-        for name in base_indicators:
-            feature_names.extend([f"{name}_value", f"{name}_roc"])
+            # close_ma50_value: 50-period MA value
+            ma50 = df['close'].rolling(window=50).mean().fillna(0)
+            features.append(ma50)
 
-        # Add lag feature names
-        for name in indicator_features:
-            for lag in [1, 2, 3]:
-                feature_names.extend([f"{name}_lag{lag}"])
+            # close_dev_ma20_roc: Price deviation from MA rate of change
+            price_dev = (df['close'] - ma20).fillna(0)
+            features.append(price_dev.pct_change().fillna(0))
 
-        # Additional features
-        additional_features = [
-            'atr_normalized', 'ema_spread', 'ema_spread_norm', 'ema_ratio',
-            'rsi_ma5', 'rsi_vol14', 'bb_width_norm', 'bb_position',
-            'macd_crossover', 'macd_crossover_change', 'stoch_divergence'
-        ]
+        # EMA9_value: EMA9 value
+        if 'EMA9' in df.columns:
+            features.append(df['EMA9'].fillna(0))
 
-        # Volume features
-        if 'volume' in df.columns:
-            additional_features.extend(['volume_pct', 'volume_ma20'])
+        # BB_upper_value: Bollinger Band upper value
+        if 'BB_upper' in df.columns:
+            features.append(df['BB_upper'].fillna(0))
 
-        # Statistical features
-        for window in [5, 10, 20]:
-            additional_features.extend([f'close_skew_{window}', f'close_kurt_{window}'])
+        # BB_lower_roc: Bollinger Band lower rate of change
+        if 'BB_lower' in df.columns:
+            features.append(df['BB_lower'].pct_change().fillna(0))
 
-        feature_names.extend(additional_features)
+        # MACD_hist_roc: MACD histogram rate of change
+        if 'MACD_hist' in df.columns:
+            features.append(df['MACD_hist'].pct_change().fillna(0))
+
+        # Stoch_K_roc: Stochastic K rate of change
+        if 'Stoch_K' in df.columns:
+            features.append(df['Stoch_K'].pct_change().fillna(0))
+
+        # Stoch_D_roc: Stochastic D rate of change
+        if 'Stoch_D' in df.columns:
+            features.append(df['Stoch_D'].pct_change().fillna(0))
+
+        # BB_upper_lag1: Bollinger Band upper lagged by 1 period
+        if 'BB_upper' in df.columns:
+            features.append(df['BB_upper'].shift(1).fillna(0))
+
+        # Ensure we have exactly the expected number of features
+        if len(features) != len(expected_features):
+            # Fallback: create zero features if we don't have all expected features
+            print(f"⚠️  Feature count mismatch: expected {len(expected_features)}, got {len(features)}")
+            features = [np.zeros(len(df)) for _ in range(len(expected_features))]
 
         # Combine features
         if features:
             feature_matrix = np.column_stack(features)
         else:
             # Fallback if no features available
-            feature_matrix = np.zeros((len(df), 1))
+            feature_matrix = np.zeros((len(df), len(expected_features)))
 
         # Replace infinities and NaN with 0
         feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
-        return feature_matrix, feature_names[:feature_matrix.shape[1]]
+        return feature_matrix, expected_features
 
     def scale_features(self, X: np.ndarray) -> np.ndarray:
         """
@@ -324,10 +316,10 @@ class MLSignalPredictor:
 
         return self.scaler.fit_transform(X)
 
-    def select_features(self, X: np.ndarray, y: np.ndarray, feature_names: List[str],
-                       max_features: int = 50) -> Tuple[np.ndarray, List[str]]:
+    def select_features_rfe_shap(self, X: np.ndarray, y: np.ndarray, feature_names: List[str],
+                                max_features: int = 30) -> Tuple[np.ndarray, List[str]]:
         """
-        Select most important features using statistical tests and model-based selection.
+        Advanced feature selection combining RFE with SHAP analysis.
 
         Args:
             X: Scaled feature matrix
@@ -339,68 +331,129 @@ class MLSignalPredictor:
             Tuple of (selected_features, selected_feature_names)
         """
         try:
-            from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
-            from sklearn.feature_selection import RFECV
+            from sklearn.feature_selection import RFE
             from sklearn.linear_model import LogisticRegression
 
             n_features = X.shape[1]
             if n_features <= max_features:
                 return X, feature_names
 
-            # Method 1: Statistical selection using f_classif
-            selector_stat = SelectKBest(score_func=f_classif, k=min(max_features, n_features))
-            X_stat = selector_stat.fit_transform(X, y)
-            stat_mask = selector_stat.get_support()
+            print("🔍 Starting RFE + SHAP feature selection...")
 
-            # Method 2: Mutual information
-            selector_mi = SelectKBest(score_func=mutual_info_classif, k=min(max_features, n_features))
-            X_mi = selector_mi.fit_transform(X, y)
-            mi_mask = selector_mi.get_support()
+            # Step 1: Initial statistical filtering (keep top 2x target features)
+            from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
+            stat_selector = SelectKBest(score_func=f_classif, k=min(max_features * 2, n_features))
+            X_stat = stat_selector.fit_transform(X, y)
+            stat_mask = stat_selector.get_support()
 
-            # Combine masks (features selected by either method)
-            combined_mask = stat_mask | mi_mask
+            # Get statistically significant features
+            stat_features = X[:, stat_mask]
+            stat_feature_names = [name for name, selected in zip(feature_names, stat_mask) if selected]
 
-            # If we have too many features, use RFE with logistic regression
-            selected_count = np.sum(combined_mask)
-            if selected_count > max_features:
-                # Use only features selected by both methods for RFE
-                strict_mask = stat_mask & mi_mask
-                if np.sum(strict_mask) >= 10:  # Need at least 10 features for RFE
-                    X_strict = X[:, strict_mask]
-                    rfe_selector = RFECV(
-                        LogisticRegression(random_state=42, max_iter=1000),
-                        step=1,
-                        cv=3,
-                        min_features_to_select=min(10, X_strict.shape[1])
+            # Step 2: RFE with cross-validation on statistically significant features
+            if len(stat_features[0]) > max_features:
+                rfe_model = LogisticRegression(random_state=42, max_iter=1000)
+
+                # Use fewer features for RFE if we have many
+                rfe_n_features = min(max_features * 2, len(stat_features[0]))
+                rfe_selector = RFE(
+                    estimator=rfe_model,
+                    n_features_to_select=min(max_features, rfe_n_features),
+                    step=1,
+                    verbose=0
+                )
+
+                X_rfe = rfe_selector.fit_transform(stat_features, y)
+                rfe_mask = rfe_selector.get_support()
+
+                # Map back to statistical feature space
+                rfe_selected_features = stat_features[:, rfe_mask]
+                rfe_selected_names = [name for name, selected in zip(stat_feature_names, rfe_mask) if selected]
+
+                # Step 3: SHAP analysis on RFE-selected features
+                if SHAP_AVAILABLE and len(rfe_selected_features[0]) > 5:
+                    shap_features, shap_names = self._shap_feature_ranking(
+                        rfe_selected_features, y, rfe_selected_names, max_features
                     )
-                    X_rfe = rfe_selector.fit_transform(X_strict, y)
-                    rfe_mask = rfe_selector.get_support()
-
-                    # Map back to original feature space
-                    final_mask = np.zeros(n_features, dtype=bool)
-                    strict_indices = np.where(strict_mask)[0]
-                    final_mask[strict_indices[rfe_mask]] = True
                 else:
-                    # Fallback: select top features by combined score
-                    stat_scores = selector_stat.scores_
-                    mi_scores = selector_mi.scores_
-                    combined_scores = (stat_scores + mi_scores) / 2
-                    top_indices = np.argsort(combined_scores)[-max_features:]
-                    final_mask = np.zeros(n_features, dtype=bool)
-                    final_mask[top_indices] = True
+                    shap_features, shap_names = rfe_selected_features, rfe_selected_names
             else:
-                final_mask = combined_mask
+                # If statistical filtering already gave us target number, use SHAP directly
+                if SHAP_AVAILABLE and len(stat_features[0]) > 5:
+                    shap_features, shap_names = self._shap_feature_ranking(
+                        stat_features, y, stat_feature_names, max_features
+                    )
+                else:
+                    shap_features, shap_names = stat_features, stat_feature_names
 
-            # Apply selection
-            X_selected = X[:, final_mask]
-            selected_feature_names = [name for name, selected in zip(feature_names, final_mask) if selected]
+            print(f"✅ RFE + SHAP selection: {n_features} -> {shap_features.shape[1]} features")
+            if len(shap_names) > 0:
+                print(f"   Top features: {', '.join(shap_names[:5])}")
 
-            print(f"✅ Feature selection: {n_features} -> {X_selected.shape[1]} features")
-
-            return X_selected, selected_feature_names
+            return shap_features, shap_names
 
         except Exception as e:
-            print(f"⚠️  Feature selection failed: {e}, using all features")
+            print(f"⚠️  RFE + SHAP selection failed: {e}, using statistical selection")
+            return self.select_features(X, y, feature_names, max_features)
+
+    def _shap_feature_ranking(self, X: np.ndarray, y: np.ndarray, feature_names: List[str],
+                             max_features: int) -> Tuple[np.ndarray, List[str]]:
+        """
+        Rank features using SHAP values and select top features.
+
+        Args:
+            X: Feature matrix
+            y: Target labels
+            feature_names: Feature names
+            max_features: Maximum number of features to select
+
+        Returns:
+            Tuple of (selected_features, selected_feature_names)
+        """
+        try:
+            # Train a simple model for SHAP analysis
+            from sklearn.ensemble import RandomForestClassifier
+            model = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+            model.fit(X, y)
+
+            # Create SHAP explainer
+            if 'RandomForest' in str(type(model)):
+                explainer = shap.TreeExplainer(model)
+            else:
+                # Fallback for other models
+                background_sample = X[:min(50, len(X))]
+                explainer = shap.KernelExplainer(model.predict_proba, background_sample)
+
+            # Calculate SHAP values for a sample of data
+            sample_size = min(100, len(X))
+            X_sample = X[:sample_size]
+
+            shap_values = explainer.shap_values(X_sample)
+
+            # Handle different SHAP output formats
+            if isinstance(shap_values, list):
+                if len(shap_values) > 1:
+                    shap_vals = shap_values[1]  # Positive class for binary classification
+                else:
+                    shap_vals = shap_values[0]
+            else:
+                shap_vals = shap_values
+
+            # Calculate mean absolute SHAP values for each feature
+            feature_importance = np.abs(shap_vals).mean(axis=0)
+
+            # Rank features by importance
+            feature_ranks = np.argsort(feature_importance)[::-1]  # Descending order
+
+            # Select top features
+            top_indices = feature_ranks[:max_features]
+            selected_features = X[:, top_indices]
+            selected_names = [feature_names[i] for i in top_indices]
+
+            return selected_features, selected_names
+
+        except Exception as e:
+            print(f"⚠️  SHAP ranking failed: {e}, using all features")
             return X, feature_names
 
     def create_labels(self, df: pd.DataFrame, prediction_horizon: int = 5) -> np.ndarray:
@@ -456,7 +509,7 @@ class MLSignalPredictor:
 
             # Feature scaling and selection
             X_scaled = self.scale_features(X)
-            X_selected, selected_feature_names = self.select_features(X_scaled, y, feature_names)
+            X_selected, selected_feature_names = self.select_features_rfe_shap(X_scaled, y, feature_names)
 
             # Store feature selection info for prediction
             self.selected_feature_indices = None
@@ -486,8 +539,10 @@ class MLSignalPredictor:
                         print(f"✅ {model_name} optimized: F1={optimization_result['best_score']:.4f}")
 
             for model_name, model_config in self.models.items():
-                # Skip XGBoost if not available
+                # Skip XGBoost and LightGBM if not available
                 if model_name == 'xgboost' and not XGBOOST_AVAILABLE:
+                    continue
+                if model_name == 'lightgbm' and not LIGHTGBM_AVAILABLE:
                     continue
 
                 try:
@@ -1150,6 +1205,20 @@ class MLSignalPredictor:
                 }
                 model = XGBClassifier(**params)
 
+            elif model_name == 'lightgbm' and LIGHTGBM_AVAILABLE:
+                params = {
+                    'n_estimators': trial.suggest_int('n_estimators', 50, 300),
+                    'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+                    'max_depth': trial.suggest_int('max_depth', 3, 10),
+                    'num_leaves': trial.suggest_int('num_leaves', 10, 100),
+                    'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                    'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+                    'min_child_samples': trial.suggest_int('min_child_samples', 5, 50),
+                    'random_state': 42,
+                    'verbosity': -1
+                }
+                model = LGBMClassifier(**params)
+
             elif model_name == 'svm':
                 # SVM parameters - define all parameters statically to avoid Optuna dynamic issues
                 kernel = trial.suggest_categorical('kernel', ['rbf', 'linear', 'poly'])
@@ -1237,6 +1306,8 @@ class MLSignalPredictor:
             self.models[model_name]['model'] = RandomForestClassifier(**best_params, random_state=42)
         elif model_name == 'xgboost' and XGBOOST_AVAILABLE:
             self.models[model_name]['model'] = XGBClassifier(**best_params, random_state=42)
+        elif model_name == 'lightgbm' and LIGHTGBM_AVAILABLE:
+            self.models[model_name]['model'] = LGBMClassifier(**best_params, verbosity=-1)
         elif model_name == 'svm':
             # Handle SVM parameters
             svm_params = best_params.copy()
@@ -1656,58 +1727,92 @@ if TENSORFLOW_AVAILABLE:
             """
             features = []
 
-            # Basic price features
-            if 'close' in df.columns:
-                features.append(df['close'].pct_change().fillna(0))  # Price change
-                features.append(df['close'].rolling(window=5).mean().fillna(0))  # Short MA
-                features.append(df['close'].rolling(window=20).mean().fillna(0))  # Long MA
-
-            # Technical indicators
-            indicator_features = [
-                'EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_lower', 'ATR', 'ADX',
-                'MACD', 'MACD_signal', 'MACD_hist', 'Stoch_K', 'Stoch_D'
+            # Expected features from trained LSTM models - maintain compatibility
+            expected_features = [
+                'close_pct_value', 'close_pct_roc', 'close_ma5_value', 'close_ma5_roc',
+                'close_ma20_value', 'close_ma20_roc', 'EMA9_value', 'EMA9_roc',
+                'EMA21_value', 'EMA21_roc', 'RSI_value', 'RSI_roc',
+                'BB_upper_value', 'BB_upper_roc', 'BB_lower_value', 'BB_lower_roc',
+                'ATR_value', 'ATR_roc', 'ADX_value'
             ]
 
-            for indicator in indicator_features:
-                if indicator in df.columns:
-                    # Add the indicator value
-                    features.append(df[indicator].fillna(0))
-                    # Add rate of change
-                    features.append(df[indicator].pct_change(fill_method=None).fillna(0))
+            # Build features in the exact order expected by trained models
+            if 'close' in df.columns:
+                # close_pct_value: Price change value
+                price_pct = df['close'].pct_change().fillna(0)
+                features.append(price_pct)
 
-            # Volatility features
-            if 'ATR' in df.columns and 'close' in df.columns:
-                features.append((df['ATR'] / df['close']).fillna(0))  # Normalized ATR
+                # close_pct_roc: Price change rate of change
+                features.append(price_pct.pct_change().fillna(0))
 
-            # Trend features
-            if 'EMA9' in df.columns and 'EMA21' in df.columns:
-                features.append((df['EMA9'] - df['EMA21']).fillna(0))  # EMA spread
-                features.append(((df['EMA9'] - df['EMA21']) / df['close']).fillna(0))  # Normalized spread
+                # close_ma5_value: 5-period MA value
+                ma5 = df['close'].rolling(window=5).mean().fillna(0)
+                features.append(ma5)
 
-            # Momentum features
+                # close_ma5_roc: 5-period MA rate of change
+                features.append(ma5.pct_change().fillna(0))
+
+                # close_ma20_value: 20-period MA value
+                ma20 = df['close'].rolling(window=20).mean().fillna(0)
+                features.append(ma20)
+
+                # close_ma20_roc: 20-period MA rate of change
+                features.append(ma20.pct_change().fillna(0))
+
+            # EMA9_value and EMA9_roc
+            if 'EMA9' in df.columns:
+                features.append(df['EMA9'].fillna(0))
+                features.append(df['EMA9'].pct_change().fillna(0))
+
+            # EMA21_value and EMA21_roc
+            if 'EMA21' in df.columns:
+                features.append(df['EMA21'].fillna(0))
+                features.append(df['EMA21'].pct_change().fillna(0))
+
+            # RSI_value and RSI_roc
             if 'RSI' in df.columns:
-                features.append(df['RSI'].rolling(window=5).mean().fillna(50))  # RSI MA
+                features.append(df['RSI'].fillna(50))
+                features.append(df['RSI'].pct_change().fillna(0))
 
-            # Create feature names
-            feature_names = []
-            base_indicators = ['close_pct', 'close_ma5', 'close_ma20'] + indicator_features
-            for name in base_indicators:
-                feature_names.extend([f"{name}_value", f"{name}_roc"])
+            # BB_upper_value and BB_upper_roc
+            if 'BB_upper' in df.columns:
+                features.append(df['BB_upper'].fillna(0))
+                features.append(df['BB_upper'].pct_change().fillna(0))
 
-            # Additional features
-            feature_names.extend(['atr_normalized', 'ema_spread', 'ema_spread_norm', 'rsi_ma5'])
+            # BB_lower_value and BB_lower_roc
+            if 'BB_lower' in df.columns:
+                features.append(df['BB_lower'].fillna(0))
+                features.append(df['BB_lower'].pct_change().fillna(0))
+
+            # ATR_value and ATR_roc
+            if 'ATR' in df.columns:
+                features.append(df['ATR'].fillna(0))
+                features.append(df['ATR'].pct_change().fillna(0))
+
+            # ADX_value (no ROC for ADX as it's not stored)
+            if 'ADX' in df.columns:
+                features.append(df['ADX'].fillna(25))
+            else:
+                # Fallback: use a default ADX value if not available
+                features.append(np.full(len(df), 25.0))  # Default neutral ADX value
+
+            # Ensure we have exactly the expected number of features
+            if len(features) != len(expected_features):
+                print(f"⚠️  LSTM Feature count mismatch: expected {len(expected_features)}, got {len(features)}")
+                # Pad with zeros if needed
+                while len(features) < len(expected_features):
+                    features.append(np.zeros(len(df)))
 
             # Combine features
             if features:
                 feature_matrix = np.column_stack(features)
             else:
-                # Fallback if no features available
-                feature_matrix = np.zeros((len(df), 1))
+                feature_matrix = np.zeros((len(df), len(expected_features)))
 
             # Replace infinities and NaN with 0
             feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
-            return feature_matrix, feature_names[:feature_matrix.shape[1]]
+            return feature_matrix, expected_features
 
         def create_labels(self, df: pd.DataFrame, prediction_horizon: int = 5) -> np.ndarray:
             """
@@ -2243,58 +2348,92 @@ if TENSORFLOW_AVAILABLE:
             """
             features = []
 
-            # Basic price features
-            if 'close' in df.columns:
-                features.append(df['close'].pct_change().fillna(0))  # Price change
-                features.append(df['close'].rolling(window=5).mean().fillna(0))  # Short MA
-                features.append(df['close'].rolling(window=20).mean().fillna(0))  # Long MA
-
-            # Technical indicators
-            indicator_features = [
-                'EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_lower', 'ATR', 'ADX',
-                'MACD', 'MACD_signal', 'MACD_hist', 'Stoch_K', 'Stoch_D'
+            # Expected features from trained Transformer models - maintain compatibility
+            expected_features = [
+                'close_pct_value', 'close_pct_roc', 'close_ma5_value', 'close_ma5_roc',
+                'close_ma20_value', 'close_ma20_roc', 'EMA9_value', 'EMA9_roc',
+                'EMA21_value', 'EMA21_roc', 'RSI_value', 'RSI_roc',
+                'BB_upper_value', 'BB_upper_roc', 'BB_lower_value', 'BB_lower_roc',
+                'ATR_value', 'ATR_roc', 'ADX_value'
             ]
 
-            for indicator in indicator_features:
-                if indicator in df.columns:
-                    # Add the indicator value
-                    features.append(df[indicator].fillna(0))
-                    # Add rate of change
-                    features.append(df[indicator].pct_change(fill_method=None).fillna(0))
+            # Build features in the exact order expected by trained models
+            if 'close' in df.columns:
+                # close_pct_value: Price change value
+                price_pct = df['close'].pct_change().fillna(0)
+                features.append(price_pct)
 
-            # Volatility features
-            if 'ATR' in df.columns and 'close' in df.columns:
-                features.append((df['ATR'] / df['close']).fillna(0))  # Normalized ATR
+                # close_pct_roc: Price change rate of change
+                features.append(price_pct.pct_change().fillna(0))
 
-            # Trend features
-            if 'EMA9' in df.columns and 'EMA21' in df.columns:
-                features.append((df['EMA9'] - df['EMA21']).fillna(0))  # EMA spread
-                features.append(((df['EMA9'] - df['EMA21']) / df['close']).fillna(0))  # Normalized spread
+                # close_ma5_value: 5-period MA value
+                ma5 = df['close'].rolling(window=5).mean().fillna(0)
+                features.append(ma5)
 
-            # Momentum features
+                # close_ma5_roc: 5-period MA rate of change
+                features.append(ma5.pct_change().fillna(0))
+
+                # close_ma20_value: 20-period MA value
+                ma20 = df['close'].rolling(window=20).mean().fillna(0)
+                features.append(ma20)
+
+                # close_ma20_roc: 20-period MA rate of change
+                features.append(ma20.pct_change().fillna(0))
+
+            # EMA9_value and EMA9_roc
+            if 'EMA9' in df.columns:
+                features.append(df['EMA9'].fillna(0))
+                features.append(df['EMA9'].pct_change().fillna(0))
+
+            # EMA21_value and EMA21_roc
+            if 'EMA21' in df.columns:
+                features.append(df['EMA21'].fillna(0))
+                features.append(df['EMA21'].pct_change().fillna(0))
+
+            # RSI_value and RSI_roc
             if 'RSI' in df.columns:
-                features.append(df['RSI'].rolling(window=5).mean().fillna(50))  # RSI MA
+                features.append(df['RSI'].fillna(50))
+                features.append(df['RSI'].pct_change().fillna(0))
 
-            # Create feature names
-            feature_names = []
-            base_indicators = ['close_pct', 'close_ma5', 'close_ma20'] + indicator_features
-            for name in base_indicators:
-                feature_names.extend([f"{name}_value", f"{name}_roc"])
+            # BB_upper_value and BB_upper_roc
+            if 'BB_upper' in df.columns:
+                features.append(df['BB_upper'].fillna(0))
+                features.append(df['BB_upper'].pct_change().fillna(0))
 
-            # Additional features
-            feature_names.extend(['atr_normalized', 'ema_spread', 'ema_spread_norm', 'rsi_ma5'])
+            # BB_lower_value and BB_lower_roc
+            if 'BB_lower' in df.columns:
+                features.append(df['BB_lower'].fillna(0))
+                features.append(df['BB_lower'].pct_change().fillna(0))
+
+            # ATR_value and ATR_roc
+            if 'ATR' in df.columns:
+                features.append(df['ATR'].fillna(0))
+                features.append(df['ATR'].pct_change().fillna(0))
+
+            # ADX_value (no ROC for ADX as it's not stored)
+            if 'ADX' in df.columns:
+                features.append(df['ADX'].fillna(25))
+            else:
+                # Fallback: use a default ADX value if not available
+                features.append(np.full(len(df), 25.0))  # Default neutral ADX value
+
+            # Ensure we have exactly the expected number of features
+            if len(features) != len(expected_features):
+                print(f"⚠️  Transformer Feature count mismatch: expected {len(expected_features)}, got {len(features)}")
+                # Pad with zeros if needed
+                while len(features) < len(expected_features):
+                    features.append(np.zeros(len(df)))
 
             # Combine features
             if features:
                 feature_matrix = np.column_stack(features)
             else:
-                # Fallback if no features available
-                feature_matrix = np.zeros((len(df), 1))
+                feature_matrix = np.zeros((len(df), len(expected_features)))
 
             # Replace infinities and NaN with 0
             feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
-            return feature_matrix, feature_names[:feature_matrix.shape[1]]
+            return feature_matrix, expected_features
 
         def create_labels(self, df: pd.DataFrame, prediction_horizon: int = 5) -> np.ndarray:
             """

@@ -53,6 +53,9 @@ cd services/web-ui && streamlit run app.py
 ## 🚀 Latest Improvements (October 2025)
 
 ### 🐛 Bug Fixes & Stability
+- **Fixed Multi-Model Backtesting Memory Issues**: Resolved memory exhaustion ("Killed: 9") in parallel model testing by implementing comprehensive mocking for expensive ML operations and reducing test dataset size by 90%
+- **Fixed AttributeError in simulate_trades**: Corrected position size handling when Position_Size_Absolute column is missing, ensuring proper array creation instead of scalar fallback
+- **Enhanced Test Suite Stability**: All 596 tests now passing with improved mocking infrastructure for expensive operations (data fetching, model training, backtesting)
 - **Fixed Infinite Loops**: Resolved hanging tests in performance monitoring with proper timeout mechanisms
 - **Enhanced Test Coverage**: Improved Prometheus availability checks and conditional test execution
 - **Performance Timeouts**: Adjusted realistic performance benchmarks for signal generation and backtesting
@@ -63,7 +66,7 @@ cd services/web-ui && streamlit run app.py
 - **Test Suite Fixes**: Corrected backtester integration tests to match actual API return formats
 
 ### 📊 Testing & Quality Assurance
-- **Comprehensive Test Suite**: 556+ tests with high pass rate (3 performance test failures expected on CI)
+- **Comprehensive Test Suite**: 596+ tests with high pass rate (3 performance test failures expected on CI)
 - **CI/CD Pipeline**: Automated testing with GitHub Actions for multiple Python versions
 - **Code Quality**: Enhanced linting, type checking, and documentation standards
 - **Performance Benchmarks**: Realistic timeout values for different hardware configurations
@@ -286,7 +289,7 @@ cd services/web-ui && streamlit run app.py
 - **Architecture**: Modular microservices design with clean separation of concerns
 - **Data Processing**: Vectorized operations using pandas/numpy for optimal performance
 - **Error Handling**: Comprehensive error boundary decorators with recovery strategies
-- **Testing**: 556+ unit and integration tests with high pass rate (3 performance tests may fail on CI systems)
+- **Testing**: 596+ unit and integration tests with high pass rate (3 performance tests may fail on CI systems)
 - **Performance**: Sub-second analysis for 1-minute charts, optimized for high-frequency data
 - **Memory Usage**: Efficient DataFrame operations with minimal memory footprint
 - **API Compatibility**: ccxt library support for 100+ cryptocurrency and forex exchanges

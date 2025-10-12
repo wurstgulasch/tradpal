@@ -11,9 +11,39 @@ import os
 import asyncio
 import aiohttp
 from dotenv import load_dotenv
-from .cache import cache_api_call
-from .input_validation import InputValidator, validate_api_inputs
-from .error_handling import error_boundary, NetworkError, DataError
+# Import cache functionality
+try:
+    from .cache import cache_api_call
+    CACHE_AVAILABLE = True
+except ImportError:
+    CACHE_AVAILABLE = False
+    def cache_api_call(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+# Import validation functionality
+try:
+    from .input_validation import InputValidator, validate_api_inputs
+    VALIDATION_AVAILABLE = True
+except ImportError:
+    VALIDATION_AVAILABLE = False
+    def validate_api_inputs(*args, **kwargs):
+        pass
+    class InputValidator:
+        pass
+
+# Import error handling functionality
+try:
+    from .error_handling import error_boundary, NetworkError, DataError
+    ERROR_HANDLING_AVAILABLE = True
+except ImportError:
+    ERROR_HANDLING_AVAILABLE = False
+    def error_boundary(func):
+        return func
+    class NetworkError(Exception):
+        pass
+    class DataError(Exception):
+        pass
 import time
 import random
 

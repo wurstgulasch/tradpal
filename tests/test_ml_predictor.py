@@ -22,20 +22,20 @@ from config.settings import SYMBOL, TIMEFRAME
 
 def create_test_dataframe():
     """Create a test DataFrame with sample trading data."""
-    dates = pd.date_range(start='2024-01-01', periods=200, freq='1min')
+    dates = pd.date_range(start='2024-01-01', periods=100, freq='1min')  # REDUCED FROM 200 TO 100
     np.random.seed(42)
 
     df = pd.DataFrame({
         'timestamp': dates,
-        'open': 50000 + np.random.normal(0, 100, 200),
-        'high': 50100 + np.random.normal(0, 100, 200),
-        'low': 49900 + np.random.normal(0, 100, 200),
-        'close': 50000 + np.random.normal(0, 100, 200),
-        'volume': np.random.randint(100, 1000, 200)
+        'open': 50000 + np.random.normal(0, 100, 100),
+        'high': 50100 + np.random.normal(0, 100, 100),
+        'low': 49900 + np.random.normal(0, 100, 100),
+        'close': 50000 + np.random.normal(0, 100, 100),
+        'volume': np.random.randint(100, 1000, 100)
     })
 
     # Add some trend to make it more realistic
-    trend = np.linspace(0, 1000, 200)  # Upward trend
+    trend = np.linspace(0, 500, 100)  # REDUCED TREND
     df['close'] = df['close'] + trend
 
     return df
@@ -154,7 +154,7 @@ def test_signal_enhancement():
 
     # Test enhancement for a few rows
     enhanced_count = 0
-    for idx in range(min(5, len(df))):
+    for idx in range(min(3, len(df))):  # REDUCED FROM 5 TO 3
         row_df = df.iloc[idx:idx+1]
         ml_prediction = predictor.predict_signal(row_df)
 

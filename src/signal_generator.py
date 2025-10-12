@@ -27,6 +27,30 @@ except ImportError:
     def is_transformer_available():
         return False
 
+# Conditional imports for sentiment analysis
+try:
+    from src.sentiment_analyzer import get_sentiment_score, SENTIMENT_ENABLED
+    SENTIMENT_IMPORTS_AVAILABLE = True
+except ImportError:
+    print("⚠️  Sentiment analyzer imports not available (optional dependencies not installed)")
+    SENTIMENT_IMPORTS_AVAILABLE = False
+    SENTIMENT_ENABLED = False
+    def get_sentiment_score():
+        return 0.0, 0.0
+
+# Conditional imports for paper trading
+try:
+    from src.paper_trading import execute_paper_trade, update_paper_portfolio, PAPER_TRADING_ENABLED
+    PAPER_TRADING_AVAILABLE = True
+except ImportError:
+    print("⚠️  Paper trading imports not available")
+    PAPER_TRADING_AVAILABLE = False
+    PAPER_TRADING_ENABLED = False
+    def execute_paper_trade(*args, **kwargs):
+        return None
+    def update_paper_portfolio(*args, **kwargs):
+        pass
+
 def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     """
     Generates Buy/Sell signals based on EMA crossover, RSI and BB.
@@ -77,6 +101,13 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     # ML Signal Enhancement
     df = apply_ml_signal_enhancement(df)
 
+    # Sentiment Analysis Enhancement
+    df = apply_sentiment_signal_enhancement(df)
+
+    # Execute Paper Trades if enabled
+    if PAPER_TRADING_ENABLED and PAPER_TRADING_AVAILABLE:
+        df = execute_paper_trades(df)
+
     # Audit logging for signal decisions
     _log_signal_decisions(df, config, params)
 
@@ -119,13 +150,123 @@ def apply_multi_timeframe_analysis(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def calculate_kelly_position_size(df: pd.DataFrame, capital: float, risk_per_trade: float) -> pd.Series:
+    """
+    Calculate optimal position size using Kelly Criterion.
+
+    The Kelly Criterion maximizes long-term growth by calculating the optimal fraction
+    of capital to risk based on win probability and win/loss ratio.
+
+    Formula: K = (p * (b+1) - 1) / b
+    Where:
+    - p = probability of winning trade
+    - b = ratio of average win to average loss
+
+    Returns fractional Kelly (50% of full Kelly) for risk management.
+    """
+    from config.settings import KELLY_ENABLED, KELLY_FRACTION, KELLY_LOOKBACK_TRADES, KELLY_MIN_TRADES
+
+    if not KELLY_ENABLED:
+        # Return traditional position sizing if Kelly is disabled
+        return pd.Series([risk_per_trade] * len(df), index=df.index)
+
+    # Check if we have minimum required trades for Kelly calculation
+    if len(df) < KELLY_MIN_TRADES:
+        # Fall back to traditional sizing if insufficient data
+        return pd.Series([risk_per_trade] * len(df), index=df.index)
+
+    try:
+        # Calculate base Kelly parameters from historical trades
+        base_win_prob = 0.5
+        base_win_loss_ratio = 2.0
+
+        if 'Trade_Result' in df.columns:
+            trade_results = df['Trade_Result'].dropna()
+            if len(trade_results) >= KELLY_MIN_TRADES:
+                wins = trade_results > 0
+                base_win_prob = wins.mean()
+
+                winning_trades = trade_results[trade_results > 0]
+                losing_trades = trade_results[trade_results < 0]
+
+                if len(winning_trades) > 0 and len(losing_trades) > 0:
+                    avg_win = winning_trades.mean()
+                    avg_loss = abs(losing_trades.mean())
+                    base_win_loss_ratio = avg_win / avg_loss
+
+        # Vectorized Kelly calculation for each row
+        kelly_sizes = pd.Series([risk_per_trade] * len(df), index=df.index)
+
+        # Check if required indicators are available - vectorized approach
+        rsi_available = df.get('RSI', pd.Series([np.nan] * len(df))).notna()
+        ml_confidence_available = df.get('ML_Confidence', pd.Series([np.nan] * len(df))).notna()
+        atr_available = df.get('ATR', pd.Series([np.nan] * len(df))).notna()
+
+        # Always calculate base Kelly from historical data, then modulate with current conditions
+        # Start with base win probability
+        win_prob = pd.Series([base_win_prob] * len(df), index=df.index)
+
+        # Adjust based on current market conditions (RSI) - vectorized, only if RSI available
+        if rsi_available.any():
+            rsi = df['RSI'].fillna(50)  # Neutral RSI if missing
+            win_prob = np.where(
+                rsi < 30,
+                np.minimum(0.7, base_win_prob + 0.1),  # Oversold - higher win probability for longs
+                np.where(
+                    rsi > 70,
+                    np.minimum(0.7, base_win_prob + 0.1),  # Overbought - higher win probability for shorts
+                    np.where(
+                        (rsi >= 45) & (rsi <= 55),
+                        np.maximum(0.3, base_win_prob - 0.05),  # Neutral RSI - slightly lower win probability
+                        win_prob
+                    )
+                )
+            )
+
+        # Adjust based on ML confidence if available - vectorized
+        if ml_confidence_available.any():
+            ml_confidence = df['ML_Confidence'].fillna(0)
+            win_prob = win_prob * (1 - ml_confidence * 0.3) + ml_confidence * win_prob
+
+        # Adjust win/loss ratio based on ATR (volatility) - vectorized
+        win_loss_ratio = pd.Series([base_win_loss_ratio] * len(df), index=df.index)
+        if atr_available.any():
+            atr = df['ATR'].fillna(0)
+            # Higher ATR (volatility) suggests higher risk/reward potential
+            atr_adjustment = np.minimum(0.5, atr / 1000)  # Normalize ATR adjustment
+            win_loss_ratio = base_win_loss_ratio * (1 + atr_adjustment)
+
+        # Calculate full Kelly fraction - vectorized
+        valid_kelly = (win_prob > 0) & (win_prob < 1) & (win_loss_ratio > 0)
+        kelly_full = np.where(
+            valid_kelly,
+            (win_prob * (win_loss_ratio + 1) - 1) / win_loss_ratio,
+            risk_per_trade
+        )
+
+        # Apply fractional Kelly for risk management
+        kelly_fractional = kelly_full * KELLY_FRACTION
+        # Ensure reasonable bounds
+        kelly_fractional = np.clip(kelly_fractional, 0.01, 0.25)  # 1% to 25%
+
+        kelly_sizes = kelly_fractional
+
+        return pd.Series(kelly_sizes, index=df.index)
+
+    except Exception as e:
+        print(f"⚠️  Kelly Criterion calculation failed: {e}")
+        # Fallback to traditional position sizing
+        return pd.Series([risk_per_trade] * len(df), index=df.index)
+
+
 def calculate_risk_management(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculates position size, stop-loss, take-profit based on ATR with multipliers.
     Position size is calculated as both absolute amount and percentage of total capital.
+    Optionally uses Kelly Criterion for optimal position sizing.
     Requires Buy_Signal and Sell_Signal columns.
     """
-    from config.settings import get_timeframe_params, TIMEFRAME, get_current_indicator_config
+    from config.settings import get_timeframe_params, TIMEFRAME, get_current_indicator_config, KELLY_ENABLED
 
     # Check for required signal columns
     if 'Buy_Signal' not in df.columns or 'Sell_Signal' not in df.columns:
@@ -137,17 +278,25 @@ def calculate_risk_management(df: pd.DataFrame) -> pd.DataFrame:
     # Get timeframe-specific parameters
     params = get_timeframe_params(TIMEFRAME)
 
+    # Calculate position size using Kelly Criterion if enabled
+    if KELLY_ENABLED:
+        print("🎯 Using Kelly Criterion for position sizing")
+        df['Kelly_Fraction'] = calculate_kelly_position_size(df, CAPITAL, RISK_PER_TRADE)
+        risk_fraction = df['Kelly_Fraction']
+    else:
+        risk_fraction = RISK_PER_TRADE
+
     # Calculate absolute position size with ATR multiplier
     atr_multiplier = params.get('atr_sl_multiplier', 1.0)
-    
+
     # Check if ATR is available, otherwise use a default volatility measure
     if 'ATR' in df.columns and not df['ATR'].isna().all():
-        df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (df['ATR'] * atr_multiplier)
+        df['Position_Size_Absolute'] = (CAPITAL * risk_fraction) / (df['ATR'] * atr_multiplier)
         atr_for_risk = df['ATR']
     else:
         # Fallback: use a simple volatility measure based on price changes
         price_volatility = df['close'].pct_change().rolling(window=VOLATILITY_WINDOW).std() * df['close']
-        df['Position_Size_Absolute'] = (CAPITAL * RISK_PER_TRADE) / (price_volatility * atr_multiplier)
+        df['Position_Size_Absolute'] = (CAPITAL * risk_fraction) / (price_volatility * atr_multiplier)
         atr_for_risk = price_volatility
         print("Warning: ATR not available, using price volatility fallback")
 
@@ -333,46 +482,78 @@ def _log_risk_assessments(df: pd.DataFrame, params: Dict[str, Any]):
     import datetime
 
     try:
-        # Only log for rows with signals to avoid spam
-        signal_rows = df[(df['Buy_Signal'] == 1) | (df['Sell_Signal'] == 1)]
+        # Only log for rows with signals to avoid spam - vectorized filtering
+        signal_mask = (df['Buy_Signal'] == 1) | (df['Sell_Signal'] == 1)
+        signal_rows = df[signal_mask]
 
-        for idx, row in signal_rows.iterrows():
-            try:
-                # Extract ATR value for risk calculation
-                atr_value = row.get('ATR', row.get('Position_Size_Absolute', 0) / (CAPITAL * RISK_PER_TRADE) if row.get('Position_Size_Absolute', 0) > 0 else 0)
+        if len(signal_rows) == 0:
+            return
 
-                # Determine assessment result based on risk limits
-                position_size_percent = row.get('Position_Size_Percent', 0)
-                max_risk_limit = RISK_PER_TRADE * 100  # Convert to percentage
+        # Extract values for vectorized processing
+        atr_values = signal_rows.get('ATR', 0).values
+        position_size_absolute = signal_rows.get('Position_Size_Absolute', 0).values
+        position_size_percent = signal_rows.get('Position_Size_Percent', 0).values
+        leverage_values = signal_rows.get('Leverage', 1).values
 
-                if position_size_percent > max_risk_limit * 1.5:  # Too risky
-                    assessment_result = "REJECTED"
-                elif position_size_percent > max_risk_limit * 1.2:  # High risk but acceptable
-                    assessment_result = "MODIFIED"
-                else:
-                    assessment_result = "APPROVED"
+        # Vectorized risk assessment calculations
+        max_risk_limit = RISK_PER_TRADE * 100  # Convert to percentage
 
-                assessment = RiskAssessment(
-                    timestamp=datetime.datetime.now().isoformat(),
-                    symbol=SYMBOL,
-                    timeframe=TIMEFRAME,
-                    capital=CAPITAL,
-                    risk_per_trade=RISK_PER_TRADE,
-                    position_size=row.get('Position_Size_Absolute', 0),
-                    atr_value=atr_value,
-                    leverage=row.get('Leverage', 1),
-                    max_drawdown_limit=params.get('max_drawdown_limit', 0.1),
-                    assessment_result=assessment_result
-                )
+        # Calculate ATR fallback values
+        atr_fallback = np.where(
+            position_size_absolute > 0,
+            position_size_absolute / (CAPITAL * RISK_PER_TRADE),
+            0
+        )
+        final_atr_values = np.where(atr_values > 0, atr_values, atr_fallback)
 
-                audit_logger.log_risk_assessment(assessment)
+        # Vectorized assessment results
+        too_risky = position_size_percent > max_risk_limit * 1.5
+        high_risk = (position_size_percent > max_risk_limit * 1.2) & ~too_risky
+        approved = ~(too_risky | high_risk)
 
-            except Exception as e:
-                audit_logger.log_error(
-                    error_type="RISK_ASSESSMENT_LOGGING_ERROR",
-                    message=f"Failed to log risk assessment for row {idx}: {str(e)}",
-                    context={"row_data": row.to_dict()}
-                )
+        assessment_results = np.full(len(signal_rows), '', dtype=object)
+        assessment_results[too_risky] = "REJECTED"
+        assessment_results[high_risk] = "MODIFIED"
+        assessment_results[approved] = "APPROVED"
+
+        # Create and log assessments - batch processing for performance
+        max_drawdown_limit = params.get('max_drawdown_limit', 0.1)
+
+        # Batch log risk assessments instead of individual logging for performance
+        try:
+            # Create summary assessment for batch logging
+            total_signals = len(signal_rows)
+            rejected_count = (assessment_results == "REJECTED").sum()
+            modified_count = (assessment_results == "MODIFIED").sum()
+            approved_count = (assessment_results == "APPROVED").sum()
+
+            # Log summary instead of individual assessments for performance
+            batch_assessment = RiskAssessment(
+                timestamp=datetime.datetime.now().isoformat(),
+                symbol=SYMBOL,
+                timeframe=TIMEFRAME,
+                capital=CAPITAL,
+                risk_per_trade=RISK_PER_TRADE,
+                position_size=np.mean(position_size_absolute),  # Average position size
+                atr_value=np.mean(final_atr_values),  # Average ATR
+                leverage=np.mean(leverage_values),  # Average leverage
+                max_drawdown_limit=max_drawdown_limit,
+                assessment_result=f"BATCH: {approved_count} approved, {modified_count} modified, {rejected_count} rejected"
+            )
+
+            audit_logger.log_risk_assessment(batch_assessment)
+
+        except Exception as e:
+            audit_logger.log_error(
+                error_type="RISK_ASSESSMENT_BATCH_LOGGING_ERROR",
+                message=f"Failed to batch log risk assessments: {str(e)}",
+                context={
+                    "total_signals": len(signal_rows),
+                    "approved": (assessment_results == "APPROVED").sum(),
+                    "modified": (assessment_results == "MODIFIED").sum(),
+                    "rejected": (assessment_results == "REJECTED").sum()
+                }
+            )
 
     except Exception as e:
         audit_logger.log_error(
@@ -425,7 +606,8 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
 
         print(f"🔬 Using {len(predictors)} ML models for signal enhancement: {[name for name, _ in predictors]}")
 
-        # Add ML signal columns
+        # Add ML signal columns - vectorized initialization
+        df = df.copy()  # Avoid modifying original
         df['ML_Signal'] = 'HOLD'
         df['ML_Confidence'] = 0.0
         df['ML_Reason'] = ''
@@ -433,124 +615,101 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
         df['Signal_Source'] = 'TRADITIONAL'
         df['Ensemble_Vote'] = 0.0  # Weighted ensemble score
 
-        # Process each row for ML prediction
-        for idx, row in df.iterrows():
+        # Pre-allocate arrays for vectorized operations
+        n_rows = len(df)
+        ensemble_signals = np.full(n_rows, 'HOLD', dtype=object)
+        ensemble_confidences = np.zeros(n_rows)
+        ensemble_reasons = np.full(n_rows, '', dtype=object)
+        ensemble_votes = np.zeros(n_rows)
+
+        # Process all rows at once for each model (batch processing)
+        for model_name, predictor in predictors:
             try:
-                # Create single-row DataFrame for prediction
-                row_df = pd.DataFrame([row])
+                # Get predictions for all rows at once (batch prediction)
+                predictions = predictor.predict_signal(df, threshold=ML_CONFIDENCE_THRESHOLD)
 
-                # Collect predictions from all models
-                model_predictions = []
-                ensemble_score = 0.0
-                total_weight = 0.0
+                # Handle both single prediction and batch prediction results
+                if isinstance(predictions, dict):
+                    # Single prediction result - apply to all rows
+                    signal = predictions['signal']
+                    confidence = predictions['confidence']
+                    reason = predictions.get('reason', '')
 
-                for model_name, predictor in predictors:
-                    try:
-                        # Get prediction from this model
-                        prediction = predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
-
-                        model_predictions.append({
-                            'model': model_name,
-                            'signal': prediction['signal'],
-                            'confidence': prediction['confidence'],
-                            'reason': prediction.get('reason', '')
-                        })
-
-                        # Convert signal to numerical score for ensemble
-                        signal_score = 0.0
-                        if prediction['signal'] == 'BUY':
-                            signal_score = prediction['confidence']
-                        elif prediction['signal'] == 'SELL':
-                            signal_score = -prediction['confidence']
-
-                        # Weight by model type (LSTM and Transformer get higher weight for time-series)
-                        weight = 1.0
-                        if model_name in ['lstm', 'transformer']:
-                            weight = 1.5  # Higher weight for deep learning models
-
-                        ensemble_score += signal_score * weight * prediction['confidence']
-                        total_weight += weight * prediction['confidence']
-
-                    except Exception as e:
-                        print(f"⚠️  {model_name} prediction failed for row {idx}: {e}")
-                        continue
-
-                # Calculate final ensemble prediction
-                if total_weight > 0:
-                    ensemble_score /= total_weight
-
-                    # Determine ensemble signal
-                    if ensemble_score > ML_CONFIDENCE_THRESHOLD:
-                        ensemble_signal = 'BUY'
-                        ensemble_confidence = min(abs(ensemble_score), 1.0)
-                    elif ensemble_score < -ML_CONFIDENCE_THRESHOLD:
-                        ensemble_signal = 'SELL'
-                        ensemble_confidence = min(abs(ensemble_score), 1.0)
-                    else:
-                        ensemble_signal = 'HOLD'
-                        ensemble_confidence = 0.0
-                else:
-                    ensemble_signal = 'HOLD'
-                    ensemble_confidence = 0.0
-
-                # Determine traditional signal
-                traditional_signal = 'HOLD'
-                if row.get('Buy_Signal', 0) == 1:
-                    traditional_signal = 'BUY'
-                elif row.get('Sell_Signal', 0) == 1:
-                    traditional_signal = 'SELL'
-
-                # Create ensemble prediction dict for compatibility
-                ensemble_prediction = {
-                    'signal': ensemble_signal,
-                    'confidence': ensemble_confidence,
-                    'reason': f'Ensemble prediction from {len(model_predictions)} models'
-                }
-
-                # Use traditional ML predictor for enhancement logic (if available)
-                if predictors and predictors[0][0] == 'traditional_ml':
-                    ml_predictor = predictors[0][1]
-                    enhanced = ml_predictor.enhance_signal(
-                        traditional_signal,
-                        ensemble_prediction,
-                        confidence_threshold=ML_CONFIDENCE_THRESHOLD,
-                        df=df
+                    # Apply to all rows
+                    ensemble_signals = np.where(
+                        ensemble_confidences < confidence,
+                        signal,
+                        ensemble_signals
                     )
-                else:
-                    # Simple enhancement logic if no traditional ML
-                    enhanced = {
-                        'signal': ensemble_signal if ensemble_confidence > ML_CONFIDENCE_THRESHOLD else traditional_signal,
-                        'source': 'ENSEMBLE' if ensemble_confidence > ML_CONFIDENCE_THRESHOLD else 'TRADITIONAL'
-                    }
+                    ensemble_confidences = np.maximum(ensemble_confidences, confidence)
+                    ensemble_reasons = np.where(
+                        ensemble_confidences == confidence,
+                        reason,
+                        ensemble_reasons
+                    )
 
-                # Update DataFrame
-                df.at[idx, 'ML_Signal'] = ensemble_signal
-                df.at[idx, 'ML_Confidence'] = ensemble_confidence
-                df.at[idx, 'ML_Reason'] = ensemble_prediction['reason']
-                df.at[idx, 'Enhanced_Signal'] = enhanced['signal']
-                df.at[idx, 'Signal_Source'] = enhanced['source']
-                df.at[idx, 'Ensemble_Vote'] = ensemble_score
+                    # Weight by model type (LSTM and Transformer get higher weight)
+                    weight = 1.5 if model_name in ['lstm', 'transformer'] else 1.0
+                    signal_score = confidence if signal == 'BUY' else (-confidence if signal == 'SELL' else 0)
+                    ensemble_votes += signal_score * weight * confidence
 
-                # Override original signals if enhanced
-                if enhanced['source'] in ['ENSEMBLE', 'ML_ENHANCED']:
-                    if enhanced['signal'] == 'BUY':
-                        df.at[idx, 'Buy_Signal'] = 1
-                        df.at[idx, 'Sell_Signal'] = 0
-                    elif enhanced['signal'] == 'SELL':
-                        df.at[idx, 'Buy_Signal'] = 0
-                        df.at[idx, 'Sell_Signal'] = 1
-                    else:
-                        df.at[idx, 'Buy_Signal'] = 0
-                        df.at[idx, 'Sell_Signal'] = 0
+                elif isinstance(predictions, list) and len(predictions) == n_rows:
+                    # Batch prediction results - one per row
+                    for idx, prediction in enumerate(predictions):
+                        signal = prediction['signal']
+                        confidence = prediction['confidence']
+                        reason = prediction.get('reason', '')
+
+                        # Update ensemble if this model has higher confidence
+                        if confidence > ensemble_confidences[idx]:
+                            ensemble_signals[idx] = signal
+                            ensemble_confidences[idx] = confidence
+                            ensemble_reasons[idx] = reason
+
+                        # Weight by model type (LSTM and Transformer get higher weight)
+                        weight = 1.5 if model_name in ['lstm', 'transformer'] else 1.0
+                        signal_score = confidence if signal == 'BUY' else (-confidence if signal == 'SELL' else 0)
+                        ensemble_votes[idx] += signal_score * weight * confidence
 
             except Exception as e:
-                # Log error but continue processing
-                audit_logger.log_error(
-                    error_type="ML_SIGNAL_ENHANCEMENT_ERROR",
-                    message=f"Failed to enhance signal for row {idx}: {str(e)}",
-                    context={"row_data": row.to_dict()}
-                )
+                print(f"⚠️  {model_name} prediction failed: {e}")
                 continue
+
+        # Apply ensemble results to DataFrame - vectorized
+        df['ML_Signal'] = ensemble_signals
+        df['ML_Confidence'] = ensemble_confidences
+        df['ML_Reason'] = ensemble_reasons
+        df['Ensemble_Vote'] = ensemble_votes
+
+        # Determine traditional signals - vectorized
+        traditional_buy = df.get('Buy_Signal', 0) == 1
+        traditional_sell = df.get('Sell_Signal', 0) == 1
+
+        # Vectorized ensemble signal determination
+        ensemble_buy = (ensemble_votes > ML_CONFIDENCE_THRESHOLD) & (ensemble_signals == 'BUY')
+        ensemble_sell = (ensemble_votes < -ML_CONFIDENCE_THRESHOLD) & (ensemble_signals == 'SELL')
+
+        # Apply enhancement logic - vectorized
+        enhanced_buy = ensemble_buy | (traditional_buy & ~ensemble_buy)
+        enhanced_sell = ensemble_sell | (traditional_sell & ~ensemble_sell)
+
+        # Update signals based on enhancement - vectorized
+        df['Buy_Signal'] = enhanced_buy.astype(int)
+        df['Sell_Signal'] = enhanced_sell.astype(int)
+
+        # Set signal source - vectorized
+        df['Signal_Source'] = np.where(
+            ensemble_buy | ensemble_sell,
+            'ENSEMBLE',
+            'TRADITIONAL'
+        )
+
+        # Set enhanced signal - vectorized
+        df['Enhanced_Signal'] = np.where(
+            enhanced_buy,
+            'BUY',
+            np.where(enhanced_sell, 'SELL', 'HOLD')
+        )
 
         # Log ML enhancement completion
         enhanced_signals_count = (df['Signal_Source'] != 'TRADITIONAL').sum()
@@ -570,6 +729,249 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
             error_type="ML_ENHANCEMENT_ERROR",
             message=f"ML signal enhancement failed: {str(e)}",
             context={'ml_enabled': ML_ENABLED}
+        )
+
+    return df
+
+
+def apply_sentiment_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply sentiment analysis enhancement to trading signals.
+
+    Integrates sentiment scores from multiple sources (Twitter, News, Reddit)
+    to enhance or filter traditional trading signals based on market psychology.
+    """
+    from config.settings import SENTIMENT_ENABLED, SENTIMENT_WEIGHT, SENTIMENT_THRESHOLD
+
+    # Check if sentiment analysis is enabled and available
+    if not SENTIMENT_ENABLED or not SENTIMENT_IMPORTS_AVAILABLE:
+        return df
+
+    try:
+        print("🧠 Applying sentiment analysis enhancement...")
+
+        # Get current sentiment score
+        sentiment_score, sentiment_confidence = get_sentiment_score()
+
+        # Add sentiment columns to DataFrame - vectorized initialization
+        df = df.copy()  # Avoid modifying original
+        df['Sentiment_Score'] = sentiment_score
+        df['Sentiment_Confidence'] = sentiment_confidence
+        df['Sentiment_Enhanced'] = False
+
+        # Only enhance signals if sentiment confidence is sufficient
+        if sentiment_confidence >= SENTIMENT_THRESHOLD:
+            print(f"🧠 Applying sentiment enhancement (score: {sentiment_score:.3f}, confidence: {sentiment_confidence:.3f})")
+
+            # Get original signals - vectorized
+            buy_signal = df.get('Buy_Signal', 0) == 1
+            sell_signal = df.get('Sell_Signal', 0) == 1
+            ml_confidence = df.get('ML_Confidence', 0.5)
+
+            # Vectorized sentiment enhancement logic
+            sentiment_positive = sentiment_score > SENTIMENT_THRESHOLD
+            sentiment_negative = sentiment_score < -SENTIMENT_THRESHOLD
+
+            # Positive sentiment strengthens buy signals
+            buy_enhanced = buy_signal & sentiment_positive
+            enhanced_buy_confidence = np.minimum(1.0, ml_confidence + sentiment_score * SENTIMENT_WEIGHT)
+
+            # Negative sentiment strengthens sell signals
+            sell_enhanced = sell_signal & sentiment_negative
+            enhanced_sell_confidence = np.minimum(1.0, ml_confidence + np.abs(sentiment_score) * SENTIMENT_WEIGHT)
+
+            # Strong sentiment can create new signals or override weak ones
+            new_buy_from_sentiment = ~buy_signal & sentiment_positive
+            new_sell_from_sentiment = ~sell_signal & sentiment_negative
+
+            # Update signals - vectorized
+            df.loc[buy_enhanced, 'Sentiment_Enhanced'] = True
+            df.loc[buy_enhanced, 'Enhanced_Signal'] = 'BUY_STRONG'
+
+            df.loc[sell_enhanced, 'Sentiment_Enhanced'] = True
+            df.loc[sell_enhanced, 'Enhanced_Signal'] = 'SELL_STRONG'
+
+            df.loc[new_buy_from_sentiment, 'Buy_Signal'] = 1
+            df.loc[new_buy_from_sentiment, 'Sentiment_Enhanced'] = True
+            df.loc[new_buy_from_sentiment, 'Enhanced_Signal'] = 'BUY_SENTIMENT'
+
+            df.loc[new_sell_from_sentiment, 'Sell_Signal'] = 1
+            df.loc[new_sell_from_sentiment, 'Sentiment_Enhanced'] = True
+            df.loc[new_sell_from_sentiment, 'Enhanced_Signal'] = 'SELL_SENTIMENT'
+
+            # Log sentiment enhancement completion
+            enhanced_count = df['Sentiment_Enhanced'].sum()
+            audit_logger.log_system_event(
+                event_type="SENTIMENT_SIGNAL_ENHANCEMENT_COMPLETED",
+                message=f"Sentiment analysis enhancement completed: {enhanced_count} signals enhanced",
+                details={
+                    'total_signals': len(df),
+                    'enhanced_signals': int(enhanced_count),
+                    'sentiment_score': sentiment_score,
+                    'sentiment_confidence': sentiment_confidence,
+                    'sentiment_enabled': True
+                }
+            )
+        else:
+            print(f"🧠 Sentiment confidence too low ({sentiment_confidence:.3f} < {SENTIMENT_THRESHOLD}), skipping enhancement")
+    except Exception as e:
+        audit_logger.log_error(
+            error_type="SENTIMENT_ENHANCEMENT_ERROR",
+            message=f"Sentiment signal enhancement failed: {str(e)}",
+            context={'sentiment_enabled': SENTIMENT_ENABLED}
+        )
+
+    return df
+
+
+def execute_paper_trades(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Execute paper trades based on generated signals.
+
+    This function simulates trades when signals are generated, maintaining
+    virtual portfolio state and tracking performance metrics.
+    """
+    from config.settings import SYMBOL, TIMEFRAME
+
+    if not PAPER_TRADING_ENABLED or not PAPER_TRADING_AVAILABLE:
+        return df
+
+    try:
+        print("📈 Executing paper trades for generated signals...")
+
+        # Add paper trading columns to DataFrame - vectorized initialization
+        df = df.copy()  # Avoid modifying original
+        df['Paper_Trade_Executed'] = False
+        df['Paper_Trade_Type'] = None
+        df['Paper_Trade_Size'] = 0.0
+        df['Paper_Portfolio_Value'] = 0.0
+
+        # Get signal conditions - vectorized
+        buy_signals = df.get('Buy_Signal', 0) == 1
+        sell_signals = df.get('Sell_Signal', 0) == 1
+
+        # Prepare data for vectorized processing
+        close_prices = df['close'].values
+        position_sizes = df.get('Position_Size_Absolute', 0).values
+        timestamps = df.index if hasattr(df.index, 'values') else [pd.Timestamp.now()] * len(df)
+        rsi_values = df.get('RSI', np.nan).values
+        ema9_values = df.get('EMA9', np.nan).values
+        ema21_values = df.get('EMA21', np.nan).values
+        bb_lower_values = df.get('BB_lower', np.nan).values
+        bb_upper_values = df.get('BB_upper', np.nan).values
+        ml_confidence_values = df.get('ML_Confidence', 0).values
+        sentiment_score_values = df.get('Sentiment_Score', 0).values
+
+        # Pre-allocate result arrays
+        n_rows = len(df)
+        trade_executed = np.zeros(n_rows, dtype=bool)
+        trade_types = np.full(n_rows, None, dtype=object)
+        trade_sizes = np.zeros(n_rows)
+        portfolio_values = np.zeros(n_rows)
+
+        # Process buy signals - vectorized
+        buy_indices = np.where(buy_signals)[0]
+        for idx in buy_indices:
+            try:
+                trade_result = execute_paper_trade(
+                    symbol=SYMBOL,
+                    side='BUY',
+                    price=close_prices[idx],
+                    size=position_sizes[idx],
+                    timestamp=timestamps[idx],
+                    reason='Signal generated',
+                    signal_data={
+                        'rsi': rsi_values[idx],
+                        'ema_short': ema9_values[idx],
+                        'ema_long': ema21_values[idx],
+                        'bb_lower': bb_lower_values[idx],
+                        'ml_confidence': ml_confidence_values[idx],
+                        'sentiment_score': sentiment_score_values[idx]
+                    }
+                )
+
+                if trade_result:
+                    trade_executed[idx] = True
+                    trade_types[idx] = 'BUY'
+                    trade_sizes[idx] = trade_result.get('size', 0)
+
+            except Exception as e:
+                audit_logger.log_error(
+                    error_type="PAPER_TRADE_EXECUTION_ERROR",
+                    message=f"Failed to execute paper buy trade for row {idx}: {str(e)}",
+                    context={"row_index": idx}
+                )
+                continue
+
+        # Process sell signals - vectorized
+        sell_indices = np.where(sell_signals)[0]
+        for idx in sell_indices:
+            try:
+                trade_result = execute_paper_trade(
+                    symbol=SYMBOL,
+                    side='SELL',
+                    price=close_prices[idx],
+                    size=position_sizes[idx],
+                    timestamp=timestamps[idx],
+                    reason='Signal generated',
+                    signal_data={
+                        'rsi': rsi_values[idx],
+                        'ema_short': ema9_values[idx],
+                        'ema_long': ema21_values[idx],
+                        'bb_upper': bb_upper_values[idx],
+                        'ml_confidence': ml_confidence_values[idx],
+                        'sentiment_score': sentiment_score_values[idx]
+                    }
+                )
+
+                if trade_result:
+                    trade_executed[idx] = True
+                    trade_types[idx] = 'SELL'
+                    trade_sizes[idx] = trade_result.get('size', 0)
+
+            except Exception as e:
+                audit_logger.log_error(
+                    error_type="PAPER_TRADE_EXECUTION_ERROR",
+                    message=f"Failed to execute paper sell trade for row {idx}: {str(e)}",
+                    context={"row_index": idx}
+                )
+                continue
+
+        # Update portfolio values for all rows - vectorized
+        for idx in range(n_rows):
+            try:
+                portfolio_value = update_paper_portfolio(current_price=close_prices[idx])
+                portfolio_values[idx] = portfolio_value
+            except Exception as e:
+                portfolio_values[idx] = 0.0
+                continue
+
+        # Apply results to DataFrame - vectorized
+        df['Paper_Trade_Executed'] = trade_executed
+        df['Paper_Trade_Type'] = trade_types
+        df['Paper_Trade_Size'] = trade_sizes
+        df['Paper_Portfolio_Value'] = portfolio_values
+
+        # Log paper trading execution completion
+        executed_trades = trade_executed.sum()
+        if executed_trades > 0:
+            audit_logger.log_system_event(
+                event_type="PAPER_TRADES_EXECUTED",
+                message=f"Paper trading execution completed: {executed_trades} trades executed",
+                details={
+                    'total_signals': len(df),
+                    'executed_trades': int(executed_trades),
+                    'symbol': SYMBOL,
+                    'timeframe': TIMEFRAME,
+                    'paper_trading_enabled': True
+                }
+            )
+
+    except Exception as e:
+        audit_logger.log_error(
+            error_type="PAPER_TRADING_EXECUTION_ERROR",
+            message=f"Paper trading execution failed: {str(e)}",
+            context={'paper_trading_enabled': PAPER_TRADING_ENABLED}
         )
 
     return df

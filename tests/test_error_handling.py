@@ -389,8 +389,12 @@ class TestBacktesterErrorHandling:
 
     def test_run_backtest_with_invalid_dates(self):
         """Test backtest with invalid date ranges."""
-        with pytest.raises(ValueError):
-            run_backtest('EUR/USD', '1m', '2023-12-31', '2023-01-01')  # End before start
+        result = run_backtest('EUR/USD', '1m', '2023-12-31', '2023-01-01')  # End before start
+        
+        # Should return error in result instead of raising exception
+        assert 'backtest_results' in result
+        assert result['backtest_results']['success'] == False
+        assert 'start_date must be before end_date' in result['backtest_results']['error']
 
 
 class TestConfigurationErrorHandling:

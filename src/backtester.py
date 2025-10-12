@@ -155,6 +155,7 @@ class Backtester:
     def _simulate_trades(self, data):
         """
         Simulate trades based on signals and calculate P&L using vectorized operations.
+        Includes realistic transaction costs (0.1% commission) and slippage simulation.
         """
         if data.empty:
             return []
@@ -184,32 +185,56 @@ class Backtester:
         # Calculate cumulative position
         positions = position_changes.cumsum()
 
-        # Find trade entries and exits
+        # Find trade entries and exits using vectorized operations
         trades = []
         current_position = 0
         entry_idx = None
         entry_price = None
 
-        for idx, (timestamp, row) in enumerate(data.iterrows()):
-            new_position = positions.iloc[idx]
+        # Get position change points
+        position_array = positions.values
+        timestamps = data.index
+        close_prices = data['close'].values
+
+        # Pre-calculate slippage and position sizes
+        slippage_pct = 0.001  # 0.1% slippage
+        position_sizes = data.get('Position_Size_Absolute', 1000).fillna(1000).values
+        stop_loss_buy = data.get('Stop_Loss_Buy', data['close'] * 0.98).values
+        stop_loss_sell = data.get('Stop_Loss_Sell', data['close'] * 1.02).values
+        take_profit_buy = data.get('Take_Profit_Buy', data['close'] * 1.02).values
+        take_profit_sell = data.get('Take_Profit_Sell', data['close'] * 0.98).values
+
+        # Process trades in a single pass with minimal loops
+        for idx in range(len(data)):
+            new_position = position_array[idx]
 
             # Position entry
             if current_position == 0 and new_position != 0:
                 entry_idx = idx
-                entry_price = row['close']
+                # Apply slippage to entry price (0.1% adverse movement)
+                if new_position == 1:  # Long entry - buy at higher price
+                    entry_price = close_prices[idx] * (1 + slippage_pct)
+                else:  # Short entry - sell at lower price
+                    entry_price = close_prices[idx] * (1 - slippage_pct)
+
                 current_position = new_position
-                position_size = row.get('Position_Size_Absolute', 1000)
+                position_size = position_sizes[idx]
+
+                # Calculate entry commission (0.1% of position value)
+                entry_commission = entry_price * position_size * self.commission
 
                 trade = {
                     'type': 'buy' if current_position == 1 else 'sell',
-                    'entry_time': timestamp,
+                    'entry_time': timestamps[idx],
                     'entry_price': entry_price,
                     'position_size': position_size,
-                    'stop_loss': row.get('Stop_Loss_Buy' if current_position == 1 else 'Stop_Loss_Sell', entry_price * (0.98 if current_position == 1 else 1.02)),
-                    'take_profit': row.get('Take_Profit_Buy' if current_position == 1 else 'Take_Profit_Sell', entry_price * (1.02 if current_position == 1 else 0.98)),
+                    'stop_loss': stop_loss_buy[idx] if current_position == 1 else stop_loss_sell[idx],
+                    'take_profit': take_profit_buy[idx] if current_position == 1 else take_profit_sell[idx],
                     'exit_time': None,
                     'exit_price': None,
                     'pnl': 0,
+                    'entry_commission': entry_commission,
+                    'exit_commission': 0,
                     'status': 'open'
                 }
                 trades.append(trade)
@@ -217,25 +242,37 @@ class Backtester:
             # Position exit or change
             elif current_position != 0 and new_position != current_position:
                 if entry_idx is not None:
-                    exit_price = row['close']
-                    exit_time = timestamp
+                    # Apply slippage to exit price (0.1% adverse movement)
+                    if current_position == 1:  # Long exit - sell at lower price
+                        exit_price = close_prices[idx] * (1 - slippage_pct)
+                    else:  # Short exit - buy at higher price
+                        exit_price = close_prices[idx] * (1 + slippage_pct)
 
-                    # Calculate P&L
+                    exit_time = timestamps[idx]
+
+                    # Calculate exit commission (0.1% of position value)
+                    exit_commission = exit_price * trades[-1]['position_size'] * self.commission
+
+                    # Calculate P&L (including commissions)
                     if current_position == 1:  # Long position
-                        pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
+                        gross_pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
                     else:  # Short position
-                        pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
+                        gross_pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
+
+                    # Net P&L = Gross P&L - Entry Commission - Exit Commission
+                    net_pnl = gross_pnl - trades[-1]['entry_commission'] - exit_commission
 
                     # Update trade
                     trades[-1].update({
                         'exit_time': exit_time,
                         'exit_price': exit_price,
-                        'pnl': pnl,
+                        'pnl': net_pnl,
+                        'exit_commission': exit_commission,
                         'status': 'closed'
                     })
 
                     # Update capital
-                    self.current_capital += pnl
+                    self.current_capital += net_pnl
 
                 # Handle position change
                 if new_position == 0:
@@ -245,19 +282,29 @@ class Backtester:
                     # Position reversal - start new trade
                     current_position = new_position
                     entry_idx = idx
-                    entry_price = row['close']
+                    # Apply slippage for position reversal
+                    if current_position == 1:  # Long entry
+                        entry_price = close_prices[idx] * (1 + slippage_pct)
+                    else:  # Short entry
+                        entry_price = close_prices[idx] * (1 - slippage_pct)
 
-                    position_size = row.get('Position_Size_Absolute', 1000)
+                    position_size = position_sizes[idx]
+
+                    # Calculate entry commission for new position
+                    entry_commission = entry_price * position_size * self.commission
+
                     trade = {
                         'type': 'buy' if current_position == 1 else 'sell',
-                        'entry_time': timestamp,
+                        'entry_time': timestamps[idx],
                         'entry_price': entry_price,
                         'position_size': position_size,
-                        'stop_loss': row.get('Stop_Loss_Buy' if current_position == 1 else 'Stop_Loss_Sell', entry_price * (0.98 if current_position == 1 else 1.02)),
-                        'take_profit': row.get('Take_Profit_Buy' if current_position == 1 else 'Take_Profit_Sell', entry_price * (1.02 if current_position == 1 else 0.98)),
+                        'stop_loss': stop_loss_buy[idx] if current_position == 1 else stop_loss_sell[idx],
+                        'take_profit': take_profit_buy[idx] if current_position == 1 else take_profit_sell[idx],
                         'exit_time': None,
                         'exit_price': None,
                         'pnl': 0,
+                        'entry_commission': entry_commission,
+                        'exit_commission': 0,
                         'status': 'open'
                     }
                     trades.append(trade)
@@ -267,25 +314,40 @@ class Backtester:
             final_price = data.iloc[-1]['close']
             final_time = data.index[-1]
 
+            # Apply slippage to final exit
+            slippage_pct = 0.001
+            if current_position == 1:  # Long exit
+                exit_price = final_price * (1 - slippage_pct)
+            else:  # Short exit
+                exit_price = final_price * (1 + slippage_pct)
+
+            # Calculate exit commission
+            exit_commission = exit_price * trades[-1]['position_size'] * self.commission
+
             if current_position == 1:
-                pnl = (final_price - entry_price) * trades[-1]['position_size'] / entry_price
+                gross_pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
             else:
-                pnl = (entry_price - final_price) * trades[-1]['position_size'] / entry_price
+                gross_pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
+
+            # Net P&L including commissions
+            net_pnl = gross_pnl - trades[-1]['entry_commission'] - exit_commission
 
             trades[-1].update({
                 'exit_time': final_time,
-                'exit_price': final_price,
-                'pnl': pnl,
+                'exit_price': exit_price,
+                'pnl': net_pnl,
+                'exit_commission': exit_commission,
                 'status': 'closed'
             })
 
-            self.current_capital += pnl
+            self.current_capital += net_pnl
 
         return trades
 
     def _calculate_metrics(self):
         """
         Calculate comprehensive performance metrics using vectorized operations.
+        Now includes transaction costs in all calculations.
         """
         if not self.trades:
             return {"error": "No trades executed during backtest"}
@@ -308,7 +370,10 @@ class Backtester:
         avg_win = trades_df[trades_df['pnl'] > 0]['pnl'].mean() if winning_trades > 0 else 0
         avg_loss = trades_df[trades_df['pnl'] <= 0]['pnl'].mean() if losing_trades > 0 else 0
 
-        # Risk metrics using vectorized operations
+        # Calculate total commissions paid
+        total_commissions = trades_df['entry_commission'].sum() + trades_df['exit_commission'].sum()
+
+        # Risk metrics using vectorized operations (net returns after costs)
         returns = trades_df['pnl'] / self.initial_capital
         sharpe_ratio = (returns.mean() / returns.std() * np.sqrt(252)) if returns.std() > 0 else 0
 
@@ -325,7 +390,7 @@ class Backtester:
         else:
             cagr = 0
 
-        # Profit factor
+        # Profit factor (using net P&L)
         gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
         gross_loss = abs(trades_df[trades_df['pnl'] <= 0]['pnl'].sum())
         profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf')
@@ -338,6 +403,8 @@ class Backtester:
             'total_pnl': round(total_pnl, 2),
             'avg_win': round(avg_win, 2),
             'avg_loss': round(avg_loss, 2),
+            'total_commissions': round(total_commissions, 2),
+            'net_pnl_after_costs': round(total_pnl - total_commissions, 2),
             'profit_factor': round(profit_factor, 2) if profit_factor != float('inf') else float('inf'),
             'max_drawdown': round(max_drawdown, 2),
             'sharpe_ratio': round(sharpe_ratio, 2),
@@ -437,7 +504,8 @@ class Backtester:
         """Apply ML enhancement to signals."""
         from config.settings import ML_CONFIDENCE_THRESHOLD
 
-        # Add ML signal columns
+        # Add ML signal columns - vectorized initialization
+        data = data.copy()  # Avoid modifying original
         data['ML_Signal'] = 'HOLD'
         data['ML_Confidence'] = 0.0
         data['ML_Reason'] = ''
@@ -446,57 +514,103 @@ class Backtester:
 
         print(f"🔬 Processing {len(data)} rows for {strategy_name}...")
 
-        # Process each row for ML prediction
-        for idx, row in data.iterrows():
+        # Batch process predictions for efficiency
+        batch_size = 100  # Process in batches to avoid memory issues
+        n_rows = len(data)
+
+        # Pre-allocate arrays for vectorized operations
+        ml_signals = np.full(n_rows, 'HOLD', dtype=object)
+        ml_confidences = np.zeros(n_rows)
+        ml_reasons = np.full(n_rows, '', dtype=object)
+        enhanced_signals = np.full(n_rows, 'HOLD', dtype=object)
+        signal_sources = np.full(n_rows, 'TRADITIONAL', dtype=object)
+
+        # Get traditional signals - vectorized
+        buy_signals = data.get('Buy_Signal', 0).values
+        sell_signals = data.get('Sell_Signal', 0).values
+
+        # Process in batches
+        for start_idx in range(0, n_rows, batch_size):
+            end_idx = min(start_idx + batch_size, n_rows)
+            batch_data = data.iloc[start_idx:end_idx]
+
             try:
-                # Create single-row DataFrame for prediction
-                row_df = pd.DataFrame([row])
+                # Get batch predictions from the model
+                predictions = predictor.predict_signal(batch_data, threshold=ML_CONFIDENCE_THRESHOLD)
 
-                # Get prediction from the model
-                prediction = predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
+                # Handle different prediction formats
+                if isinstance(predictions, list) and len(predictions) == len(batch_data):
+                    # Individual predictions per row
+                    for i, prediction in enumerate(predictions):
+                        idx = start_idx + i
+                        ml_signals[idx] = prediction['signal']
+                        ml_confidences[idx] = prediction['confidence']
+                        ml_reasons[idx] = prediction.get('reason', '')
 
-                # Update DataFrame
-                data.at[idx, 'ML_Signal'] = prediction['signal']
-                data.at[idx, 'ML_Confidence'] = prediction['confidence']
-                data.at[idx, 'ML_Reason'] = prediction.get('reason', '')
-                data.at[idx, 'Signal_Source'] = strategy_name.upper()
+                        # Determine traditional signal
+                        traditional_signal = 'HOLD'
+                        if buy_signals[idx] == 1:
+                            traditional_signal = 'BUY'
+                        elif sell_signals[idx] == 1:
+                            traditional_signal = 'SELL'
 
-                # Determine traditional signal
-                traditional_signal = 'HOLD'
-                if row.get('Buy_Signal', 0) == 1:
-                    traditional_signal = 'BUY'
-                elif row.get('Sell_Signal', 0) == 1:
-                    traditional_signal = 'SELL'
+                        # Enhancement logic
+                        if prediction['confidence'] >= ML_CONFIDENCE_THRESHOLD:
+                            enhanced_signals[idx] = prediction['signal']
+                            signal_sources[idx] = strategy_name.upper()
+                        else:
+                            enhanced_signals[idx] = traditional_signal
+                            signal_sources[idx] = 'TRADITIONAL'
 
-                # Enhancement logic: use ML if confidence is high enough
-                if prediction['confidence'] >= ML_CONFIDENCE_THRESHOLD:
-                    enhanced_signal = prediction['signal']
-                    source = strategy_name.upper()
-                else:
-                    enhanced_signal = traditional_signal
-                    source = 'TRADITIONAL'
+                elif isinstance(predictions, dict):
+                    # Single prediction result applied to batch
+                    signal = predictions['signal']
+                    confidence = predictions['confidence']
+                    reason = predictions.get('reason', '')
 
-                data.at[idx, 'Enhanced_Signal'] = enhanced_signal
-                data.at[idx, 'Signal_Source'] = source
+                    for i in range(len(batch_data)):
+                        idx = start_idx + i
+                        ml_signals[idx] = signal
+                        ml_confidences[idx] = confidence
+                        ml_reasons[idx] = reason
 
-                # Override original signals if enhanced
-                if source == strategy_name.upper():
-                    if enhanced_signal == 'BUY':
-                        data.at[idx, 'Buy_Signal'] = 1
-                        data.at[idx, 'Sell_Signal'] = 0
-                    elif enhanced_signal == 'SELL':
-                        data.at[idx, 'Buy_Signal'] = 0
-                        data.at[idx, 'Sell_Signal'] = 1
-                    else:
-                        data.at[idx, 'Buy_Signal'] = 0
-                        data.at[idx, 'Sell_Signal'] = 0
+                        # Determine traditional signal
+                        traditional_signal = 'HOLD'
+                        if buy_signals[idx] == 1:
+                            traditional_signal = 'BUY'
+                        elif sell_signals[idx] == 1:
+                            traditional_signal = 'SELL'
+
+                        # Enhancement logic
+                        if confidence >= ML_CONFIDENCE_THRESHOLD:
+                            enhanced_signals[idx] = signal
+                            signal_sources[idx] = strategy_name.upper()
+                        else:
+                            enhanced_signals[idx] = traditional_signal
+                            signal_sources[idx] = 'TRADITIONAL'
 
             except Exception as e:
-                # On prediction error, keep traditional signals
+                print(f"⚠️  Batch prediction failed for rows {start_idx}-{end_idx}: {e}")
                 continue
 
+        # Apply results to DataFrame - vectorized
+        data['ML_Signal'] = ml_signals
+        data['ML_Confidence'] = ml_confidences
+        data['ML_Reason'] = ml_reasons
+        data['Enhanced_Signal'] = enhanced_signals
+        data['Signal_Source'] = signal_sources
+
+        # Override original signals if enhanced - vectorized
+        enhanced_mask = signal_sources != 'TRADITIONAL'
+        data.loc[enhanced_mask, 'Buy_Signal'] = np.where(
+            enhanced_signals[enhanced_mask] == 'BUY', 1, 0
+        )
+        data.loc[enhanced_mask, 'Sell_Signal'] = np.where(
+            enhanced_signals[enhanced_mask] == 'SELL', 1, 0
+        )
+
         # Count enhanced signals
-        enhanced_count = (data['Signal_Source'] == strategy_name.upper()).sum()
+        enhanced_count = enhanced_mask.sum()
         print(f"✅ Applied {strategy_name} to {enhanced_count} signals")
 
         return data
@@ -515,6 +629,7 @@ def run_backtest(symbol=SYMBOL, timeframe=TIMEFRAME, start_date=None, end_date=N
 def calculate_performance_metrics(trades_df, initial_capital=10000):
     """
     Calculate comprehensive performance metrics from trades DataFrame using vectorized operations.
+    Now includes transaction costs analysis.
     """
     if trades_df.empty:
         return {
@@ -526,7 +641,9 @@ def calculate_performance_metrics(trades_df, initial_capital=10000):
             'final_capital': initial_capital,
             'return_pct': 0.0,
             'max_drawdown': 0.0,
-            'sharpe_ratio': 0.0
+            'sharpe_ratio': 0.0,
+            'total_commissions': 0.0,
+            'net_pnl_after_costs': 0.0
         }
 
     # Ensure we have the required columns
@@ -550,6 +667,18 @@ def calculate_performance_metrics(trades_df, initial_capital=10000):
     trades_df['pnl'] = 0.0
     trades_df.loc[long_trades, 'pnl'] = pnl_long
     trades_df.loc[short_trades, 'pnl'] = pnl_short
+
+    # Calculate commissions if available (assume 0.1% per trade if not specified)
+    commission_rate = 0.001  # 0.1%
+    if 'entry_commission' in trades_df.columns and 'exit_commission' in trades_df.columns:
+        total_commissions = trades_df['entry_commission'].sum() + trades_df['exit_commission'].sum()
+    else:
+        # Estimate commissions if not provided
+        entry_commissions = trades_df['entry_price'] * trades_df['position_size'] * commission_rate
+        exit_commissions = trades_df['exit_price'] * trades_df['position_size'] * commission_rate
+        total_commissions = entry_commissions.sum() + exit_commissions.sum()
+        # Adjust P&L for commissions
+        trades_df['pnl'] = trades_df['pnl'] - entry_commissions - exit_commissions
 
     # Basic metrics using vectorized operations
     total_trades = len(trades_df)
@@ -589,142 +718,11 @@ def calculate_performance_metrics(trades_df, initial_capital=10000):
         'return_pct': round(return_pct, 2),
         'max_drawdown': round(abs(max_drawdown), 2),
         'max_drawdown_percentage': round(max_drawdown_percentage, 2),
-        'sharpe_ratio': round(sharpe_ratio, 2)
+        'sharpe_ratio': round(sharpe_ratio, 2),
+        'total_commissions': round(total_commissions, 2),
+        'net_pnl_after_costs': round(total_pnl - total_commissions, 2)
     }
 
-def simulate_trades(data):
-    """
-    Simulate trades based on signals in the data.
-    Returns a DataFrame of executed trades.
-    """
-    if data.empty:
-        return pd.DataFrame()
-
-    # Check for required columns
-    required_cols = ['close']
-    if not all(col in data.columns for col in required_cols):
-        raise KeyError(f"Data must contain required columns: {required_cols}")
-
-    # Check for signal columns (they can be missing, but if present should be valid)
-    signal_cols = ['Buy_Signal', 'Sell_Signal']
-    if not any(col in data.columns for col in signal_cols):
-        raise KeyError(f"Data must contain at least one signal column: {signal_cols}")
-
-    trades = []
-    position = 0  # 0 = no position, 1 = long, -1 = short
-    entry_price = 0
-    entry_time = None
-    position_size = 1000  # Default position size
-
-    for idx, row in data.iterrows():
-        current_time = idx
-        current_price = row['close']
-
-        # Check for entry signals
-        if position == 0:
-            if row.get('Buy_Signal', 0) == 1:
-                position = 1
-                entry_price = current_price
-                entry_time = current_time
-                position_size = row.get('Position_Size_Absolute', 1000)
-
-                # Store entry trade info
-                entry_trade = {
-                    'entry_time': entry_time,
-                    'entry_price': entry_price,
-                    'position_size': position_size,
-                    'direction': 'long'
-                }
-                trades.append(entry_trade)
-
-            elif row.get('Sell_Signal', 0) == 1:
-                position = -1
-                entry_price = current_price
-                entry_time = current_time
-                position_size = row.get('Position_Size_Absolute', 1000)
-
-                # Store entry trade info
-                entry_trade = {
-                    'entry_time': entry_time,
-                    'entry_price': entry_price,
-                    'position_size': position_size,
-                    'direction': 'short'
-                }
-                trades.append(entry_trade)
-
-        # Check for exit conditions (simplified - exit on opposite signal or stop loss/take profit)
-        elif position != 0:
-            exit_signal = False
-            exit_price = current_price
-            exit_reason = ''
-
-            if position == 1:  # Long position
-                # Check stop loss (if low <= stop loss)
-                stop_loss = row.get('Stop_Loss_Buy', row.get('Stop_Loss', current_price * 0.98))
-                if row['low'] <= stop_loss:
-                    exit_signal = True
-                    exit_price = stop_loss
-                    exit_reason = 'stop_loss'
-                # Check take profit (if high >= take profit)
-                take_profit = row.get('Take_Profit_Buy', row.get('Take_Profit', current_price * 1.02))
-                if row['high'] >= take_profit:
-                    exit_signal = True
-                    exit_price = take_profit
-                    exit_reason = 'take_profit'
-                # Check sell signal
-                if row.get('Sell_Signal', 0) == 1:
-                    exit_signal = True
-                    exit_reason = 'sell_signal'
-
-            else:  # Short position
-                # Check stop loss (if high >= stop loss)
-                stop_loss = row.get('Stop_Loss_Sell', row.get('Stop_Loss', current_price * 1.02))
-                if row['high'] >= stop_loss:
-                    exit_signal = True
-                    exit_price = stop_loss
-                    exit_reason = 'stop_loss'
-                # Check take profit (if low <= take profit)
-                take_profit = row.get('Take_Profit_Sell', row.get('Take_Profit', current_price * 0.98))
-                if row['low'] <= take_profit:
-                    exit_signal = True
-                    exit_price = take_profit
-                    exit_reason = 'take_profit'
-                # Check buy signal
-                if row.get('Buy_Signal', 0) == 1:
-                    exit_signal = True
-                    exit_reason = 'buy_signal'
-
-            if exit_signal:
-                # Update the last trade with exit info
-                if trades:
-                    trades[-1].update({
-                        'exit_time': current_time,
-                        'exit_price': exit_price,
-                        'exit_reason': exit_reason
-                    })
-
-                # Reset position
-                position = 0
-
-    # Convert to DataFrame and filter only completed trades
-    if trades:
-        trades_df = pd.DataFrame(trades)
-        # Only return completed trades (those with exit info)
-        if 'exit_time' in trades_df.columns:
-            completed_trades = trades_df.dropna(subset=['exit_time']).copy()
-            # Calculate P&L for completed trades
-            completed_trades['pnl'] = 0.0
-            for idx, trade in completed_trades.iterrows():
-                if trade['direction'] == 'long':
-                    pnl = (trade['exit_price'] - trade['entry_price']) * trade['position_size'] / trade['entry_price']
-                else:  # short
-                    pnl = (trade['entry_price'] - trade['exit_price']) * trade['position_size'] / trade['entry_price']
-                completed_trades.loc[idx, 'pnl'] = pnl
-            return completed_trades
-        else:
-            return trades_df  # Return all trades if no exits
-    else:
-        return pd.DataFrame()
 def run_walk_forward_backtest(parameter_grid: dict, evaluation_metric: str = 'sharpe_ratio',
                              symbol: str = SYMBOL, timeframe: str = TIMEFRAME) -> dict:
     """
@@ -1077,54 +1075,65 @@ def _apply_single_model_enhancement(df, model_type):
         df['Enhanced_Signal'] = 'HOLD'
         df['Signal_Source'] = 'TRADITIONAL'
         
-        # Process each row for ML prediction
-        for idx, row in df.iterrows():
+        # Process each row for ML prediction - optimized to avoid iterrows()
+        buy_signals = df.get('Buy_Signal', 0).values
+        sell_signals = df.get('Sell_Signal', 0).values
+        
+        # Pre-allocate arrays for vectorized assignment
+        ml_signals = np.full(len(df), 'HOLD', dtype=object)
+        ml_confidences = np.zeros(len(df))
+        ml_reasons = np.full(len(df), '', dtype=object)
+        enhanced_signals = np.full(len(df), 'HOLD', dtype=object)
+        signal_sources = np.full(len(df), 'TRADITIONAL', dtype=object)
+        
+        for idx in range(len(df)):
             try:
                 # Create single-row DataFrame for prediction
-                row_df = pd.DataFrame([row])
+                row_df = pd.DataFrame([df.iloc[idx]])
                 
                 # Get prediction from the specific model
                 prediction = predictor.predict_signal(row_df, threshold=ML_CONFIDENCE_THRESHOLD)
                 
-                # Update DataFrame
-                df.at[idx, 'ML_Signal'] = prediction['signal']
-                df.at[idx, 'ML_Confidence'] = prediction['confidence']
-                df.at[idx, 'ML_Reason'] = prediction.get('reason', '')
-                df.at[idx, 'Signal_Source'] = predictor_name.upper()
+                # Store results in arrays
+                ml_signals[idx] = prediction['signal']
+                ml_confidences[idx] = prediction['confidence']
+                ml_reasons[idx] = prediction.get('reason', '')
+                signal_sources[idx] = predictor_name.upper()
                 
                 # Determine traditional signal
                 traditional_signal = 'HOLD'
-                if row.get('Buy_Signal', 0) == 1:
+                if buy_signals[idx] == 1:
                     traditional_signal = 'BUY'
-                elif row.get('Sell_Signal', 0) == 1:
+                elif sell_signals[idx] == 1:
                     traditional_signal = 'SELL'
                 
                 # Simple enhancement logic
                 if prediction['confidence'] > ML_CONFIDENCE_THRESHOLD:
-                    enhanced_signal = prediction['signal']
-                    source = predictor_name.upper()
+                    enhanced_signals[idx] = prediction['signal']
+                    signal_sources[idx] = predictor_name.upper()
                 else:
-                    enhanced_signal = traditional_signal
-                    source = 'TRADITIONAL'
-                
-                df.at[idx, 'Enhanced_Signal'] = enhanced_signal
-                df.at[idx, 'Signal_Source'] = source
-                
-                # Override original signals if enhanced
-                if source == predictor_name.upper():
-                    if enhanced_signal == 'BUY':
-                        df.at[idx, 'Buy_Signal'] = 1
-                        df.at[idx, 'Sell_Signal'] = 0
-                    elif enhanced_signal == 'SELL':
-                        df.at[idx, 'Buy_Signal'] = 0
-                        df.at[idx, 'Sell_Signal'] = 1
-                    else:
-                        df.at[idx, 'Buy_Signal'] = 0
-                        df.at[idx, 'Sell_Signal'] = 0
+                    enhanced_signals[idx] = traditional_signal
+                    signal_sources[idx] = 'TRADITIONAL'
                         
             except Exception as e:
                 print(f"⚠️  Prediction failed for row {idx} in {model_type}: {e}")
                 continue
+        
+        # Vectorized assignment to DataFrame
+        df['ML_Signal'] = ml_signals
+        df['ML_Confidence'] = ml_confidences
+        df['ML_Reason'] = ml_reasons
+        df['Enhanced_Signal'] = enhanced_signals
+        df['Signal_Source'] = signal_sources
+        
+        # Override original signals if enhanced - vectorized
+        enhanced_mask = signal_sources == predictor_name.upper()
+        df.loc[enhanced_mask, 'Buy_Signal'] = np.where(
+            enhanced_signals[enhanced_mask] == 'BUY', 1, 0
+        )
+        df.loc[enhanced_mask, 'Sell_Signal'] = np.where(
+            enhanced_signals[enhanced_mask] == 'SELL', 1, 0
+        )
         
         return df
         
@@ -1260,3 +1269,233 @@ def _save_multi_model_results(comparison, symbol, timeframe, start_date, end_dat
         csv_filename = f"output/multi_model_comparison_{symbol.replace('/', '_')}_{timeframe}_{timestamp}.csv"
         comparison_df.to_csv(csv_filename, index=False)
         print(f"📊 Comparison table saved to {csv_filename}")
+
+
+def calculate_performance_metrics(trades_df, initial_capital):
+    """
+    Calculate comprehensive performance metrics from trades data.
+
+    Args:
+        trades_df: DataFrame with trade data containing columns:
+                  'entry_price', 'exit_price', 'position_size', 'direction'
+        initial_capital: Initial capital amount
+
+    Returns:
+        Dictionary with performance metrics
+    """
+    if trades_df.empty:
+        return {
+            'total_trades': 0,
+            'winning_trades': 0,
+            'losing_trades': 0,
+            'win_rate': 0.0,
+            'total_pnl': 0.0,
+            'gross_profit': 0.0,
+            'gross_loss': 0.0,
+            'profit_factor': 0.0,
+            'max_drawdown': 0.0,
+            'max_drawdown_percentage': 0.0,
+            'sharpe_ratio': 0.0,
+            'final_capital': initial_capital
+        }
+
+    # Ensure we have the required columns
+    required_cols = ['entry_price', 'exit_price', 'position_size', 'direction']
+    if not all(col in trades_df.columns for col in required_cols):
+        raise ValueError(f"Trades DataFrame missing required columns: {required_cols}")
+
+    # Calculate P&L for each trade using vectorized operations
+    trades_df = trades_df.copy()
+    
+    # Vectorized P&L calculation
+    long_trades = trades_df['direction'] == 'long'
+    short_trades = trades_df['direction'] == 'short'
+    
+    pnl_long = (trades_df.loc[long_trades, 'exit_price'] - trades_df.loc[long_trades, 'entry_price']) * \
+               trades_df.loc[long_trades, 'position_size']
+    
+    pnl_short = (trades_df.loc[short_trades, 'entry_price'] - trades_df.loc[short_trades, 'exit_price']) * \
+                trades_df.loc[short_trades, 'position_size']
+    
+    trades_df['pnl'] = 0.0
+    trades_df.loc[long_trades, 'pnl'] = pnl_long
+    trades_df.loc[short_trades, 'pnl'] = pnl_short
+
+    # Basic metrics
+    total_trades = len(trades_df)
+    winning_trades = len(trades_df[trades_df['pnl'] > 0])
+    losing_trades = len(trades_df[trades_df['pnl'] < 0])
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
+
+    total_pnl = trades_df['pnl'].sum()
+    gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
+    gross_loss = abs(trades_df[trades_df['pnl'] < 0]['pnl'].sum())
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+
+    final_capital = initial_capital + total_pnl
+
+    # Calculate drawdown
+    cumulative_pnl = trades_df['pnl'].cumsum()
+    running_max = cumulative_pnl.expanding().max()
+    drawdown = running_max - cumulative_pnl
+    max_drawdown = drawdown.max()
+    max_drawdown_percentage = (max_drawdown / (initial_capital + running_max.max())) * 100
+
+    # Sharpe ratio (simplified, assuming daily returns and 0% risk-free rate)
+    if len(trades_df) > 1:
+        returns = trades_df['pnl'] / initial_capital
+        sharpe_ratio = returns.mean() / returns.std() * np.sqrt(252) if returns.std() > 0 else 0.0
+    else:
+        sharpe_ratio = 0.0
+
+    return {
+        'total_trades': total_trades,
+        'winning_trades': winning_trades,
+        'losing_trades': losing_trades,
+        'win_rate': win_rate,
+        'total_pnl': total_pnl,
+        'gross_profit': gross_profit,
+        'gross_loss': gross_loss,
+        'profit_factor': profit_factor,
+        'max_drawdown': max_drawdown,
+        'max_drawdown_percentage': max_drawdown_percentage,
+        'sharpe_ratio': sharpe_ratio,
+        'final_capital': final_capital
+    }
+
+
+def simulate_trades(data_df):
+    """
+    Simulate trades based on OHLCV data with Buy_Signal and Sell_Signal columns.
+    Uses vectorized operations for better performance.
+
+    Args:
+        data_df: DataFrame with OHLCV data and signal columns
+
+    Returns:
+        DataFrame with completed trades
+    """
+    if data_df.empty:
+        return pd.DataFrame()
+
+    # Check for required columns
+    required_cols = ['close']
+    if not all(col in data_df.columns for col in required_cols):
+        raise KeyError(f"Data must contain required columns: {required_cols}")
+
+    # Check for signal columns (they can be missing, but if present should be valid)
+    signal_cols = ['Buy_Signal', 'Sell_Signal']
+    if not any(col in data_df.columns for col in signal_cols):
+        raise KeyError(f"Data must contain at least one signal column: {signal_cols}")
+
+    # Vectorized trade simulation
+    buy_signals = data_df.get('Buy_Signal', 0).values
+    sell_signals = data_df.get('Sell_Signal', 0).values
+    close_prices = data_df['close'].values
+    low_prices = data_df.get('low', data_df['close']).values
+    high_prices = data_df.get('high', data_df['close']).values
+    stop_loss_buy = data_df.get('Stop_Loss_Buy', data_df['close'] * 0.98).values
+    take_profit_buy = data_df.get('Take_Profit_Buy', data_df['close'] * 1.02).values
+
+    # Handle position sizes - ensure it's an array even if column doesn't exist
+    if 'Position_Size_Absolute' in data_df.columns:
+        position_sizes = data_df['Position_Size_Absolute'].values
+    else:
+        position_sizes = np.full(len(data_df), 1000)
+
+    # Get timestamps
+    if 'timestamp' in data_df.columns:
+        timestamps = data_df['timestamp'].values
+    else:
+        timestamps = data_df.index.values
+
+    trades = []
+    in_position = False
+    entry_price = 0.0
+    entry_timestamp = None
+    position_size = 1000
+
+    # Process each row (still need loop for state management, but minimize operations)
+    for i in range(len(data_df)):
+        # Check for buy signal
+        if not in_position and buy_signals[i] == 1:
+            in_position = True
+            entry_price = close_prices[i]
+            entry_timestamp = timestamps[i]
+            position_size = position_sizes[i] if i < len(position_sizes) else 1000
+            continue
+
+        # Check for exit conditions if in position
+        if in_position:
+            exit_triggered = False
+            exit_price = close_prices[i]
+            exit_reason = 'sell_signal'
+
+            # Check sell signal
+            if sell_signals[i] == 1:
+                exit_triggered = True
+                exit_reason = 'sell_signal'
+            # Check stop loss
+            elif low_prices[i] <= stop_loss_buy[i]:
+                exit_triggered = True
+                exit_price = stop_loss_buy[i]
+                exit_reason = 'stop_loss'
+            # Check take profit
+            elif high_prices[i] >= take_profit_buy[i]:
+                exit_triggered = True
+                exit_price = take_profit_buy[i]
+                exit_reason = 'take_profit'
+
+            if exit_triggered:
+                pnl = (exit_price - entry_price) * position_size
+
+                trade = {
+                    'entry_price': entry_price,
+                    'exit_price': exit_price,
+                    'position_size': position_size,
+                    'direction': 'long',
+                    'pnl': pnl,
+                    'entry_timestamp': entry_timestamp,
+                    'exit_timestamp': timestamps[i],
+                    'exit_reason': exit_reason
+                }
+                trades.append(trade)
+                in_position = False
+
+    return pd.DataFrame(trades)
+
+
+def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=None):
+    """
+    Standalone function to run a backtest and return results.
+
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe string
+        start_date: Start date string
+        end_date: End date string
+
+    Returns:
+        Dictionary with backtest results and trades DataFrame
+    """
+    try:
+        # Create backtester instance
+        backtester = Backtester(symbol=symbol, timeframe=timeframe,
+                              start_date=start_date, end_date=end_date)
+
+        # Run backtest
+        results = backtester.run_backtest()
+
+        # Get trades
+        trades_df = pd.DataFrame(backtester.trades)
+
+        return {
+            'backtest_results': results,
+            'trades': trades_df
+        }
+
+    except Exception as e:
+        return {
+            'backtest_results': {'success': False, 'error': str(e)},
+            'trades': pd.DataFrame()
+        }

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tradpal"
-version = "2.5.0"
+version = "2.5.1"
 description = "Advanced Python trading system with multi-timeframe analysis, ML enhancement, portfolio management, and real-time sentiment analysis"
 readme = "README.md"
 license = {text = "MIT"}
@@ -99,7 +99,7 @@ dev = [
 ]
 all = [
     "tradpal[webui,ml,sentiment,performance,monitoring,integrations,dev]",
-],
+]
 
 [project.urls]
 Homepage = "https://github.com/wurstgulasch/tradpal"

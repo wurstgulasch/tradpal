@@ -8,10 +8,10 @@ to ensure the discovery module works correctly.
 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from src.discovery import run_discovery
-from src.logging_config import logger
+from discovery import run_discovery
+from logging_config import logger
 
 def test_discovery():
     """Run a quick discovery test with small parameters."""
