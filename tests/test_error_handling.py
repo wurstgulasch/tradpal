@@ -27,58 +27,61 @@ from integrations.email_integration.email import EmailIntegration, EmailConfig
 class TestDataFetcherErrorHandling:
     """Test error handling in data fetcher."""
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_with_network_timeout(self, mock_ccxt):
+    @patch('src.data_fetcher.get_data_source')
+    @patch('src.data_fetcher.cache_api_call')
+    def test_fetch_with_network_timeout(self, mock_cache, mock_get_source):
         """Test handling of network timeouts."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.side_effect = TimeoutError("Connection timeout")
+        mock_data_source = MagicMock()
+        mock_get_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.side_effect = TimeoutError("Connection timeout")
 
-        # With error handling, function should return retry string
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert isinstance(result, str) and result == "retry"
+        # With error handling, function should raise the exception
+        with pytest.raises(TimeoutError):
+            fetch_historical_data('EUR/USD', '1m', 100)
 
-    def test_fetch_with_invalid_exchange(self):
-        """Test handling of invalid exchange."""
-        # Input validation now catches invalid exchanges
+    def test_fetch_with_invalid_symbol(self):
+        """Test handling of invalid symbol."""
+        # Input validation should catch invalid symbols
         from src.input_validation import ValidationError
-        with pytest.raises(ValidationError, match="Invalid exchange"):
-            fetch_historical_data('EUR/USD', 'invalid_exchange', '1m', 100)
+        with pytest.raises(ValidationError, match="Symbol cannot be empty"):
+            fetch_historical_data('', '1m', 100)
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_with_empty_response(self, mock_ccxt):
+    @patch('src.data_fetcher.get_data_source')
+    @patch('src.data_fetcher.cache_api_call')
+    def test_fetch_with_empty_response(self, mock_cache, mock_get_source):
         """Test handling of empty API responses."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.return_value = []
-        mock_exchange.has = {'fetchOHLCV': True}
-        mock_exchange.parse8601.return_value = 1640995200000
-        mock_exchange.timeframes = {'1m': 60000}
+        mock_data_source = MagicMock()
+        mock_get_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.return_value = pd.DataFrame()
 
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 50)
+        result = fetch_historical_data('EUR/USD', '1m', 50)
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 0
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_with_malformed_data(self, mock_ccxt):
+    @patch('src.data_fetcher.get_data_source')
+    @patch('src.data_fetcher.cache_api_call')
+    def test_fetch_with_malformed_data(self, mock_cache, mock_get_source):
         """Test handling of malformed API data."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        # Malformed data - missing some OHLC values
-        mock_exchange.fetch_ohlcv.return_value = [
-            [1640995200000, 1.0, 1.1],  # Incomplete OHLCV
-            [1640995260000],  # Empty
-        ]
-        mock_exchange.has = {'fetchOHLCV': True}
+        mock_data_source = MagicMock()
+        mock_get_source.return_value = mock_data_source
+        # Return malformed data that will fail validation
+        malformed_df = pd.DataFrame({
+            'open': ['not_a_number'],
+            'high': [1.1],
+            'low': [0.9],
+            'close': [1.0],
+            'volume': [100]
+        })
+        mock_data_source.fetch_historical_data.return_value = malformed_df
 
-        # With error handling, malformed data should cause retry
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 2)
-        assert result == "retry"  # Should return retry on consecutive errors
+        # Should raise ValueError during validation
+        with pytest.raises(ValueError):
+            fetch_historical_data('EUR/USD', '1m', 2)
 
     def test_validate_data_with_wrong_types(self):
         """Test validation with wrong data types."""
         # String instead of DataFrame
-        with pytest.raises(AttributeError):
+        with pytest.raises(ValueError, match="Input must be a pandas DataFrame"):
             validate_data("not a dataframe")
 
         # DataFrame with wrong column types
@@ -516,10 +519,23 @@ class TestIntegrationErrorHandling:
 class TestSystemIntegrationErrorHandling:
     """Test error handling across the entire system."""
 
-    def test_full_pipeline_error_recovery(self):
+    @patch('src.data_fetcher.get_data_source')
+    def test_full_pipeline_error_recovery(self, mock_get_source):
         """Test error recovery in the full pipeline."""
-        # Test that data fetcher handles errors gracefully - this test now verifies successful operation
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 10)
+        # Mock data source to return valid data
+        mock_data_source = MagicMock()
+        mock_get_source.return_value = mock_data_source
+        mock_df = pd.DataFrame({
+            'timestamp': pd.date_range('2023-01-01', periods=10, freq='1min'),
+            'open': [1.0] * 10,
+            'high': [1.1] * 10,
+            'low': [0.9] * 10,
+            'close': [1.05] * 10,
+            'volume': [1000] * 10
+        })
+        mock_data_source.fetch_historical_data.return_value = mock_df
+
+        result = fetch_historical_data('EUR/USD', '1m', 10)
         assert isinstance(result, pd.DataFrame)
         assert len(result) > 0  # Should return data on success
 

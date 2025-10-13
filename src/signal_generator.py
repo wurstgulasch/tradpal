@@ -87,19 +87,30 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     if STRICT_SIGNALS_ENABLED:
         # Enhanced logic for crash scenarios - generate buy signals on extreme oversold conditions
         # even without bullish EMA crossover (for crash buying opportunities)
+        
+        # Only generate signals where all required indicators are available (not NaN)
+        valid_indicators = (
+            df['EMA9'].notna() & 
+            df['EMA21'].notna() & 
+            df['RSI'].notna() & 
+            df['BB_lower'].notna() & 
+            df['BB_upper'].notna()
+        )
+        
         ema_buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
         crash_buy_condition = ((df['RSI'].values < 35) & (df['close'].values < df['BB_lower'].values)) | \
                              ((df['RSI'].values < 40) & (df['close'].values < df['BB_lower'].values * 1.02))  # More lenient crash condition
         
-        buy_condition = ema_buy_condition | crash_buy_condition
+        buy_condition = (ema_buy_condition | crash_buy_condition) & valid_indicators
         df['Buy_Signal'] = buy_condition.astype(int)
         
-        sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values)
+        sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values) & valid_indicators
         df['Sell_Signal'] = sell_condition.astype(int)
     else:
-        # Simplified signals: only EMA crossover
-        df['Buy_Signal'] = (df['EMA_crossover'].values == 1).astype(int)
-        df['Sell_Signal'] = (df['EMA_crossover'].values == -1).astype(int)
+        # Simplified signals: only EMA crossover where indicators are valid
+        valid_ema = df['EMA9'].notna() & df['EMA21'].notna()
+        df['Buy_Signal'] = ((df['EMA_crossover'].values == 1) & valid_ema).astype(int)
+        df['Sell_Signal'] = ((df['EMA_crossover'].values == -1) & valid_ema).astype(int)
 
     # Multi-Timeframe Analysis (MTA) for signal confirmation
     if MTA_ENABLED:
@@ -110,6 +121,9 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
 
     # Sentiment Analysis Enhancement
     df = apply_sentiment_signal_enhancement(df)
+
+    # Funding Rate Enhancement for perpetual futures
+    df = apply_funding_rate_signal_enhancement(df)
 
     # Execute Paper Trades if enabled
     if PAPER_TRADING_ENABLED and PAPER_TRADING_AVAILABLE:
@@ -973,6 +987,121 @@ def execute_paper_trades(df: pd.DataFrame) -> pd.DataFrame:
             error_type="PAPER_TRADING_EXECUTION_ERROR",
             message=f"Paper trading execution failed: {str(e)}",
             context={'paper_trading_enabled': PAPER_TRADING_ENABLED}
+        )
+
+    return df
+
+
+def apply_funding_rate_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply funding rate analysis enhancement to trading signals for perpetual futures.
+
+    Integrates funding rate data to enhance or filter signals based on perpetual futures
+    market dynamics. Positive funding rates favor shorts, negative favor longs.
+    """
+    from config.settings import FUNDING_RATE_ENABLED, FUNDING_RATE_WEIGHT, FUNDING_RATE_THRESHOLD
+
+    # Check if funding rate analysis is enabled
+    if not FUNDING_RATE_ENABLED:
+        return df
+
+    try:
+        print("💰 Applying funding rate signal enhancement...")
+
+        # Add funding rate columns to DataFrame - vectorized initialization
+        df = df.copy()  # Avoid modifying original
+        df['Funding_Rate_Enhanced'] = False
+
+        # Check if funding rate data is available in the DataFrame
+        funding_rate_available = 'funding_rate' in df.columns and not df['funding_rate'].isna().all()
+
+        if not funding_rate_available:
+            print("💰 No funding rate data available, skipping enhancement")
+            return df
+
+        print("💰 Funding rate data found, applying enhancement")
+
+        # Get original signals - vectorized
+        buy_signal = df.get('Buy_Signal', 0) == 1
+        sell_signal = df.get('Sell_Signal', 0) == 1
+
+        # Get funding rate data - vectorized
+        funding_rates = df['funding_rate'].fillna(0).values
+        funding_rate_zscore = df.get('funding_rate_zscore', pd.Series([0] * len(df))).fillna(0).values
+
+        # Vectorized funding rate enhancement logic
+        # Positive funding rate (> threshold) favors shorts (sell signals)
+        # Negative funding rate (< -threshold) favors longs (buy signals)
+        funding_positive = funding_rates > FUNDING_RATE_THRESHOLD
+        funding_negative = funding_rates < -FUNDING_RATE_THRESHOLD
+        funding_extreme = np.abs(funding_rate_zscore) > 2.0  # Z-score > 2 or < -2
+
+        # Enhance existing signals based on funding rates
+        buy_enhanced = buy_signal & funding_negative  # Buy signals strengthened by negative funding
+        sell_enhanced = sell_signal & funding_positive  # Sell signals strengthened by positive funding
+
+        # Funding rate can create new signals or override weak ones
+        new_buy_from_funding = ~buy_signal & funding_negative & ~sell_signal  # Only if no conflicting sell signal
+        new_sell_from_funding = ~sell_signal & funding_positive & ~buy_signal  # Only if no conflicting buy signal
+
+        # Extreme funding rates might indicate reversals
+        funding_reversal_buy = funding_extreme & (funding_rates < 0) & sell_signal  # Extreme negative funding might reverse sell signals
+        funding_reversal_sell = funding_extreme & (funding_rates > 0) & buy_signal  # Extreme positive funding might reverse buy signals
+
+        # Update signals - vectorized
+        df.loc[buy_enhanced, 'Funding_Rate_Enhanced'] = True
+        df.loc[buy_enhanced, 'Enhanced_Signal'] = 'BUY_FUNDING_STRONG'
+
+        df.loc[sell_enhanced, 'Funding_Rate_Enhanced'] = True
+        df.loc[sell_enhanced, 'Enhanced_Signal'] = 'SELL_FUNDING_STRONG'
+
+        df.loc[new_buy_from_funding, 'Buy_Signal'] = 1
+        df.loc[new_buy_from_funding, 'Funding_Rate_Enhanced'] = True
+        df.loc[new_buy_from_funding, 'Enhanced_Signal'] = 'BUY_FUNDING'
+
+        df.loc[new_sell_from_funding, 'Sell_Signal'] = 1
+        df.loc[new_sell_from_funding, 'Funding_Rate_Enhanced'] = True
+        df.loc[new_sell_from_funding, 'Enhanced_Signal'] = 'SELL_FUNDING'
+
+        # Apply reversals for extreme funding rates
+        df.loc[funding_reversal_buy, 'Buy_Signal'] = 1
+        df.loc[funding_reversal_buy, 'Sell_Signal'] = 0
+        df.loc[funding_reversal_buy, 'Funding_Rate_Enhanced'] = True
+        df.loc[funding_reversal_buy, 'Enhanced_Signal'] = 'BUY_FUNDING_REVERSAL'
+
+        df.loc[funding_reversal_sell, 'Sell_Signal'] = 1
+        df.loc[funding_reversal_sell, 'Buy_Signal'] = 0
+        df.loc[funding_reversal_sell, 'Funding_Rate_Enhanced'] = True
+        df.loc[funding_reversal_sell, 'Enhanced_Signal'] = 'SELL_FUNDING_REVERSAL'
+
+        # Adjust position sizing based on funding rates
+        if 'Position_Size_Absolute' in df.columns:
+            # Reduce position size when funding rates are extremely high (costly)
+            funding_cost_multiplier = np.clip(1 / (1 + np.abs(funding_rates) * 10), 0.1, 1.0)
+            df['Position_Size_Absolute'] *= funding_cost_multiplier
+            df['Funding_Adjusted_Position'] = True
+
+        # Log funding rate enhancement completion
+        enhanced_count = df['Funding_Rate_Enhanced'].sum()
+        if enhanced_count > 0:
+            audit_logger.log_system_event(
+                event_type="FUNDING_RATE_SIGNAL_ENHANCEMENT_COMPLETED",
+                message=f"Funding rate signal enhancement completed: {enhanced_count} signals enhanced",
+                details={
+                    'total_signals': len(df),
+                    'enhanced_signals': int(enhanced_count),
+                    'funding_rate_positive': funding_positive.sum(),
+                    'funding_rate_negative': funding_negative.sum(),
+                    'funding_rate_extreme': funding_extreme.sum(),
+                    'funding_rate_enabled': True
+                }
+            )
+
+    except Exception as e:
+        audit_logger.log_error(
+            error_type="FUNDING_RATE_ENHANCEMENT_ERROR",
+            message=f"Funding rate signal enhancement failed: {str(e)}",
+            context={'funding_rate_enabled': FUNDING_RATE_ENABLED}
         )
 
     return df

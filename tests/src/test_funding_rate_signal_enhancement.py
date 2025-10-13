@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""
+Test Funding Rate Signal Enhancement
+
+Tests for the funding rate signal enhancement in the signal generator.
+"""
+
+import pytest
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
+import sys
+import os
+
+# Add src to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+
+from src.signal_generator import apply_funding_rate_signal_enhancement
+
+
+class TestFundingRateSignalEnhancement:
+    """Test funding rate signal enhancement functions."""
+
+    @pytest.fixture
+    def sample_market_data(self):
+        """Create sample market data with signals."""
+        dates = pd.date_range('2021-12-01', periods=10, freq='1H')
+
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'open': np.random.uniform(50000, 51000, len(dates)),
+            'high': np.random.uniform(50500, 51500, len(dates)),
+            'low': np.random.uniform(49500, 50500, len(dates)),
+            'close': np.random.uniform(50000, 51000, len(dates)),
+            'volume': np.random.uniform(1000, 2000, len(dates)),
+            'EMA9': np.random.uniform(49900, 51100, len(dates)),
+            'EMA21': np.random.uniform(49800, 51200, len(dates)),
+            'RSI': np.random.uniform(30, 70, len(dates)),
+            'Buy_Signal': [1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+            'Sell_Signal': [0, 1, 0, 0, 1, 0, 0, 1, 0, 0]
+        })
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    @pytest.fixture
+    def sample_funding_data_positive(self):
+        """Create sample positive funding rate data."""
+        dates = pd.date_range('2021-12-01', periods=10, freq='1H')
+
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'funding_rate': [0.0002, 0.00015, 0.00018, 0.00012, 0.00022,
+                           0.00019, 0.00016, 0.00021, 0.00014, 0.00017],
+            'funding_rate_zscore': [1.2, 0.8, 1.1, 0.5, 1.5, 1.3, 0.9, 1.4, 0.7, 1.0]
+        })
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    @pytest.fixture
+    def sample_funding_data_negative(self):
+        """Create sample negative funding rate data."""
+        dates = pd.date_range('2021-12-01', periods=10, freq='1H')
+
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'funding_rate': [-0.00015, -0.00012, -0.00018, -0.00008, -0.00022,
+                           -0.00016, -0.00011, -0.00019, -0.00009, -0.00014],
+            'funding_rate_zscore': [-0.8, -0.5, -1.1, -0.3, -1.5, -0.9, -0.4, -1.2, -0.3, -0.7]
+        })
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    @pytest.fixture
+    def sample_funding_data_extreme(self):
+        """Create sample extreme funding rate data."""
+        dates = pd.date_range('2021-12-01', periods=10, freq='1H')
+
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'funding_rate': [0.0005, -0.0004, 0.0006, -0.00045, 0.00055,
+                           -0.0005, 0.00048, -0.00052, 0.00047, -0.00046],
+            'funding_rate_zscore': [3.2, -2.8, 3.5, -3.1, 3.3, -3.2, 2.9, -3.4, 2.8, -3.0]
+        })
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    @patch('config.settings.FUNDING_RATE_ENABLED', True)
+    @patch('config.settings.FUNDING_RATE_WEIGHT', 0.3)
+    @patch('config.settings.FUNDING_RATE_THRESHOLD', 0.0001)
+    def test_positive_funding_rate_enhancement(self, sample_market_data, sample_funding_data_positive):
+        """Test signal enhancement with positive funding rates."""
+        # Add funding data to market data
+        enhanced_df = sample_market_data.copy()
+        for col in sample_funding_data_positive.columns:
+            enhanced_df[col] = sample_funding_data_positive[col]
+
+        result = apply_funding_rate_signal_enhancement(enhanced_df)
+
+        assert not result.empty
+        assert 'Funding_Rate_Enhanced' in result.columns
+
+        # Positive funding rates should enhance sell signals
+        enhanced_sells = result[result['Funding_Rate_Enhanced'] == True]['Sell_Signal'].sum()
+        assert enhanced_sells > 0
+
+    @patch('config.settings.FUNDING_RATE_ENABLED', True)
+    @patch('config.settings.FUNDING_RATE_WEIGHT', 0.3)
+    @patch('config.settings.FUNDING_RATE_THRESHOLD', 0.0001)
+    def test_negative_funding_rate_enhancement(self, sample_market_data, sample_funding_data_negative):
+        """Test signal enhancement with negative funding rates."""
+        # Add funding data to market data
+        enhanced_df = sample_market_data.copy()
+        for col in sample_funding_data_negative.columns:
+            enhanced_df[col] = sample_funding_data_negative[col]
+
+        result = apply_funding_rate_signal_enhancement(enhanced_df)
+
+        assert not result.empty
+        assert 'Funding_Rate_Enhanced' in result.columns
+
+        # Negative funding rates should enhance buy signals
+        enhanced_buys = result[result['Funding_Rate_Enhanced'] == True]['Buy_Signal'].sum()
+        assert enhanced_buys > 0
+
+    @patch('config.settings.FUNDING_RATE_ENABLED', True)
+    @patch('config.settings.FUNDING_RATE_WEIGHT', 0.3)
+    @patch('config.settings.FUNDING_RATE_THRESHOLD', 0.0001)
+    def test_extreme_funding_rate_reversal(self, sample_market_data, sample_funding_data_extreme):
+        """Test signal reversal with extreme funding rates."""
+        # Add funding data to market data
+        enhanced_df = sample_market_data.copy()
+        for col in sample_funding_data_extreme.columns:
+            enhanced_df[col] = sample_funding_data_extreme[col]
+
+        result = apply_funding_rate_signal_enhancement(enhanced_df)
+
+        assert not result.empty
+        assert 'Funding_Rate_Enhanced' in result.columns
+
+        # Check for reversal signals
+        reversal_signals = result[result['Enhanced_Signal'].str.contains('REVERSAL', na=False)]
+        assert len(reversal_signals) > 0
+
+    @patch('config.settings.FUNDING_RATE_ENABLED', False)
+    def test_disabled_funding_rate_enhancement(self, sample_market_data, sample_funding_data_positive):
+        """Test that enhancement is disabled when FUNDING_RATE_ENABLED is False."""
+        # Add funding data to market data
+        enhanced_df = sample_market_data.copy()
+        for col in sample_funding_data_positive.columns:
+            enhanced_df[col] = sample_funding_data_positive[col]
+
+        result = apply_funding_rate_signal_enhancement(enhanced_df)
+
+        # Should return original data unchanged
+        assert len(result) == len(enhanced_df)
+        assert 'Funding_Rate_Enhanced' not in result.columns
+
+    def test_no_funding_data_available(self, sample_market_data):
+        """Test behavior when no funding data is available."""
+        with patch('config.settings.FUNDING_RATE_ENABLED', True):
+            result = apply_funding_rate_signal_enhancement(sample_market_data)
+
+            # Should return original data with Funding_Rate_Enhanced column set to False
+            assert len(result) == len(sample_market_data)
+            assert 'Funding_Rate_Enhanced' in result.columns
+            assert not result['Funding_Rate_Enhanced'].any()  # All should be False
+
+    @patch('config.settings.FUNDING_RATE_ENABLED', True)
+    @patch('config.settings.FUNDING_RATE_WEIGHT', 0.3)
+    @patch('config.settings.FUNDING_RATE_THRESHOLD', 0.0001)
+    def test_position_size_adjustment(self, sample_market_data, sample_funding_data_positive):
+        """Test position size adjustment based on funding rates."""
+        # Add funding data and position size to market data
+        enhanced_df = sample_market_data.copy()
+        for col in sample_funding_data_positive.columns:
+            enhanced_df[col] = sample_funding_data_positive[col]
+        enhanced_df['Position_Size_Absolute'] = np.random.uniform(1000, 2000, len(enhanced_df))
+
+        result = apply_funding_rate_signal_enhancement(enhanced_df)
+
+        assert not result.empty
+        assert 'Position_Size_Absolute' in result.columns
+        assert 'Funding_Adjusted_Position' in result.columns
+
+        # Position sizes should be adjusted (potentially reduced) due to positive funding costs
+        original_sizes = enhanced_df['Position_Size_Absolute']
+        adjusted_sizes = result['Position_Size_Absolute']
+        # Some positions should be adjusted
+        assert not adjusted_sizes.equals(original_sizes)
+
+    @patch('config.settings.FUNDING_RATE_ENABLED', True)
+    @patch('config.settings.FUNDING_RATE_WEIGHT', 0.3)
+    @patch('config.settings.FUNDING_RATE_THRESHOLD', 0.0001)
+    def test_new_signals_from_funding_rates(self, sample_market_data, sample_funding_data_negative):
+        """Test generation of new signals from funding rates alone."""
+        # Create market data with no signals
+        no_signal_df = sample_market_data.copy()
+        no_signal_df['Buy_Signal'] = 0
+        no_signal_df['Sell_Signal'] = 0
+
+        # Add negative funding data (should generate buy signals)
+        for col in sample_funding_data_negative.columns:
+            no_signal_df[col] = sample_funding_data_negative[col]
+
+        result = apply_funding_rate_signal_enhancement(no_signal_df)
+
+        assert not result.empty
+        assert 'Funding_Rate_Enhanced' in result.columns
+
+        # Should have generated some buy signals from negative funding rates
+        new_buy_signals = result[(result['Funding_Rate_Enhanced'] == True) &
+                                (result['Buy_Signal'] == 1) &
+                                (result['Enhanced_Signal'] == 'BUY_FUNDING')]
+        assert len(new_buy_signals) > 0
+
+    @patch('src.signal_generator.audit_logger')
+    @patch('config.settings.FUNDING_RATE_ENABLED', True)
+    @patch('config.settings.FUNDING_RATE_WEIGHT', 0.3)
+    @patch('config.settings.FUNDING_RATE_THRESHOLD', 0.0001)
+    def test_audit_logging(self, mock_audit_logger, sample_market_data, sample_funding_data_positive):
+        """Test that funding rate enhancement logs audit events."""
+        # Add funding data to market data
+        enhanced_df = sample_market_data.copy()
+        for col in sample_funding_data_positive.columns:
+            enhanced_df[col] = sample_funding_data_positive[col]
+
+        result = apply_funding_rate_signal_enhancement(enhanced_df)
+
+        # Should have logged enhancement completion
+        mock_audit_logger.log_system_event.assert_called()
+
+    def test_empty_dataframe_handling(self):
+        """Test handling of empty dataframes."""
+        with patch('config.settings.FUNDING_RATE_ENABLED', True):
+            result = apply_funding_rate_signal_enhancement(pd.DataFrame())
+
+            assert result.empty
+
+    def test_error_handling(self, sample_market_data):
+        """Test error handling in funding rate enhancement."""
+        with patch('config.settings.FUNDING_RATE_ENABLED', True):
+            # Create malformed data that should cause errors
+            bad_df = sample_market_data.copy()
+            bad_df['funding_rate'] = 'invalid_data'
+
+            # Should handle errors gracefully
+            result = apply_funding_rate_signal_enhancement(bad_df)
+
+            # Should still return a dataframe
+            assert isinstance(result, pd.DataFrame)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

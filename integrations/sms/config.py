@@ -31,7 +31,7 @@ class SMSConfig(IntegrationConfig):
             to_numbers = [num.strip() for num in os.getenv('SMS_TO_NUMBERS', '').split(',') if num.strip()]
 
         return cls(
-            enabled=bool(os.getenv('TWILIO_ACCOUNT_SID') and os.getenv('TWILIO_AUTH_TOKEN') and to_numbers),
+            enabled=bool(os.getenv('TWILIO_ACCOUNT_SID') and os.getenv('TWILIO_AUTH_TOKEN') and os.getenv('TWILIO_FROM_NUMBER') and to_numbers),
             name="SMS Notifications",
             account_sid=os.getenv('TWILIO_ACCOUNT_SID', ''),
             auth_token=os.getenv('TWILIO_AUTH_TOKEN', ''),

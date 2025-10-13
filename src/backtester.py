@@ -21,7 +21,7 @@ class Backtester:
     """
 
     def __init__(self, symbol=SYMBOL, exchange=EXCHANGE, timeframe=TIMEFRAME,
-                 start_date=None, end_date=None, initial_capital=10000):
+                 start_date=None, end_date=None, initial_capital=10000, commission=0.001):
         self.symbol = symbol
         self.exchange = exchange
         self.timeframe = timeframe
@@ -45,6 +45,7 @@ class Backtester:
         self.current_capital = initial_capital
         self.trades = []
         self.portfolio_values = []
+        self.commission = commission
 
     def run_backtest(self, df=None, strategy='traditional', symbol=None, timeframe=None,
                      initial_capital=None, commission=0.001):
@@ -1559,12 +1560,17 @@ def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=No
         Dictionary with backtest results and trades DataFrame
     """
     try:
+        from config.settings import ML_ENABLED
+        
         # Create backtester instance
         backtester = Backtester(symbol=symbol, timeframe=timeframe,
                               start_date=start_date, end_date=end_date)
 
-        # Run backtest with ML-enhanced strategy
-        results = backtester.run_backtest(strategy='ml_enhanced')
+        # Choose strategy based on ML_ENABLED setting
+        strategy = 'ml_enhanced' if ML_ENABLED else 'traditional'
+
+        # Run backtest with appropriate strategy
+        results = backtester.run_backtest(strategy=strategy)
 
         # Get trades
         trades_df = pd.DataFrame(backtester.trades)

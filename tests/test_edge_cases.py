@@ -27,52 +27,71 @@ from integrations.email_integration.email import EmailIntegration, EmailConfig
 class TestDataFetcherEdgeCases:
     """Test edge cases in data fetcher."""
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_single_candle(self, mock_ccxt):
+    @patch('src.data_fetcher.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_single_candle(self, mock_get_data_source, mock_cache):
         """Test fetching a single candle."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.return_value = [
-            [1640995200000, 1.0, 1.1, 0.9, 1.05, 1000]
-        ]
-        mock_exchange.has = {'fetchOHLCV': True}
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.return_value = pd.DataFrame({
+            'open': [1.0],
+            'high': [1.1],
+            'low': [0.9],
+            'close': [1.05],
+            'volume': [1000]
+        }, index=pd.to_datetime([1640995200000], unit='ms'))
 
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 1)
+        result = fetch_historical_data('EUR/USD', '1m', 1)
         assert len(result) == 1
         assert result.iloc[0]['close'] == 1.05
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_weekend_data(self, mock_ccxt):
+    @patch('src.data_fetcher.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_weekend_data(self, mock_get_data_source, mock_cache):
         """Test fetching data that includes weekends."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Simulate weekend data (should be handled gracefully)
-        weekend_data = [
-            [1640995200000, 1.0, 1.1, 0.9, 1.05, 1000],  # Friday
-            [1641081600000, 1.05, 1.15, 0.95, 1.1, 800],   # Saturday (might be empty)
-            [1641168000000, 1.1, 1.2, 1.0, 1.15, 1200]     # Sunday (might be empty)
-        ]
-        mock_exchange.fetch_ohlcv.return_value = weekend_data
-        mock_exchange.has = {'fetchOHLCV': True}
+        weekend_data = pd.DataFrame({
+            'open': [1.0, 1.05, 1.1],
+            'high': [1.1, 1.15, 1.2],
+            'low': [0.9, 0.95, 1.0],
+            'close': [1.05, 1.1, 1.15],
+            'volume': [1000, 800, 1200]
+        }, index=pd.to_datetime([1640995200000, 1641081600000, 1641168000000], unit='ms'))
+        mock_data_source.fetch_historical_data.return_value = weekend_data
 
-        result = fetch_historical_data('EUR/USD', 'kraken', '1d', 3)
+        result = fetch_historical_data('EUR/USD', '1d', 3)
         assert len(result) >= 1  # At least some data should be returned
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_with_timezone_issues(self, mock_ccxt):
+    @patch('src.data_fetcher.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_with_timezone_issues(self, mock_get_data_source, mock_cache):
         """Test fetching data with timezone complications."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Data with timestamps that might cause timezone issues
-        data = [
-            [1640995200000, 1.0, 1.1, 0.9, 1.05, 1000],  # UTC timestamp
-        ]
-        mock_exchange.fetch_ohlcv.return_value = data
-        mock_exchange.has = {'fetchOHLCV': True}
+        data = pd.DataFrame({
+            'open': [1.0],
+            'high': [1.1],
+            'low': [0.9],
+            'close': [1.05],
+            'volume': [1000]
+        }, index=pd.to_datetime([1640995200000], unit='ms'))
+        mock_data_source.fetch_historical_data.return_value = data
 
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 1)
+        result = fetch_historical_data('EUR/USD', '1m', 1)
         assert len(result) == 1
         # Should handle timezone conversion properly
         assert isinstance(result.index, pd.DatetimeIndex)

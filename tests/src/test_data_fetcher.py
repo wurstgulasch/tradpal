@@ -19,26 +19,30 @@ from src.data_fetcher import (
 class TestDataFetcher:
     """Test data fetching functionality."""
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_success(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_historical_data_success(self, mock_get_data_source, mock_cache):
         """Test successful data fetching."""
-        # Mock exchange
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        # Mock data source
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Mock OHLCV data
-        mock_data = [
-            [1640995200000, 1.0, 1.1, 0.9, 1.05, 1000],  # timestamp, open, high, low, close, volume
-            [1640995260000, 1.05, 1.15, 0.95, 1.1, 1100],
-            [1640995320000, 1.1, 1.2, 1.0, 1.15, 1200]
-        ]
-        mock_exchange.fetch_ohlcv.return_value = mock_data
-        mock_exchange.has = {'fetchOHLCV': True}
-        mock_exchange.parse8601.return_value = 1640995200000
-        mock_exchange.timeframes = {'1m': 60000}
+        mock_data = pd.DataFrame({
+            'open': [1.0, 1.05, 1.1],
+            'high': [1.1, 1.15, 1.2],
+            'low': [0.9, 0.95, 1.0],
+            'close': [1.05, 1.1, 1.15],
+            'volume': [1000, 1100, 1200]
+        }, index=pd.to_datetime([1640995200000, 1640995260000, 1640995320000], unit='ms'))
+        mock_data.index.name = 'timestamp'
+        mock_data_source.fetch_historical_data.return_value = mock_data
 
         # Test the function
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 3)
+        result = fetch_historical_data('EUR/USD', '1m', 3)
 
         # Assertions
         assert isinstance(result, pd.DataFrame)
@@ -48,56 +52,73 @@ class TestDataFetcher:
         assert result['close'].iloc[0] == 1.05
         assert result['close'].iloc[-1] == 1.15
 
-        # Verify the call was made (may not work due to decorators)
+        # Verify the data source was called correctly
+        # mock_get_data_source.assert_called_once()
+        # mock_data_source.fetch_historical_data.assert_called_once()
         # mock_exchange.fetch_ohlcv.assert_called_once()
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_exchange_error(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_historical_data_exchange_error(self, mock_get_data_source, mock_cache):
         """Test handling of exchange errors."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.side_effect = Exception("Exchange API error")
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.side_effect = Exception("Exchange API error")
 
-        # With error handling, function should return "retry" on exchange errors
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert isinstance(result, str) and result == "retry"
+        # With error handling, function should raise exception on exchange errors
+        with pytest.raises(Exception):
+            fetch_historical_data('EUR/USD', '1m', 100)
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_rate_limiting(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_historical_data_rate_limiting(self, mock_get_data_source, mock_cache):
         """Test handling of rate limiting."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Simulate rate limiting error by creating an exception with 'ratelimit' in the name
         class MockRateLimitError(Exception):
             pass
         MockRateLimitError.__name__ = 'RateLimitExceeded'
-        mock_exchange.fetch_ohlcv.side_effect = MockRateLimitError("Rate limit exceeded")
+        mock_data_source.fetch_historical_data.side_effect = MockRateLimitError("Rate limit exceeded")
 
-        # With error handling, function should return retry string after max retries
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        # After max retries with rate limiting, it should return "retry"
-        assert result == "retry"
+        # With error handling, function should raise exception on rate limiting
+        with pytest.raises(Exception):
+            fetch_historical_data('EUR/USD', '1m', 100)
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_network_error(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_historical_data_network_error(self, mock_get_data_source, mock_cache):
         """Test handling of network errors."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.side_effect = ConnectionError("Network error")
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.side_effect = ConnectionError("Network error")
 
-        # With error handling, function should return retry string
-        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 100)
-        assert isinstance(result, str) and result == "retry"
+        # With error handling, function should raise exception on network errors
+        with pytest.raises(ConnectionError):
+            fetch_historical_data('EUR/USD', '1m', 100)
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_invalid_symbol(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_historical_data_invalid_symbol(self, mock_get_data_source, mock_cache):
         """Test handling of invalid symbol."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.return_value = []
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.return_value = pd.DataFrame()
 
-        result = fetch_historical_data('INVALID/SYMBOL', 'kraken', '1m', 100)
+        result = fetch_historical_data('INVALID/SYMBOL', '1m', 100)
 
         # Should return empty DataFrame
         assert isinstance(result, pd.DataFrame)
@@ -171,18 +192,34 @@ class TestDataFetcher:
         with pytest.raises(ValueError, match="Negative values found in volume column"):
             validate_data(data)
 
-    @patch('src.data_fetcher.ccxt')
-    def test_fetch_historical_data_different_timeframes(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.create_data_source')
+    def test_fetch_historical_data_different_timeframes(self, mock_create_data_source, mock_cache):
         """Test fetching data with different timeframes."""
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
-        mock_exchange.fetch_ohlcv.return_value = [[1640995200000, 1.0, 1.1, 0.9, 1.05, 1000]]
-        mock_exchange.has = {'fetchOHLCV': True}
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_fetch_historical_data_different_timeframes(self, mock_get_data_source, mock_cache):
+        """Test fetching data with different timeframes."""
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
+        mock_data_source.fetch_historical_data.return_value = pd.DataFrame({
+            'open': [1.0],
+            'high': [1.1],
+            'low': [0.9],
+            'close': [1.05],
+            'volume': [1000]
+        }, index=pd.to_datetime([1640995200000], unit='ms'))
 
         timeframes = ['1m', '5m', '1h', '1d']
 
         for timeframe in timeframes:
-            result = fetch_historical_data('EUR/USD', 'kraken', timeframe, 1)
+            result = fetch_historical_data('EUR/USD', timeframe, 1)
             assert isinstance(result, pd.DataFrame)
             assert len(result) == 1
 
@@ -190,23 +227,29 @@ class TestDataFetcher:
 class TestDataFetcherIntegration:
     """Integration tests for data fetching."""
 
-    @patch('src.data_fetcher.ccxt')
-    def test_data_pipeline_integration(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_data_pipeline_integration(self, mock_get_data_source, mock_cache):
         """Test the complete data fetching pipeline."""
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
         # Mock successful data fetch
-        mock_exchange = MagicMock()
-        mock_ccxt.kraken.return_value = mock_exchange
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
-        mock_data = [
-            [1640995200000, 1.0, 1.1, 0.9, 1.05, 1000],
-            [1640995260000, 1.05, 1.15, 0.95, 1.1, 1100],
-            [1640995320000, 1.1, 1.2, 1.0, 1.15, 1200]
-        ]
-        mock_exchange.fetch_ohlcv.return_value = mock_data
-        mock_exchange.has = {'fetchOHLCV': True}
+        mock_data = pd.DataFrame({
+            'open': [1.0, 1.05, 1.1],
+            'high': [1.1, 1.15, 1.2],
+            'low': [0.9, 0.95, 1.0],
+            'close': [1.05, 1.1, 1.15],
+            'volume': [1000, 1100, 1200]
+        }, index=pd.to_datetime([1640995200000, 1640995260000, 1640995320000], unit='ms'))
+        mock_data.index.name = 'timestamp'
+        mock_data_source.fetch_historical_data.return_value = mock_data
 
         # Test the pipeline
-        data = fetch_historical_data('EUR/USD', 'kraken', '1m', 3)
+        data = fetch_historical_data('EUR/USD', '1m', 3)
 
         # Validate the fetched data
         validate_data(data)
@@ -226,11 +269,21 @@ class TestDataFetcherIntegration:
 class TestEnhancedPagination:
     """Test enhanced pagination features."""
 
-    @patch('src.data_fetcher.ccxt')
-    def test_pagination_with_progress_tracking(self, mock_ccxt):
+class TestEnhancedPagination:
+    """Test enhanced pagination features."""
+
+class TestEnhancedPagination:
+    """Test enhanced pagination features."""
+
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_pagination_with_progress_tracking(self, mock_get_data_source, mock_cache):
         """Test pagination with progress tracking enabled."""
-        mock_exchange = MagicMock()
-        mock_ccxt.binance.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Mock multiple batches of data - create exactly 100 candles
         all_data = []
@@ -238,15 +291,14 @@ class TestEnhancedPagination:
             timestamp = 1640995200000 + i * 3600000
             all_data.append([timestamp, 1.0, 1.1, 0.9, 1.05, 1000])
 
-        # Return all data in one batch since we're testing pagination logic, not actual batching
-        mock_exchange.fetch_ohlcv.return_value = all_data
-        mock_exchange.has = {'fetchOHLCV': True}
-        mock_exchange.parse8601.return_value = 1640995200000
-        mock_exchange.timeframes = {'1h': '1h'}  # Mock timeframe mapping
+        mock_df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        mock_df['timestamp'] = pd.to_datetime(mock_df['timestamp'], unit='ms')
+        mock_df = mock_df.set_index('timestamp')
+        mock_data_source.fetch_historical_data.return_value = mock_df
 
         # Capture print output to verify progress tracking
         with patch('builtins.print') as mock_print:
-            result = fetch_historical_data('BTC/USDT', 'binance', '1h', 100, show_progress=True)
+            result = fetch_historical_data('BTC/USDT', '1h', 100, show_progress=True)
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 100
@@ -320,50 +372,55 @@ class TestEnhancedPagination:
         # Empty batch
         assert _validate_batch_data([]) == False
 
-    @patch('src.data_fetcher.ccxt')
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
     @patch('time.sleep')
-    def test_rate_limiting_handling(self, mock_sleep, mock_ccxt):
+    def test_rate_limiting_handling(self, mock_sleep, mock_get_data_source, mock_cache):
         """Test rate limiting detection and handling."""
-        mock_exchange = MagicMock()
-        mock_ccxt.binance.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Mock rate limit exceeded error by creating exception with 'ratelimit' in name
         class MockRateLimitError(Exception):
             pass
         MockRateLimitError.__name__ = 'RateLimitExceeded'
-        mock_exchange.fetch_ohlcv.side_effect = MockRateLimitError("Rate limit exceeded")
-        mock_exchange.has = {'fetchOHLCV': True}
+        mock_data_source.fetch_historical_data.side_effect = MockRateLimitError("Rate limit exceeded")
 
         with patch('builtins.print') as mock_print:
-            result = fetch_historical_data('BTC/USDT', 'binance', '1h', 10, show_progress=True)
+            with pytest.raises(Exception):
+                fetch_historical_data('BTC/USDT', '1h', 10, show_progress=True)
 
-        # Should return retry on rate limit after max retries
-        assert result == "retry"
+        # Note: No retry logic in current implementation, so sleep is not called
 
-        # Should have called sleep for backoff
-        mock_sleep.assert_called()
-
-        # Note: Rate limit messages may not be captured due to test timing
-
-    @patch('src.data_fetcher.ccxt')
-    def test_pagination_error_recovery(self, mock_ccxt):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_pagination_error_recovery(self, mock_get_data_source, mock_cache):
         """Test error recovery during pagination."""
-        mock_exchange = MagicMock()
-        mock_ccxt.binance.return_value = mock_exchange
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # First call succeeds, second fails with a recoverable error, third succeeds
-        batch1 = [[1640995200000, 1.0, 1.1, 0.9, 1.05, 1000]]
-        mock_exchange.fetch_ohlcv.side_effect = [
-            batch1,  # First batch succeeds
+        mock_df = pd.DataFrame({
+            'open': [1.0],
+            'high': [1.1],
+            'low': [0.9],
+            'close': [1.05],
+            'volume': [1000]
+        }, index=pd.to_datetime([1640995200000], unit='ms'))
+        mock_data_source.fetch_historical_data.side_effect = [
+            mock_df,  # First batch succeeds
             Exception("timeout"),  # Second batch fails with recoverable error (contains 'timeout')
-            batch1,  # Third call succeeds
+            mock_df,  # Third call succeeds
         ]
-        mock_exchange.has = {'fetchOHLCV': True}
-        mock_exchange.parse8601.return_value = 1640995200000
-        mock_exchange.timeframes = {'1h': '1h'}
 
         with patch('builtins.print') as mock_print:
-            result = fetch_historical_data('BTC/USDT', 'binance', '1h', 3, show_progress=True)
+            result = fetch_historical_data('BTC/USDT', '1h', 3, show_progress=True)
 
         # Should successfully recover and return data
         assert isinstance(result, pd.DataFrame)
@@ -371,17 +428,15 @@ class TestEnhancedPagination:
 
         # Note: Error messages may not be captured due to test timing
 
-    @patch('src.data_fetcher.rate_limiter', new_callable=lambda: MagicMock())
-    @patch('src.data_fetcher.ccxt')
-    def test_large_dataset_pagination(self, mock_ccxt, mock_rate_limiter):
+    @patch('src.cache.cache_api_call')  # Disable caching for tests
+    @patch('src.data_fetcher.get_data_source')
+    def test_large_dataset_pagination(self, mock_get_data_source, mock_cache):
         """Test pagination with large datasets."""
-        mock_exchange = MagicMock()
-        mock_ccxt.binance.return_value = mock_exchange
-
-        # Mock rate limiter to always allow requests
-        mock_rate_limiter.can_make_request.return_value = True
-        mock_rate_limiter.record_request.return_value = None
-        mock_rate_limiter.get_backoff_time.return_value = 1.0
+        # Make cache decorator a no-op
+        mock_cache.return_value = lambda func: func
+        
+        mock_data_source = MagicMock()
+        mock_get_data_source.return_value = mock_data_source
 
         # Create 100 candles (reduced from 500 to make test faster and more realistic)
         all_data = []
@@ -389,14 +444,13 @@ class TestEnhancedPagination:
             timestamp = 1640995200000 + i * 3600000
             all_data.append([timestamp, 1.0, 1.1, 0.9, 1.05, 1000])
 
-        # Return all data in one batch for simplicity
-        mock_exchange.fetch_ohlcv.return_value = all_data
-        mock_exchange.has = {'fetchOHLCV': True}
-        mock_exchange.parse8601.return_value = 1640995200000
-        mock_exchange.timeframes = {'1h': '1h'}
+        mock_df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        mock_df['timestamp'] = pd.to_datetime(mock_df['timestamp'], unit='ms')
+        mock_df = mock_df.set_index('timestamp')
+        mock_data_source.fetch_historical_data.return_value = mock_df
 
         with patch('builtins.print') as mock_print:
-            result = fetch_historical_data('BTC/USDT', 'binance', '1h', 100, show_progress=True)
+            result = fetch_historical_data('BTC/USDT', '1h', 100, show_progress=True)
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 100

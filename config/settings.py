@@ -39,7 +39,7 @@ KRAKEN_MAX_PER_REQUEST = 720  # Kraken's max candles per request for 1m timefram
 DEFAULT_HISTORICAL_DAYS = 365  # Default historical data period in days
 JSON_INDENT = 4  # JSON output indentation
 SYMBOL = 'BTC/USDT'  # For ccxt
-EXCHANGE = 'kraken'  # Example exchange
+EXCHANGE = 'binance'  # Changed from kraken to binance for funding rate support
 
 # Timeframe
 TIMEFRAME = '1m'
@@ -143,7 +143,7 @@ ATR_PERIOD = current_params['atr_period']
 
 # Risk management
 CAPITAL = 10000  # Realistic starting capital for trading
-RISK_PER_TRADE = 0.8  # 80% risk per trade (conservative risk management)
+RISK_PER_TRADE = 0.01  # 1% risk per trade (conservative risk management)
 
 # Risk management parameters
 SL_MULTIPLIER = current_params['atr_sl_multiplier']
@@ -417,10 +417,33 @@ def get_current_indicator_config() -> Dict[str, Any]:
 # Set DEFAULT_INDICATOR_CONFIG based on mode
 DEFAULT_INDICATOR_CONFIG = get_current_indicator_config()
 
-# Data and output
-LOOKBACK_DAYS = 365  # Increased for longer backtest periods
-OUTPUT_FORMAT = 'json'
-OUTPUT_FILE = 'output/signals.json'
+# Data Source Configuration
+DATA_SOURCE = os.getenv('DATA_SOURCE', 'yahoo_finance')  # Options: 'ccxt', 'yahoo_finance', 'alpha_vantage', 'polygon'
+DATA_SOURCE_CONFIG = {
+    'ccxt': {
+        'exchange': EXCHANGE,
+        'api_key': os.getenv('TRADPAL_API_KEY'),
+        'api_secret': os.getenv('TRADPAL_API_SECRET')
+    },
+    'yahoo_finance': {
+        'adjust_prices': True,  # Adjust for splits and dividends
+        'auto_adjust': True,    # Automatically adjust OHLC
+        'prepost': False        # Include pre/post market data
+    },
+    'funding_rate': {
+        'exchange': EXCHANGE,  # Same exchange as main data source
+        'api_key': os.getenv('TRADPAL_API_KEY'),
+        'api_secret': os.getenv('TRADPAL_API_SECRET')
+    },
+    'alpha_vantage': {
+        'api_key': os.getenv('ALPHA_VANTAGE_API_KEY'),
+        'outputsize': 'full'  # 'compact' or 'full'
+    },
+    'polygon': {
+        'api_key': os.getenv('POLYGON_API_KEY'),
+        'adjusted': True  # Adjust for splits
+    }
+}
 
 # Logging
 LOG_LEVEL = 'INFO'
@@ -430,6 +453,10 @@ API_KEY = os.getenv('TRADPAL_API_KEY', '')
 API_SECRET = os.getenv('TRADPAL_API_SECRET', '')
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+
+# Output configuration
+OUTPUT_FILE = 'output/signals.json'  # Default output file for signals
+OUTPUT_FORMAT = 'json'  # Output format: 'json', 'csv', 'both'
 
 def validate_timeframe(timeframe):
     """Validate timeframe string format and logical constraints."""
@@ -493,6 +520,10 @@ WEBSOCKET_PING_INTERVAL = 30  # Ping interval in seconds
 WEBSOCKET_TIMEOUT = 60  # Connection timeout in seconds
 WEBSOCKET_BUFFER_SIZE = 1024  # Message buffer size
 WEBSOCKET_COMPRESSION = True  # Enable message compression
+WEBSOCKET_DATA_ENABLED = os.getenv('WEBSOCKET_DATA_ENABLED', 'false').lower() == 'true'  # Enable WebSocket data fetching
+WEBSOCKET_RECONNECT_ATTEMPTS = int(os.getenv('WEBSOCKET_RECONNECT_ATTEMPTS', '5'))  # Number of reconnection attempts
+WEBSOCKET_RECONNECT_DELAY = int(os.getenv('WEBSOCKET_RECONNECT_DELAY', '5'))  # Delay between reconnection attempts (seconds)
+WEBSOCKET_PING_TIMEOUT = int(os.getenv('WEBSOCKET_PING_TIMEOUT', '30'))  # Ping timeout in seconds
 
 # Real-time Streaming Settings
 REALTIME_ENABLED = True  # Enable real-time data streaming
@@ -502,11 +533,13 @@ REALTIME_DATA_RETENTION = 3600  # Data retention time in seconds (1 hour)
 REALTIME_BROADCAST_SIGNALS = True  # Broadcast trading signals
 REALTIME_BROADCAST_MARKET_DATA = True  # Broadcast market data updates
 
-# WebSocket Data Fetching Settings (New)
-WEBSOCKET_DATA_ENABLED = os.getenv('WEBSOCKET_DATA_ENABLED', 'false').lower() == 'true'  # Enable WebSocket data fetching
-WEBSOCKET_RECONNECT_ATTEMPTS = 5  # Number of reconnection attempts
-WEBSOCKET_RECONNECT_DELAY = 5  # Delay between reconnection attempts (seconds)
-WEBSOCKET_PING_TIMEOUT = 30  # Ping timeout for WebSocket connections
+# Funding Rate Analysis Settings
+FUNDING_RATE_ENABLED = os.getenv('FUNDING_RATE_ENABLED', 'false').lower() == 'true'  # Enable funding rate analysis for perpetual futures
+FUNDING_RATE_WEIGHT = float(os.getenv('FUNDING_RATE_WEIGHT', '0.3'))  # Weight for funding rate signals (0-1)
+FUNDING_RATE_THRESHOLD = float(os.getenv('FUNDING_RATE_THRESHOLD', '0.0001'))  # Threshold for funding rate signals (0.01% = 0.0001)
+
+# ML Lookback Settings
+LOOKBACK_DAYS = int(os.getenv('LOOKBACK_DAYS', '365'))  # Default lookback period for ML training (days)
 
 # Redis Cache Settings (New)
 REDIS_ENABLED = os.getenv('REDIS_ENABLED', 'false').lower() == 'true'  # Enable Redis caching

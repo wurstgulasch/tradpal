@@ -384,3 +384,129 @@ def plot_indicators(df):
     ax3.set_title('ATR')
     plt.tight_layout()
     plt.show()
+
+@cache_indicators()
+def funding_rate_analysis(funding_df: pd.DataFrame, window: int = 24) -> pd.DataFrame:
+    """
+    Analyze funding rate data for perpetual futures trading.
+
+    Args:
+        funding_df: DataFrame with funding rate data (must have 'funding_rate' column)
+        window: Rolling window for analysis (in funding periods, typically 8h each)
+
+    Returns:
+        DataFrame with funding rate analysis indicators
+    """
+    if funding_df.empty or 'funding_rate' not in funding_df.columns:
+        return pd.DataFrame()
+
+    df = funding_df.copy()
+
+    # Basic funding rate metrics
+    df['funding_rate_pct'] = df['funding_rate'] * 100  # Convert to percentage
+
+    # Rolling statistics
+    df['funding_rate_mean'] = df['funding_rate'].rolling(window=window).mean()
+    df['funding_rate_std'] = df['funding_rate'].rolling(window=window).std()
+    df['funding_rate_zscore'] = (df['funding_rate'] - df['funding_rate_mean']) / df['funding_rate_std']
+
+    # Trend analysis
+    df['funding_rate_trend'] = df['funding_rate'].diff().rolling(window=window).mean()
+
+    # Funding rate direction changes
+    df['funding_direction_change'] = (df['funding_rate'] > 0).astype(int).diff().fillna(0).abs()
+
+    # Extreme funding rates (potential reversal signals)
+    df['funding_rate_extreme'] = (
+        (df['funding_rate'] > df['funding_rate_mean'] + 2 * df['funding_rate_std']) |
+        (df['funding_rate'] < df['funding_rate_mean'] - 2 * df['funding_rate_std'])
+    ).astype(int)
+
+    # Funding cost analysis (annualized)
+    df['funding_cost_daily'] = df['funding_rate'] * 3  # Assuming 3 funding payments per day
+    df['funding_cost_weekly'] = df['funding_cost_daily'] * 7
+    df['funding_cost_monthly'] = df['funding_cost_daily'] * 30
+
+    # Momentum indicators for funding rates
+    df['funding_rate_momentum'] = df['funding_rate'].diff(3)  # 3-period momentum (24h for 8h funding)
+
+    # Volatility of funding rates
+    df['funding_rate_volatility'] = df['funding_rate'].rolling(window=window).std()
+
+    return df
+
+@cache_indicators()
+def funding_rate_signal(funding_df: pd.DataFrame, threshold: float = 0.001) -> pd.Series:
+    """
+    Generate trading signals based on funding rate analysis.
+
+    Args:
+        funding_df: DataFrame with funding rate data
+        threshold: Threshold for signal generation (0.001 = 0.1%)
+
+    Returns:
+        Series with signal values: 1 (long bias), -1 (short bias), 0 (neutral)
+    """
+    if funding_df.empty or 'funding_rate' not in funding_df.columns:
+        return pd.Series(dtype=int)
+
+    signals = pd.Series(0, index=funding_df.index, dtype=int)
+
+    # Positive funding rate favors shorts (borrowers pay longs)
+    # Negative funding rate favors longs (borrowers get paid by longs)
+    signals[funding_df['funding_rate'] > threshold] = -1  # Short bias
+    signals[funding_df['funding_rate'] < -threshold] = 1  # Long bias
+
+    # Extreme funding rates might indicate reversals
+    if 'funding_rate_extreme' in funding_df.columns:
+        extreme_mask = funding_df['funding_rate_extreme'] == 1
+        signals[extreme_mask] = -signals[extreme_mask]  # Reverse signal on extremes
+
+    return signals
+
+@cache_indicators()
+def combined_funding_market_analysis(market_df: pd.DataFrame, funding_df: pd.DataFrame,
+                                   funding_weight: float = 0.3) -> pd.DataFrame:
+    """
+    Combine market data analysis with funding rate analysis for enhanced signals.
+
+    Args:
+        market_df: DataFrame with market OHLCV data and indicators
+        funding_df: DataFrame with funding rate analysis
+        funding_weight: Weight for funding rate signals (0-1)
+
+    Returns:
+        DataFrame with combined analysis
+    """
+    if market_df.empty or funding_df.empty:
+        return market_df if not market_df.empty else pd.DataFrame()
+
+    df = market_df.copy()
+
+    # Resample funding data to match market timeframe if needed
+    # This is a simplified approach - in production, you'd want proper time alignment
+    if len(funding_df) != len(df):
+        # Forward fill funding data to match market data frequency
+        funding_resampled = funding_df.reindex(df.index, method='ffill')
+    else:
+        funding_resampled = funding_df
+
+    # Add funding rate indicators to market data
+    df['funding_rate'] = funding_resampled.get('funding_rate', 0)
+    df['funding_rate_zscore'] = funding_resampled.get('funding_rate_zscore', 0)
+    df['funding_signal'] = funding_resampled.get('funding_signal', 0)
+
+    # Create combined signal (weighted average of market and funding signals)
+    if 'signal' in df.columns and 'funding_signal' in df.columns:
+        df['combined_signal'] = (
+            (1 - funding_weight) * df['signal'] +
+            funding_weight * df['funding_signal']
+        )
+
+    # Funding rate adjusted position sizing
+    # Reduce position size when funding rates are extremely high (costly)
+    if 'funding_rate' in df.columns:
+        funding_cost_multiplier = 1 / (1 + df['funding_rate'].abs() * 10)  # Reduce size with high costs
+        df['adjusted_position_size'] = df.get('position_size', 1) * funding_cost_multiplier
+
+    return df
