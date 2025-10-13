@@ -637,6 +637,8 @@ def run_backtest_mode(args, performance_monitor=None):
             # Record backtest metrics in performance monitor
             if performance_monitor:
                 performance_monitor.record_trade(
+                    symbol=args.symbol,
+                    trade_type='backtest',
                     pnl=metrics.get('total_pnl', 0),
                     win_rate=metrics.get('win_rate', 0),
                     total_trades=metrics.get('total_trades', 0),

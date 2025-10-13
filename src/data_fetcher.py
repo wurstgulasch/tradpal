@@ -46,6 +46,7 @@ except ImportError:
         pass
 import time
 import random
+import numpy as np
 
 # Load environment variables
 load_dotenv()
@@ -189,10 +190,21 @@ def fetch_data(limit: int = DEFAULT_DATA_LIMIT) -> pd.DataFrame:
 
 @adaptive_retry(max_retries=MAX_RETRIES_HISTORICAL)
 @cache_api_call(ttl_seconds=CACHE_TTL_HISTORICAL)  # Cache for historical data
-def fetch_historical_data(symbol=SYMBOL, exchange_name=EXCHANGE, timeframe=TIMEFRAME, limit=HISTORICAL_DATA_LIMIT, start_date=None):
+def fetch_historical_data(symbol=SYMBOL, exchange_name=EXCHANGE, timeframe=TIMEFRAME, limit=HISTORICAL_DATA_LIMIT, start_date=None, show_progress=True):
     """
     Fetches historical OHLCV data from specified exchange using ccxt.
-    Supports pagination for large datasets.
+    Supports advanced pagination for large datasets with progress tracking and adaptive batching.
+
+    Args:
+        symbol: Trading symbol (e.g., 'BTC/USDT')
+        exchange_name: Exchange name (e.g., 'kraken', 'binance')
+        timeframe: Timeframe (e.g., '1m', '1h', '1d')
+        limit: Maximum number of candles to fetch
+        start_date: Start date for historical data (datetime object)
+        show_progress: Whether to show progress indicators
+
+    Returns:
+        DataFrame with OHLCV data or "retry" on recoverable errors
     """
     # Validate inputs
     validate_api_inputs(symbol=symbol, exchange=exchange_name, timeframe=timeframe, limit=limit)
@@ -209,45 +221,257 @@ def fetch_historical_data(symbol=SYMBOL, exchange_name=EXCHANGE, timeframe=TIMEF
     if start_date:
         since = exchange.parse8601(start_date.isoformat())
     else:
-        since = exchange.parse8601((datetime.now() - timedelta(days=DEFAULT_HISTORICAL_DAYS)).isoformat())  # Default historical period
+        since = exchange.parse8601((datetime.now() - timedelta(days=DEFAULT_HISTORICAL_DAYS)).isoformat())
 
-    # For backtesting, fetch historical data with pagination if needed
+    # Advanced pagination with adaptive batching and progress tracking
     all_ohlcv = []
     remaining_limit = limit
-    max_per_request = KRAKEN_MAX_PER_REQUEST  # Kraken's limit for 1m timeframe
+    total_fetched = 0
+
+    # Adaptive batch sizing based on exchange and timeframe
+    base_batch_size = _get_adaptive_batch_size(exchange_name, timeframe)
+    current_batch_size = base_batch_size
+    consecutive_errors = 0
+    max_consecutive_errors = 3
+
+    # Progress tracking
+    start_time = time.time()
+    last_progress_time = start_time
+
+    if show_progress:
+        print(f"📊 Fetching {limit} candles of {symbol} from {exchange_name} ({timeframe})...")
 
     while remaining_limit > 0:
-        fetch_limit = min(remaining_limit, max_per_request)
-        try:
-            ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since, fetch_limit)
-        except Exception as e:
-            # Return retry on recoverable errors
+        # Check if we exceeded max consecutive errors
+        if consecutive_errors >= max_consecutive_errors:
+            if show_progress:
+                print(f"❌ Too many consecutive errors ({consecutive_errors}), aborting")
             return "retry"
-        
-        if not ohlcv:
-            break
-        
-        all_ohlcv.extend(ohlcv)
-        
-        # Update since for next batch
-        last_timestamp = ohlcv[-1][0]
-        since = last_timestamp + (exchange.timeframes[timeframe] * 1000)  # Next candle
-        
-        remaining_limit -= len(ohlcv)
-        
-        # Safety check to avoid infinite loops
-        if len(ohlcv) < fetch_limit:
-            break
+
+        try:
+            # Adaptive batch size reduction on errors
+            fetch_limit = min(remaining_limit, current_batch_size)
+
+            # Rate limiting
+            rate_limiter.record_request()
+            if not rate_limiter.can_make_request():
+                sleep_time = rate_limiter.get_backoff_time(1)
+                if show_progress:
+                    print(f"⏳ Rate limit reached, waiting {sleep_time:.1f}s...")
+                time.sleep(sleep_time)
+
+            # Fetch batch
+            batch_start_time = time.time()
+            ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since, fetch_limit)
+            batch_duration = time.time() - batch_start_time
+
+            if not ohlcv:
+                if show_progress:
+                    print("ℹ️  No more data available from exchange")
+                break
+
+            # Validate batch data
+            if not _validate_batch_data(ohlcv):
+                consecutive_errors += 1
+                current_batch_size = max(10, current_batch_size // 2)  # Reduce batch size
+                if show_progress:
+                    print(f"⚠️  Invalid batch data, reducing batch size to {current_batch_size}")
+                continue
+
+            # Add batch to results
+            batch_size = len(ohlcv)
+            all_ohlcv.extend(ohlcv)
+            total_fetched += batch_size
+            remaining_limit -= batch_size
+            consecutive_errors = 0  # Reset error counter
+
+            # Update since for next batch (next candle after last one)
+            last_timestamp = ohlcv[-1][0]
+            # Convert timeframe to milliseconds
+            timeframe_ms = _timeframe_to_ms(timeframe)
+            since = last_timestamp + timeframe_ms
+
+            # Progress reporting
+            current_time = time.time()
+            if show_progress and (current_time - last_progress_time > 5):  # Update every 5 seconds
+                elapsed = current_time - start_time
+                progress = (total_fetched / limit) * 100 if limit > 0 else 0
+                rate = total_fetched / elapsed if elapsed > 0 else 0
+                eta = (remaining_limit / rate) if rate > 0 else 0
+
+                print(f"📈 Progress: {total_fetched}/{limit} candles ({progress:.1f}%) | "
+                      f"Rate: {rate:.1f} candles/sec | ETA: {eta:.0f}s | "
+                      f"Batch: {batch_size} in {batch_duration:.2f}s")
+                last_progress_time = current_time
+
+            # Safety check to avoid infinite loops
+            if batch_size < fetch_limit:
+                if show_progress:
+                    print(f"ℹ️  Reached end of available data ({batch_size}/{fetch_limit} candles in last batch)")
+                break
+
+            # Adaptive batch size adjustment based on performance
+            if batch_duration > 5:  # Slow response
+                current_batch_size = max(10, current_batch_size // 2)
+            elif batch_duration < 1 and current_batch_size < base_batch_size * 2:  # Fast response
+                current_batch_size = min(base_batch_size * 2, current_batch_size * 2)
+
+        except Exception as e:
+            # Check if this is a rate limit error
+            error_str = str(type(e).__name__).lower()
+            error_msg = str(e).lower()
+
+            if 'ratelimit' in error_str or 'ratelimit' in error_msg or 'rate limit' in error_msg or 'rate_limit' in error_msg:
+                consecutive_errors += 1
+                sleep_time = rate_limiter.get_backoff_time(consecutive_errors)
+                if show_progress:
+                    print(f"🚦 Rate limit exceeded, waiting {sleep_time:.1f}s... (attempt {consecutive_errors}/{max_consecutive_errors})")
+                time.sleep(sleep_time)
+                current_batch_size = max(10, current_batch_size // 2)
+
+            elif 'network' in error_str or 'network' in error_msg or 'connection' in error_msg:
+                consecutive_errors += 1
+                sleep_time = rate_limiter.get_backoff_time(consecutive_errors)
+                if show_progress:
+                    print(f"🌐 Network error, retrying in {sleep_time:.1f}s... (attempt {consecutive_errors}/{max_consecutive_errors})")
+                time.sleep(sleep_time)
+
+            else:
+                # Check if this is a recoverable error
+                if any(keyword in error_msg for keyword in ['timeout', 'connection', 'temporary']):
+                    consecutive_errors += 1
+                    sleep_time = rate_limiter.get_backoff_time(consecutive_errors)
+                    if show_progress:
+                        print(f"⚠️  Temporary error, retrying in {sleep_time:.1f}s... (attempt {consecutive_errors}/{max_consecutive_errors})")
+                    time.sleep(sleep_time)
+                    current_batch_size = max(10, current_batch_size // 2)
+                else:
+                    # Non-recoverable error
+                    if show_progress:
+                        print(f"❌ Non-recoverable error: {e}")
+                    return "retry"
+    if show_progress:
+        total_time = time.time() - start_time
+        final_rate = total_fetched / total_time if total_time > 0 else 0
+        print(f"✅ Completed: {total_fetched} candles fetched in {total_time:.1f}s "
+              f"(avg {final_rate:.1f} candles/sec)")
+
+    # Create DataFrame
+    if not all_ohlcv:
+        if show_progress:
+            print("⚠️  No data fetched")
+        return pd.DataFrame()
 
     df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
+
+    # Remove duplicates (can happen with pagination)
+    df = df[~df.index.duplicated(keep='first')]
 
     # Validate the fetched data if not empty
     if len(df) > 0:
         validate_data(df)
 
     return df
+
+def _timeframe_to_ms(timeframe: str) -> int:
+    """
+    Convert timeframe string to milliseconds.
+    
+    Args:
+        timeframe: Timeframe string (e.g., '1m', '1h', '1d')
+        
+    Returns:
+        Timeframe in milliseconds
+    """
+    # Timeframe multipliers
+    timeframe_map = {
+        '1m': 60 * 1000,
+        '5m': 5 * 60 * 1000,
+        '15m': 15 * 60 * 1000,
+        '30m': 30 * 60 * 1000,
+        '1h': 60 * 60 * 1000,
+        '4h': 4 * 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000,
+        '1w': 7 * 24 * 60 * 60 * 1000,
+    }
+    
+    return timeframe_map.get(timeframe, 60 * 60 * 1000)  # Default to 1h
+
+def _get_adaptive_batch_size(exchange_name: str, timeframe: str) -> int:
+    """
+    Get adaptive batch size based on exchange and timeframe.
+
+    Args:
+        exchange_name: Name of the exchange
+        timeframe: Timeframe string
+
+    Returns:
+        Recommended batch size
+    """
+    # Base batch sizes by exchange
+    exchange_batches = {
+        'kraken': KRAKEN_MAX_PER_REQUEST,
+        'binance': 1000,
+        'coinbase': 300,
+        'default': 500
+    }
+
+    base_batch = exchange_batches.get(exchange_name.lower(), exchange_batches['default'])
+
+    # Adjust for timeframe (shorter timeframes = smaller batches)
+    timeframe_multipliers = {
+        '1m': 1.0,
+        '5m': 1.2,
+        '15m': 1.5,
+        '30m': 2.0,
+        '1h': 3.0,
+        '4h': 4.0,
+        '1d': 5.0,
+        '1w': 7.0
+    }
+
+    multiplier = timeframe_multipliers.get(timeframe, 1.0)
+    return int(base_batch / multiplier)
+
+def _validate_batch_data(ohlcv_batch: list) -> bool:
+    """
+    Validate a batch of OHLCV data.
+
+    Args:
+        ohlcv_batch: List of OHLCV candles
+
+    Returns:
+        True if batch is valid, False otherwise
+    """
+    if not ohlcv_batch:
+        return False
+
+    try:
+        for candle in ohlcv_batch:
+            if len(candle) != 6:  # OHLCV + timestamp
+                return False
+
+            timestamp, open_price, high, low, close, volume = candle
+
+            # Check for None/NaN values
+            if any(x is None or (isinstance(x, float) and np.isnan(x))
+                   for x in [timestamp, open_price, high, low, close, volume]):
+                return False
+
+            # Basic OHLC validation
+            if not (low <= open_price <= high and low <= close <= high):
+                return False
+
+            # Check for negative values
+            if any(x < 0 for x in [open_price, high, low, close, volume]):
+                return False
+
+        return True
+
+    except (TypeError, ValueError):
+        return False
 
 def validate_data(df):
     """

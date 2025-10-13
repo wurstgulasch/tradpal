@@ -162,7 +162,7 @@ class PerformanceMonitor:
 
         indicator_calculation_duration.observe(duration)
 
-    def record_trade(self, symbol: str, trade_type: str, pnl: float = 0.0):
+    def record_trade(self, symbol: str, trade_type: str, pnl: float = 0.0, win_rate: float = 0.0, total_trades: int = 0, max_drawdown: float = 0.0):
         """Zeichne Trading-Metriken auf."""
         if not PROMETHEUS_AVAILABLE:
             return

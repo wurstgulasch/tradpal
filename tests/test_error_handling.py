@@ -71,9 +71,9 @@ class TestDataFetcherErrorHandling:
         ]
         mock_exchange.has = {'fetchOHLCV': True}
 
-        # With error handling, malformed data should still cause an error
-        with pytest.raises(ValueError):
-            fetch_historical_data('EUR/USD', 'kraken', '1m', 2)
+        # With error handling, malformed data should cause retry
+        result = fetch_historical_data('EUR/USD', 'kraken', '1m', 2)
+        assert result == "retry"  # Should return retry on consecutive errors
 
     def test_validate_data_with_wrong_types(self):
         """Test validation with wrong data types."""

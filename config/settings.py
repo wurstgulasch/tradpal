@@ -229,7 +229,7 @@ ADAPTIVE_CONFIG_FILE_LIVE = os.getenv('ADAPTIVE_CONFIG_FILE', 'config/adaptive_c
 # Machine Learning settings
 ML_ENABLED = os.getenv('ML_ENABLED', 'true').lower() == 'true'  # Enable/disable ML signal enhancement
 ML_MODEL_DIR = 'cache/ml_models'  # Directory to store trained ML models
-ML_CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for ML signal override
+ML_CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for ML signal override (lowered from 0.6)
 ML_TRAINING_HORIZON = 5  # Prediction horizon for training labels (periods ahead)
 ML_RETRAINING_INTERVAL_HOURS = 24  # How often to retrain models (hours)
 ML_MIN_TRAINING_SAMPLES = 1000  # Minimum samples required for training

@@ -173,14 +173,15 @@ class Backtester:
         buy_signals = (data['Buy_Signal'] == 1)
         sell_signals = (data['Sell_Signal'] == 1)
 
-        # Calculate entry and exit points
+        # Simple position management: Buy signals enter long, Sell signals exit long
+        # This is a simplified approach - in reality you'd want more sophisticated position management
         position_changes = pd.Series(0, index=data.index)
 
-        # Long entries
+        # Long entries on buy signals (only if not already in position)
         position_changes[buy_signals] = 1
 
-        # Short entries (overwrite if both signals occur)
-        position_changes[sell_signals] = -1
+        # Long exits on sell signals (set to 0 to exit)
+        position_changes[sell_signals] = 0
 
         # Calculate cumulative position
         positions = position_changes.cumsum()
@@ -198,7 +199,10 @@ class Backtester:
 
         # Pre-calculate slippage and position sizes
         slippage_pct = 0.001  # 0.1% slippage
-        position_sizes = data.get('Position_Size_Absolute', 1000).fillna(1000).values
+        if 'Position_Size_Absolute' in data.columns:
+            position_sizes = data['Position_Size_Absolute'].fillna(1000).values
+        else:
+            position_sizes = np.full(len(data), 1000)
         stop_loss_buy = data.get('Stop_Loss_Buy', data['close'] * 0.98).values
         stop_loss_sell = data.get('Stop_Loss_Sell', data['close'] * 1.02).values
         take_profit_buy = data.get('Take_Profit_Buy', data['close'] * 1.02).values
@@ -274,40 +278,80 @@ class Backtester:
                     # Update capital
                     self.current_capital += net_pnl
 
-                # Handle position change
-                if new_position == 0:
-                    current_position = 0
-                    entry_idx = None
-                else:
-                    # Position reversal - start new trade
-                    current_position = new_position
-                    entry_idx = idx
-                    # Apply slippage for position reversal
-                    if current_position == 1:  # Long entry
-                        entry_price = close_prices[idx] * (1 + slippage_pct)
-                    else:  # Short entry
-                        entry_price = close_prices[idx] * (1 - slippage_pct)
+                # Handle position changes - only act when position actually changes
+                if new_position != current_position:
+                    # Close existing position if we have one
+                    if current_position != 0 and trades and trades[-1]['status'] == 'open':
+                        # Close the existing position
+                        final_price = close_prices[idx]
+                        final_time = timestamps[idx]
 
-                    position_size = position_sizes[idx]
+                        # Apply slippage to exit
+                        slippage_pct = 0.001
+                        if current_position == 1:  # Long exit - sell at lower price
+                            exit_price = final_price * (1 - slippage_pct)
+                        else:  # Short exit - buy at higher price
+                            exit_price = final_price * (1 + slippage_pct)
 
-                    # Calculate entry commission for new position
-                    entry_commission = entry_price * position_size * self.commission
+                        exit_time = final_time
 
-                    trade = {
-                        'type': 'buy' if current_position == 1 else 'sell',
-                        'entry_time': timestamps[idx],
-                        'entry_price': entry_price,
-                        'position_size': position_size,
-                        'stop_loss': stop_loss_buy[idx] if current_position == 1 else stop_loss_sell[idx],
-                        'take_profit': take_profit_buy[idx] if current_position == 1 else take_profit_sell[idx],
-                        'exit_time': None,
-                        'exit_price': None,
-                        'pnl': 0,
-                        'entry_commission': entry_commission,
-                        'exit_commission': 0,
-                        'status': 'open'
-                    }
-                    trades.append(trade)
+                        # Calculate exit commission (0.1% of position value)
+                        exit_commission = exit_price * trades[-1]['position_size'] * self.commission
+
+                        # Calculate P&L (including commissions)
+                        if current_position == 1:  # Long position
+                            gross_pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
+                        else:  # Short position
+                            gross_pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
+
+                        # Net P&L = Gross P&L - Entry Commission - Exit Commission
+                        net_pnl = gross_pnl - trades[-1]['entry_commission'] - exit_commission
+
+                        # Update trade
+                        trades[-1].update({
+                            'exit_time': exit_time,
+                            'exit_price': exit_price,
+                            'pnl': net_pnl,
+                            'exit_commission': exit_commission,
+                            'status': 'closed'
+                        })
+
+                        # Update capital
+                        self.current_capital += net_pnl
+
+                    # Open new position if signal is not neutral
+                    if new_position != 0:
+                        current_position = new_position
+                        entry_idx = idx
+                        # Apply slippage for position entry
+                        if current_position == 1:  # Long entry
+                            entry_price = close_prices[idx] * (1 + slippage_pct)
+                        else:  # Short entry
+                            entry_price = close_prices[idx] * (1 - slippage_pct)
+
+                        position_size = position_sizes[idx]
+
+                        # Calculate entry commission for new position
+                        entry_commission = entry_price * position_size * self.commission
+
+                        trade = {
+                            'type': 'buy' if current_position == 1 else 'sell',
+                            'entry_time': timestamps[idx],
+                            'entry_price': entry_price,
+                            'position_size': position_size,
+                            'stop_loss': stop_loss_buy[idx] if current_position == 1 else stop_loss_sell[idx],
+                            'take_profit': take_profit_buy[idx] if current_position == 1 else take_profit_sell[idx],
+                            'exit_time': None,
+                            'exit_price': None,
+                            'pnl': 0,
+                            'entry_commission': entry_commission,
+                            'exit_commission': 0,
+                            'status': 'open'
+                        }
+                        trades.append(trade)
+                    else:
+                        current_position = 0
+                        entry_idx = None
 
         # Close any remaining open positions at the end
         if current_position != 0 and trades and trades[-1]['status'] == 'open':
@@ -1485,6 +1529,42 @@ def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=No
 
         # Run backtest
         results = backtester.run_backtest()
+
+        # Get trades
+        trades_df = pd.DataFrame(backtester.trades)
+
+        return {
+            'backtest_results': results,
+            'trades': trades_df
+        }
+
+    except Exception as e:
+        return {
+            'backtest_results': {'success': False, 'error': str(e)},
+            'trades': pd.DataFrame()
+        }
+
+
+def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=None):
+    """
+    Standalone function to run a backtest and return results.
+
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe string
+        start_date: Start date string
+        end_date: End date string
+
+    Returns:
+        Dictionary with backtest results and trades DataFrame
+    """
+    try:
+        # Create backtester instance
+        backtester = Backtester(symbol=symbol, timeframe=timeframe,
+                              start_date=start_date, end_date=end_date)
+
+        # Run backtest with ML-enhanced strategy
+        results = backtester.run_backtest(strategy='ml_enhanced')
 
         # Get trades
         trades_df = pd.DataFrame(backtester.trades)
