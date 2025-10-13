@@ -53,6 +53,8 @@ cd services/web-ui && streamlit run app.py
 ## 🚀 Latest Improvements (October 2025)
 
 ### 🐛 Bug Fixes & Stability
+- **Fixed Discovery Module Test Failures**: Resolved issues with `_individual_to_config` method for 21-element test individuals and enhanced `_load_historical_data` with fallback mechanisms for data fetching failures
+- **Enhanced Discovery Data Fetching**: Added automatic fallback to different timeframes (5m, 15m, 1h) when 1m data is unavailable, with mock data generation as last resort for testing
 - **Fixed ML Integration Test Failures**: Resolved sklearn import issues in `ml_predictor.py` by adding missing imports (`RandomForestClassifier`, `GradientBoostingClassifier`, `SVC`, `LogisticRegression`, `StandardScaler`, `Pipeline`, `SelectKBest`, `f_classif`, `mutual_info_classif`, `train_test_split`)
 - **Fixed Signal Generator Syntax Error**: Corrected `apply_ml_signal_enhancement` function by properly adding try block and initializing `predictors` variable for ML model loading
 - **Enhanced Signal_Source Column**: Ensured `Signal_Source` column is always added to DataFrames, defaulting to 'TRADITIONAL' when ML is disabled
@@ -84,9 +86,57 @@ cd services/web-ui && streamlit run app.py
 ### 🆕 New Features & Scripts
 - **Enhanced Backtest Script** (`scripts/enhanced_backtest.py`): Advanced backtesting with detailed reporting, parameter analysis, and export capabilities
 - **ML Performance Testing** (`scripts/test_ml_performance.py`): Comprehensive ML model performance evaluation against traditional indicators
+- **Modular Data Sources**: New architecture supporting multiple data providers (Yahoo Finance, CCXT, Alpha Vantage, Polygon.io) with config-based switching
 - **Improved .gitignore**: Enhanced file exclusion patterns for better repository hygiene
 - **Audit Logger Enhancements**: Improved structured logging and error handling
 - **Cache System Updates**: Better caching mechanisms for API responses and ML models
+
+---
+
+## 📊 Modular Data Sources
+
+TradPal now supports multiple data providers through a modular architecture, allowing you to switch between different sources based on your needs.
+
+### Supported Data Sources
+
+| Data Source | Best For | Historical Data | Real-time Data | API Key Required |
+|-------------|----------|-----------------|----------------|------------------|
+| **Yahoo Finance** | Long-term historical data, traditional assets | ✅ Excellent | ❌ | No |
+| **CCXT** | Crypto exchanges, real-time trading | ⚠️ Limited | ✅ Good | Optional |
+| **Alpha Vantage** | Premium financial data | ✅ Good | ❌ | Yes |
+| **Polygon.io** | High-performance market data | ✅ Excellent | ✅ Good | Yes |
+
+### Configuration
+
+Set your preferred data source in `config/settings.py`:
+
+```python
+# Data Source Configuration
+DATA_SOURCE = 'yahoo_finance'  # Options: 'yahoo_finance', 'ccxt', 'alpha_vantage', 'polygon'
+```
+
+Or via environment variable:
+
+```bash
+export DATA_SOURCE=yahoo_finance
+```
+
+### Data Source Features
+
+- **Yahoo Finance**: Best for historical BTC/USD data, no API key required, reliable for backtesting
+- **CCXT**: Direct exchange integration, supports multiple crypto exchanges, real-time data
+- **Alpha Vantage**: Premium data with extensive historical coverage (requires API key)
+- **Polygon.io**: High-performance financial market data (requires API key)
+
+### Testing Data Sources
+
+Run the data source test script to verify functionality:
+
+```bash
+python scripts/test_data_sources.py
+```
+
+This will test all available data sources and report their status.
 
 ---
 
@@ -101,6 +151,7 @@ cd services/web-ui && streamlit run app.py
 - **📈 Portfolio Management**: Multi-asset portfolio system with risk-based allocation and rebalancing
 - **🔍 SHAP Explainability**: PyTorch model interpretability with feature importance and trading signal explanations
 - **📰 Sentiment Analysis**: Multi-source sentiment aggregation from Twitter, news, and Reddit for enhanced signals
+- **💰 Funding Rate Analysis**: Perpetual futures funding rate analysis with signal enhancement and risk management
 - **Advanced ML Models with PyTorch**: LSTM, GRU, and Transformer neural networks for time series prediction with GPU support
 - **AutoML with Optuna**: Automated hyperparameter optimization with TPE, Random, and Grid sampling strategies
 - **Enhanced Walk-Forward Metrics**: Information Coefficient, Bias-Variance tradeoff, and overfitting detection
@@ -601,6 +652,15 @@ python examples/shap_integration_demo.py
 - Interactive visualizations of model decisions
 - Integration examples with PyTorch models
 
+#### Funding Rate Analysis Demo
+```bash
+python examples/funding_rate_demo.py
+```
+- Analyzes real-time and historical funding rates across exchanges
+- Demonstrates funding rate signal integration with technical analysis
+- Shows risk management adjustments based on funding rate data
+- Interactive funding rate visualization and alerts
+
 **Sentiment Configuration:**
 ```python
 # Enable sentiment analysis in config/settings.py
@@ -631,6 +691,71 @@ SHAP_MAX_SAMPLES = 1000  # Maximum samples for global explanations
 SHAP_PLOT_FORMAT = 'png'  # Format for explanation plots
 ```
 
+### Funding Rate Analysis 💰
+
+TradPal now includes comprehensive perpetual futures funding rate analysis to enhance trading signals and risk management. Funding rates represent the periodic payments between long and short positions in perpetual futures contracts, providing valuable insights into market sentiment and potential price movements.
+
+#### Key Features
+- **Real-time Funding Rate Data**: Direct integration with major crypto exchanges (Binance, Kraken, etc.) for live funding rate data
+- **Historical Funding Rate Analysis**: Long-term funding rate trends and volatility analysis
+- **Signal Enhancement**: Funding rate signals integrated with traditional technical indicators
+- **Risk Management**: Funding rate-based position sizing and leverage adjustments
+- **Multi-Exchange Support**: Aggregate funding rates across multiple exchanges for robust analysis
+- **Automated Alerts**: Notifications for extreme funding rate conditions
+
+#### Funding Rate Signal Logic
+- **Bullish Funding Rate Signal**: Negative funding rates (longs paying shorts) often indicate bearish sentiment
+- **Bearish Funding Rate Signal**: Positive funding rates (shorts paying longs) often indicate bullish sentiment
+- **Extreme Rate Alerts**: Funding rates > 0.1% or < -0.1% trigger enhanced risk management
+- **Volatility Integration**: Funding rate volatility used for dynamic leverage adjustment
+
+#### Configuration Options
+```python
+# Enable funding rate analysis in config/settings.py
+FUNDING_RATE_ENABLED = True
+FUNDING_RATE_WEIGHT = 0.2  # Weight in signal combination (0.0-1.0)
+FUNDING_RATE_THRESHOLD = 0.001  # Minimum rate for signal consideration (0.1%)
+FUNDING_RATE_EXCHANGES = ['binance', 'kraken', 'okx']  # Exchanges to monitor
+FUNDING_RATE_UPDATE_INTERVAL = 60  # Update interval in seconds
+FUNDING_RATE_HISTORY_DAYS = 30  # Days of historical data to analyze
+```
+
+#### Usage Examples
+```bash
+# Run live trading with funding rate enhancement
+python main.py --mode live --symbol BTC/USDT --funding-rate
+
+# Backtest with funding rate signals
+python main.py --mode backtest --symbol BTC/USDT --timeframe 1h --funding-rate --start-date 2024-01-01
+
+# Analyze funding rate data only
+python scripts/analyze_funding_rates.py --symbol BTC/USDT --exchanges binance kraken
+```
+
+#### Funding Rate Data Sources
+- **Binance**: Primary exchange with comprehensive perpetual futures data
+- **Kraken**: Alternative exchange for cross-validation
+- **OKX**: Additional exchange for multi-exchange analysis
+- **Bybit**: Popular exchange with competitive funding rates
+- **KuCoin**: Emerging exchange with growing perpetual futures market
+
+#### Risk Management Integration
+- **Position Sizing**: Funding rate volatility adjusts position sizes
+- **Leverage Adjustment**: Extreme funding rates reduce maximum leverage
+- **Stop Loss Enhancement**: Funding rate trends influence stop-loss placement
+- **Take Profit Optimization**: Funding rate signals help optimize exit points
+
+#### API Keys Setup
+```bash
+# Exchange API keys (optional for public funding rate data)
+export BINANCE_API_KEY="your_binance_api_key"
+export BINANCE_SECRET_KEY="your_binance_secret_key"
+
+# For enhanced rate limits and private endpoints
+export KRAKEN_API_KEY="your_kraken_api_key"
+export KRAKEN_PRIVATE_KEY="your_kraken_private_key"
+```
+
 **API Keys Setup:**
 ```bash
 # Twitter/X API (for social sentiment)
@@ -653,6 +778,7 @@ TradPal supports various command-line options for different use cases:
 - `--symbol`: Trading symbol (default: BTC/USDT)
 - `--timeframe`: Chart timeframe (default: 1m)
 - `--profile`: Performance profile (`light`, `heavy`, default: default .env)
+- `--funding-rate`: Enable funding rate analysis and signal enhancement
 
 ### Backtesting Options
 - `--start-date`: Backtest start date (YYYY-MM-DD)
@@ -691,4 +817,10 @@ python main.py --mode discovery --symbol BTC/USDT --timeframe 1h --population 10
 
 # Paper trading simulation
 python main.py --mode paper --symbol BTC/USDT --timeframe 1m
+
+# Live trading with funding rate enhancement
+python main.py --mode live --symbol BTC/USDT --funding-rate
+
+# Backtesting with funding rate signals
+python main.py --mode backtest --symbol BTC/USDT --timeframe 1h --funding-rate --start-date 2024-01-01
 ```
