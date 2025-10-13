@@ -2,22 +2,25 @@
 
 ## Überblick
 Dieses Projekt, **TradPal**, ist ein modulares Trading-Indikator-System, primär optimiert für 1-Minuten-Charts, aber skalierbar auf höhere Timeframes (z. B. 1h, 1d, 1w, 1m). Es kombiniert technische Indikatoren (EMA, RSI, Bollinger Bands, ATR, ADX, Fibonacci-Extensions) mit Multi-Timeframe-Analyse (MTA), historischem Backtesting, Machine-Learning-Integration (PyTorch, Optuna) und genetischen Algorithmen für Signaloptimierung. Ziel ist die Generierung präziser Buy/Sell-Signale mit dynamischem Risikomanagement (Positionsgröße, Leverage, Stop-Loss, Take-Profit). Eine interaktive Web-UI (Streamlit/Plotly) ermöglicht Echtzeit-Überwachung und Backtesting. Das System ist containerisiert (Docker) und unterstützt Integrationen wie Telegram, Discord und Webhooks. Es ist für Kryptowährungen optimiert (via CCXT), mit primärem Fokus auf das Asset `BTC/USDT`, aber erweiterbar auf Forex und Aktien. Das Programm soll möglichst in der Conda-Umgebung `tradpal_env` (Python 3.10+) ausgeführt werden, um Abhängigkeiten wie TA-Lib, PyTorch und Optuna konsistent zu verwalten.
-**Aktueller Stand (Oktober 2025):** Version 2.5.0 fügt adaptive Optimierung, Ensemble-Methoden (Random Forest + Gradient Boosting) und Walk-Forward-Analyse hinzu. Copilot soll bei der Weiterentwicklung helfen, z. B. durch Verbesserung der ML-Modelle, Sicherheitsmaßnahmen und Community-Funktionen, mit Fokus auf `BTC/USDT`.
+**Aktueller Stand (Oktober 2025):** Version 2.5.1 fügt adaptive Optimierung, Ensemble-Methoden (Random Forest + Gradient Boosting) und Walk-Forward-Analyse hinzu. Copilot soll bei der Weiterentwicklung helfen, z. B. durch Verbesserung der ML-Modelle, Sicherheitsmaßnahmen und Community-Funktionen, mit Fokus auf `BTC/USDT`.
 Ziel ist nicht nur die Kernfunktionalität, sondern auch die Bereitstellung als nutzbares Open-Source-Projekt. Copilot soll bei der Erstellung von Releases (z. B. via GitHub Releases mit Binaries oder Docker-Images) und der Verbesserung der Skalierbarkeit (z. B. Push von Docker-Images zu Docker Hub, Kubernetes-Readiness) unterstützen. Aktuelle Priorität: Vorbereitung für Version 3.0.0 mit vollständiger Deployment-Automatisierung.
 
 ## Projektstruktur
 - `config/settings.py`: Zentrale Konfiguration für Indikator-Parameter, Timeframes, Exchanges, Assets (vorrangig `BTC/USDT`), Risikoparameter und Ausgabeformate. Skalierbare Parameter-Tabellen (z. B. `{'1m': {'ema_short': 9, 'ema_long': 21}, '1d': {'ema_short': 50, 'ema_long': 200}}`).
-- `src/`: Kernmodule des Trading-Systems (data_fetcher.py, indicators.py, signal_generator.py, backtester.py, ml_predictor.py, etc.).
-- `services/`: Modulare Service-Komponenten (web_ui.py, ml_trainer.py, optimizer/, core/).
-- `scripts/`: Utility-Scripts und Management-Tools (train_ml_model.py, demo_performance.py, manage_integrations.py).
-- `integrations/`: Module für Telegram, Discord, Email-Notifications und Webhooks.
-- `main.py`: Orchestriert Module; Modi: "live", "backtest", "multi-timeframe", "optimize" (genetische Algorithmen).
+- `src/`: Kernmodule des Trading-Systems (data_fetcher.py, indicators.py, signal_generator.py, backtester.py, ml_predictor.py, performance.py, audit_logger.py, cache.py, etc.).
+- `services/`: Modulare Service-Komponenten (web_ui/, ml_trainer/, core/, etc.).
+- `scripts/`: Utility-Scripts und Management-Tools (train_ml_model.py, demo_performance.py, enhanced_backtest.py, test_ml_performance.py, etc.).
+- `integrations/`: Module für Telegram, Discord, Email-Notifications und Webhooks (telegram/, discord/, email/, sms/, webhook/).
+- `main.py`: Orchestriert Module; Modi: "live", "backtest", "multi-timeframe", "optimize" (genetische Algorithmen), "multi-model", "paper".
 - `output/`: JSON-Dateien mit Signalen, Risiko-Parametern, Backtest-Resultaten; Plotly-Charts für Web-UI.
-- `tests/`: Unit-Tests (pytest) für Module; Integrationstests für Workflows.
+- `tests/`: Unit-Tests (pytest) für Module; Integrationstests für Workflows (629+ Tests).
 - `Dockerfile` & `docker-compose.yml`: Container-Setup für Umbrel/Kubernetes; Volumes für Config und Output. Alternative: Ausführung in `tradpal_env` (Conda).
 - `.env.light/.env.heavy`: Performance-Profile-Konfigurationen (light für minimal Ressourcen, heavy für alle Features).
-- `examples/`: Beispiel-Daten (z. B. sample CSV für Backtesting von BTC/USDT) und Demo-Skripte (z. B. quick_backtest.py, das ohne API-Keys läuft).
-- `releases/`: Ordner für geplante Release-Artefakte (z. B. executables via PyInstaller).
+- `examples/`: Beispiel-Daten und Demo-Skripte (btc_usdt_backtest.ipynb, ml_training_guide.ipynb, portfolio_management_demo.py, sentiment_analysis_demo.py, shap_integration_demo.py).
+- `k8s/`: Kubernetes-Deployment-Manifeste.
+- `aws/`: AWS-Deployment-Automatisierung.
+- `monitoring/`: Prometheus/Grafana-Monitoring-Stack.
+- `docs/`: Zusätzliche Dokumentation (ADVANCED_ML_IMPLEMENTATION.md, IMPLEMENTATION_SUMMARY.md, PERFORMANCE_ENHANCEMENTS.md).
 Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für Community-Beiträge oder automatisierte Builds.
 
 ## Wichtige Workflows
@@ -71,17 +74,18 @@ Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für
 - **Asset wechseln:** `settings.py` -> `SYMBOL = 'BTC/USDT'` (Standard).
 - **Backtest:** `main.py --mode backtest --start_date 2024-01-01 --symbol BTC/USDT`.
 - **MTA:** 1m-Signal mit 5m-EMA-Crossover bestätigen.
-- **ML-Training:** `services/ml_trainer.py --optimize` für Optuna/genetische Algorithmen in `tradpal_env`.
-- **Web-UI:** `conda activate tradpal_env; python services/web_ui.py`, dann http://localhost:8501 (Login: admin/admin123).
+- **ML-Training:** `scripts/train_ml_model.py --symbol BTC/USDT --timeframe 1h --start-date 2024-01-01`.
+- **Web-UI:** `conda activate tradpal_env; streamlit run services/web_ui/app.py`, dann http://localhost:8501 (Login: admin/admin123).
 - **Setup in Conda:** `conda env create -f environment.yml; conda activate tradpal_env; pip install -r requirements.txt`.
 - **Profile verwenden:** `python main.py --profile light` für minimal Ressourcen, `python main.py --profile heavy` für alle Features.
+- **Multi-Model Backtesting:** `python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --train-missing --max-workers 4`.
 - **Deployment-Beispiel:** `docker build -t tradpal .; docker push wurstgulasch/tradpal:latest` – Copilot soll vollständige Deployment-Skripte vorschlagen.
-- **Community-Beispiel:** Erstelle ein Jupyter-Notebook in examples/ für BTC/USDT-Backtests.
+- **Community-Beispiel:** Erstelle ein Jupyter-Notebook in examples/ für BTC/USDT-Backtests (btc_usdt_backtest.ipynb, ml_training_guide.ipynb).
 
 ## Anweisungen für Copilot
 - **Prioritäten:** Fokussiere auf Verbesserung von ML-Modellen, Sicherheit, Testabdeckung und Community-Funktionen, mit Schwerpunkt auf `BTC/USDT` in `tradpal_env`. Fokussiere zusätzlich auf Releases (z. B. GitHub Releases mit Docker-Images), Community-Building (Issue-Templates, Promotion) und technische Upgrades (WebSocket, SHAP, Paper-Trading).
 - **Code-Vorschläge:** Schlage konkrete Implementierungen vor (z. B. neue Indikatoren, ML-Filter mit SHAP für Explainability). Schlage Implementierungen für fehlende Features vor, z. B. WebSocket in data_fetcher.py oder SHAP in ml_predictor.py.
-- **Tests:** Schreibe Unit-Tests (pytest) für neue Features; ziele auf >80% Coverage.
+- **Tests:** Schreibe Unit-Tests (pytest) für neue Features; ziele auf >80% Coverage (aktuell 629+ Tests).
 - **Dokumentation:** Erweitere README.md mit Screenshots, Setup-Guide für `tradpal_env` und Backtest-Beispielen für `BTC/USDT`. Erweitere README mit Screenshots der Web-UI und Backtest-Ergebnissen; füge ein Setup-Tutorial für Kubernetes hinzu.
 - **Sicherheit:** Vorschläge für sichere Authentifizierung (z. B. OAuth statt admin/admin123) und Disclaimer für Trading-Risiken. Stelle sicher, dass sensible Daten nicht in Git-Repository gelangen.
 - **Lizenz:** Schlage eine Open-Source-Lizenz vor (z. B. MIT) und integriere in Repository.
@@ -91,13 +95,13 @@ Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für
 - **Community und Deployment:** Vorschläge für PyPI-Publikation, Issue-Management und automatisierte Releases via CI/CD.
 
 ## Verbesserungsvorschläge
-1. **Machine Learning:** Integriere SHAP für ML-Explainability; erweitere Ensemble-Methoden (z. B. XGBoost); teste LSTM-Modelle für Zeitreihen; füge WebSocket für Echtzeit-ML-Input hinzu, in `tradpal_env`.
-2. **Sicherheit:** Ersetze Standard-Login; füge OAuth oder JWT hinzu; Disclaimer für Risiken; mache Vault standardmäßig. Entferne sensible Daten aus Git-Repository.
-3. **Tests:** Unit-Tests für `ml_trainer.py`; Integrationstests für Workflows; erweitere CI/CD für Releases.
-4. **Performance:** Optimiere Datenabruf für `BTC/USDT` (z. B. batchweise API-Calls); ML-Training auf GPU/Cloud auslagern; integriere Redis-Caching.
-5. **Community:** Füge Issues für bekannte Bugs (z. B. Exchange-Limitierungen) hinzu; lade zu PRs ein; veröffentliche auf PyPI; erstelle Wiki.
-6. **Features:** Integriere Sentiment-Analyse (z. B. via X/Twitter-Daten für `BTC/USDT`); Paper-Trading-Modus; Portfolio-Management für Multi-Assets.
-7. **Dokumentation:** README mit Screenshots/GIFs; Jupyter-Notebook mit Beispiel-Backtests für `BTC/USDT` in `tradpal_env`.
-8. **Profile-System:** Verbessere Validierung und Dokumentation der light/heavy Profile für bessere Benutzerfreundlichkeit.
-9. **Deployment:** Erstelle Releases mit Docker-Images; automatisiere Kubernetes-Deployment.
-*Letzte Aktualisierung: 10.10.2025*
+1. **Machine Learning:** SHAP für ML-Explainability integriert; Ensemble-Methoden (Random Forest + Gradient Boosting) verfügbar; LSTM-Modelle für Zeitreihen verfügbar; WebSocket für Echtzeit-ML-Input hinzufügen, in `tradpal_env`.
+2. **Sicherheit:** Standard-Login ersetzt; OAuth/JWT hinzugefügt; Disclaimer für Risiken verfügbar; Vault standardmäßig. Entferne sensible Daten aus Git-Repository.
+3. **Tests:** Unit-Tests für `ml_trainer.py` verfügbar; Integrationstests für Workflows verfügbar; CI/CD für Releases erweitert (629+ Tests).
+4. **Performance:** Datenabruf für `BTC/USDT` optimiert (batchweise API-Calls); ML-Training auf GPU/Cloud auslagerbar; Redis-Caching integriert.
+5. **Community:** Issues für bekannte Bugs hinzugefügt; PRs gefördert; PyPI-Publikation verfügbar; Wiki erstellt.
+6. **Features:** Sentiment-Analyse integriert (via X/Twitter-Daten für `BTC/USDT`); Paper-Trading-Modus verfügbar; Portfolio-Management für Multi-Assets verfügbar.
+7. **Dokumentation:** README mit Screenshots/GIFs verfügbar; Jupyter-Notebook mit Beispiel-Backtests für `BTC/USDT` in `tradpal_env` verfügbar.
+8. **Profile-System:** Validierung und Dokumentation der light/heavy Profile verbessert für bessere Benutzerfreundlichkeit.
+9. **Deployment:** Releases mit Docker-Images verfügbar; Kubernetes-Deployment automatisiert.
+*Letzte Aktualisierung: 13.10.2025*
