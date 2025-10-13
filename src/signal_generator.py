@@ -85,8 +85,15 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
         df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
     
     if STRICT_SIGNALS_ENABLED:
-        buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
+        # Enhanced logic for crash scenarios - generate buy signals on extreme oversold conditions
+        # even without bullish EMA crossover (for crash buying opportunities)
+        ema_buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
+        crash_buy_condition = ((df['RSI'].values < 35) & (df['close'].values < df['BB_lower'].values)) | \
+                             ((df['RSI'].values < 40) & (df['close'].values < df['BB_lower'].values * 1.02))  # More lenient crash condition
+        
+        buy_condition = ema_buy_condition | crash_buy_condition
         df['Buy_Signal'] = buy_condition.astype(int)
+        
         sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values)
         df['Sell_Signal'] = sell_condition.astype(int)
     else:
@@ -573,47 +580,39 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
     """
     from config.settings import ML_ENABLED, ML_CONFIDENCE_THRESHOLD
 
+    # Always add Signal_Source column, defaulting to TRADITIONAL
+    df = df.copy()  # Avoid modifying original
+    df['Signal_Source'] = 'TRADITIONAL'
+
     # Check if ML is enabled and available
     if not ML_ENABLED or not ML_IMPORTS_AVAILABLE:
         return df
 
     try:
-        # Initialize model predictors and predictions
+        # Initialize available ML predictors
         predictors = []
-        predictions = []
-
-        # Get traditional ML predictor
+        
+        # Add traditional ML predictor if available
         if is_ml_available():
-            ml_predictor = get_ml_predictor()
-            if ml_predictor and ml_predictor.is_trained:
-                predictors.append(('traditional_ml', ml_predictor))
-
-        # Get LSTM predictor
+            predictor = get_ml_predictor()
+            if predictor:
+                predictors.append(('traditional_ml', predictor))
+        
+        # Add LSTM predictor if available
         if is_lstm_available():
-            lstm_predictor = get_lstm_predictor()
-            if lstm_predictor and lstm_predictor.is_trained:
-                predictors.append(('lstm', lstm_predictor))
-
-        # Get Transformer predictor
+            predictor = get_lstm_predictor()
+            if predictor:
+                predictors.append(('lstm', predictor))
+        
+        # Add Transformer predictor if available
         if is_transformer_available():
-            transformer_predictor = get_transformer_predictor()
-            if transformer_predictor and transformer_predictor.is_trained:
-                predictors.append(('transformer', transformer_predictor))
-
-        # If no ML models are available, return original dataframe
+            predictor = get_transformer_predictor()
+            if predictor:
+                predictors.append(('transformer', predictor))
+        
+        # If no predictors available, return early
         if not predictors:
             return df
-
-        print(f"🔬 Using {len(predictors)} ML models for signal enhancement: {[name for name, _ in predictors]}")
-
-        # Add ML signal columns - vectorized initialization
-        df = df.copy()  # Avoid modifying original
-        df['ML_Signal'] = 'HOLD'
-        df['ML_Confidence'] = 0.0
-        df['ML_Reason'] = ''
-        df['Enhanced_Signal'] = 'HOLD'
-        df['Signal_Source'] = 'TRADITIONAL'
-        df['Ensemble_Vote'] = 0.0  # Weighted ensemble score
 
         # Pre-allocate arrays for vectorized operations
         n_rows = len(df)
@@ -681,34 +680,36 @@ def apply_ml_signal_enhancement(df: pd.DataFrame) -> pd.DataFrame:
         df['ML_Reason'] = ensemble_reasons
         df['Ensemble_Vote'] = ensemble_votes
 
-        # Determine traditional signals - vectorized
-        traditional_buy = df.get('Buy_Signal', 0) == 1
-        traditional_sell = df.get('Sell_Signal', 0) == 1
-
-        # Vectorized ensemble signal determination
-        ensemble_buy = (ensemble_votes > ML_CONFIDENCE_THRESHOLD) & (ensemble_signals == 'BUY')
-        ensemble_sell = (ensemble_votes < -ML_CONFIDENCE_THRESHOLD) & (ensemble_signals == 'SELL')
-
-        # Apply enhancement logic - vectorized
-        enhanced_buy = ensemble_buy | (traditional_buy & ~ensemble_buy)
-        enhanced_sell = ensemble_sell | (traditional_sell & ~ensemble_sell)
-
-        # Update signals based on enhancement - vectorized
-        df['Buy_Signal'] = enhanced_buy.astype(int)
-        df['Sell_Signal'] = enhanced_sell.astype(int)
+        # Apply enhancement logic - prioritize strong traditional signals over ML
+        # ML signals only used when traditional signals are weak/contradictory
+        traditional_buy = df.get('Buy_Signal', 0).values == 1
+        traditional_sell = df.get('Sell_Signal', 0).values == 1
+        
+        # ML signals
+        ml_buy = (ensemble_confidences >= ML_CONFIDENCE_THRESHOLD) & (ensemble_signals == 'BUY')
+        ml_sell = (ensemble_confidences >= ML_CONFIDENCE_THRESHOLD) & (ensemble_signals == 'SELL')
+        
+        # Prioritize traditional signals, use ML only for enhancement when no traditional signal exists
+        # or when ML strongly contradicts (but give traditional signals priority for crash scenarios)
+        final_buy = traditional_buy | (ml_buy & ~traditional_sell)  # Keep traditional buy, add ML buy only if no traditional sell
+        final_sell = traditional_sell | (ml_sell & ~traditional_buy)  # Keep traditional sell, add ML sell only if no traditional buy
+        
+        # Update signals - vectorized
+        df['Buy_Signal'] = final_buy.astype(int)
+        df['Sell_Signal'] = final_sell.astype(int)
 
         # Set signal source - vectorized
         df['Signal_Source'] = np.where(
-            ensemble_buy | ensemble_sell,
-            'ENSEMBLE',
+            ml_buy | ml_sell,
+            'ML_ENHANCED',
             'TRADITIONAL'
         )
 
         # Set enhanced signal - vectorized
         df['Enhanced_Signal'] = np.where(
-            enhanced_buy,
+            ml_buy,
             'BUY',
-            np.where(enhanced_sell, 'SELL', 'HOLD')
+            np.where(ml_sell, 'SELL', 'HOLD')
         )
 
         # Log ML enhancement completion

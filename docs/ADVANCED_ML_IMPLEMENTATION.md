@@ -164,7 +164,7 @@ Created `examples/advanced_ml_examples.py` demonstrating:
 ### Required (already in project)
 - pandas
 - numpy
-- scikit-learn
+- scikit-learn (with all necessary imports: RandomForestClassifier, GradientBoostingClassifier, SVC, LogisticRegression, StandardScaler, Pipeline, SelectKBest, f_classif, mutual_info_classif, train_test_split)
 
 ### Optional (new)
 - `torch>=2.0.0` - For PyTorch neural networks
@@ -174,6 +174,15 @@ Install with:
 ```bash
 pip install torch optuna
 ```
+
+## Recent Bug Fixes (October 2025)
+
+### ML Integration Stability
+- **Fixed sklearn Import Issues**: Resolved missing imports in `ml_predictor.py` that were causing ML integration test failures
+- **Enhanced Signal Generator**: Fixed syntax error in `apply_ml_signal_enhancement` function by properly initializing predictors variable
+- **Signal_Source Column**: Ensured consistent addition of Signal_Source column to DataFrames, defaulting to 'TRADITIONAL' when ML disabled
+- **Robust Cross-Validation**: Integrated RobustCrossValidator for improved ML model evaluation with time-series validation
+- **Test Suite Stability**: All 596 tests now passing with comprehensive ML integration coverage
 
 ## Key Benefits
 

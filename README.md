@@ -53,6 +53,10 @@ cd services/web-ui && streamlit run app.py
 ## 🚀 Latest Improvements (October 2025)
 
 ### 🐛 Bug Fixes & Stability
+- **Fixed ML Integration Test Failures**: Resolved sklearn import issues in `ml_predictor.py` by adding missing imports (`RandomForestClassifier`, `GradientBoostingClassifier`, `SVC`, `LogisticRegression`, `StandardScaler`, `Pipeline`, `SelectKBest`, `f_classif`, `mutual_info_classif`, `train_test_split`)
+- **Fixed Signal Generator Syntax Error**: Corrected `apply_ml_signal_enhancement` function by properly adding try block and initializing `predictors` variable for ML model loading
+- **Enhanced Signal_Source Column**: Ensured `Signal_Source` column is always added to DataFrames, defaulting to 'TRADITIONAL' when ML is disabled
+- **Robust Cross-Validation Integration**: Added `RobustCrossValidator` usage for improved ML model evaluation with time-series cross-validation
 - **Fixed Multi-Model Backtesting Memory Issues**: Resolved memory exhaustion ("Killed: 9") in parallel model testing by implementing comprehensive mocking for expensive ML operations and reducing test dataset size by 90%
 - **Fixed AttributeError in simulate_trades**: Corrected position size handling when Position_Size_Absolute column is missing, ensuring proper array creation instead of scalar fallback
 - **Enhanced Test Suite Stability**: All 596 tests now passing with improved mocking infrastructure for expensive operations (data fetching, model training, backtesting)

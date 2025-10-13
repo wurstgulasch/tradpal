@@ -16,16 +16,33 @@ from pathlib import Path
 import logging
 
 try:
+    from sklearn.model_selection import (
+        cross_val_score, KFold, StratifiedKFold, TimeSeriesSplit,
+        cross_validate, validation_curve, learning_curve, train_test_split
+    )
+    from sklearn.metrics import (
+        accuracy_score, precision_score, recall_score, f1_score,
+        roc_auc_score, confusion_matrix, classification_report,
+        make_scorer
+    )
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-    from sklearn.linear_model import LogisticRegression
     from sklearn.svm import SVC
+    from sklearn.linear_model import LogisticRegression
     from sklearn.preprocessing import StandardScaler
-    from sklearn.model_selection import train_test_split, cross_val_score
-    from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
     from sklearn.pipeline import Pipeline
+    from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
+    RandomForestClassifier = None
+    GradientBoostingClassifier = None
+    SVC = None
+    LogisticRegression = None
+    StandardScaler = None
+    Pipeline = None
+    SelectKBest = None
+    f_classif = None
+    mutual_info_classif = None
     print("⚠️  scikit-learn not available. ML features will be disabled.")
     print("   Install with: pip install scikit-learn")
 
@@ -563,33 +580,52 @@ class MLSignalPredictor:
                     recall = recall_score(y_test, y_pred, zero_division=0)
                     f1 = f1_score(y_test, y_pred, zero_division=0)
 
-                    # Cross-validation score
-                    cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='f1')
+                    # Robust cross-validation with multiple strategies
+                    cv_validator = RobustCrossValidator(cv_method='time_series', n_splits=5)
+
+                    # Compare different CV strategies
+                    cv_comparison = cv_validator.compare_cv_strategies(
+                        model, X_selected, y, strategies=['time_series', 'kfold']
+                    )
+
+                    # Use time series CV for main evaluation
+                    cv_validator.cv_method = 'time_series'
+                    cv_results = cv_validator.cross_validate_model(
+                        model, X_selected, y,
+                        scoring=['accuracy', 'precision', 'recall', 'f1']
+                    )
+
+                    # Learning curves for overfitting detection
+                    learning_curves = cv_validator.plot_learning_curves(model, X_selected, y)
 
                     results[model_name] = {
                         'accuracy': accuracy,
                         'precision': precision,
                         'recall': recall,
                         'f1_score': f1,
-                        'cv_f1_mean': cv_scores.mean(),
-                        'cv_f1_std': cv_scores.std(),
+                        'cv_f1_mean': cv_results['f1']['mean'],
+                        'cv_f1_std': cv_results['f1']['std'],
+                        'cv_comparison': cv_comparison,
+                        'learning_curves': learning_curves,
+                        'cv_stability_score': cv_validator.get_cv_summary()['overall_stability'],
                         'model': model
                     }
 
-                    # Select best model based on preferred criteria
+                    # Select best model based on preferred criteria with CV stability consideration
                     score = {
                         'f1': f1,
                         'accuracy': accuracy,
                         'precision': precision,
                         'recall': recall,
-                        'balanced_accuracy': (accuracy + recall) / 2  # Simple balanced accuracy
+                        'balanced_accuracy': (accuracy + recall) / 2,
+                        'cv_stable_f1': cv_results['f1']['mean'] * (1 - cv_results['f1']['std'])  # Penalize unstable models
                     }.get(ML_MODEL_SELECTION_CRITERIA, f1)
 
                     if score > best_score:
                         best_score = score
                         best_model_name = model_name
 
-                    print(f"✅ {model_config['name']}: F1={f1:.3f}, CV-F1={cv_scores.mean():.3f}±{cv_scores.std():.3f}")
+                    print(f"✅ {model_config['name']}: F1={f1:.3f}, CV-F1={cv_results['f1']['mean']:.3f}±{cv_results['f1']['std']:.3f}, Stability={cv_validator.get_cv_summary()['overall_stability']:.3f}")
 
                 except Exception as e:
                     print(f"❌ Failed to train {model_config['name']}: {e}")
@@ -649,6 +685,134 @@ class MLSignalPredictor:
                 error_type="ML_TRAINING_ERROR",
                 message=error_msg,
                 context={'symbol': self.symbol, 'timeframe': self.timeframe}
+            )
+
+            return {'success': False, 'error': str(e)}
+
+    def train_single_model(self, df: pd.DataFrame, model_name: str, test_size: float = 0.2, prediction_horizon: int = 5) -> Dict[str, Any]:
+        """
+        Train a single ML model and select it as the best model.
+
+        Args:
+            df: DataFrame with technical indicators and price data
+            model_name: Name of the model to train
+            test_size: Fraction of data to use for testing
+            prediction_horizon: Periods to look ahead for labeling
+
+        Returns:
+            Dictionary with training results and best model info
+        """
+        try:
+            # Check if model is available
+            if model_name not in self.models:
+                available_models = list(self.models.keys())
+                raise ValueError(f"Model '{model_name}' not available. Available models: {available_models}")
+
+            # Prepare features and labels
+            X, feature_names = self.prepare_features(df)
+            y = self.create_labels(df, prediction_horizon)
+
+            # Remove rows with NaN
+            valid_indices = ~(np.isnan(X).any(axis=1) | np.isnan(y))
+            X = X[valid_indices]
+            y = y[valid_indices]
+
+            if len(X) < 100:
+                raise ValueError(f"Insufficient data for training: {len(X)} samples")
+
+            # Feature scaling and selection
+            X_scaled = self.scale_features(X)
+            X_selected, selected_feature_names = self.select_features_rfe_shap(X_scaled, y, feature_names)
+
+            # Store feature selection info for prediction
+            self.selected_feature_indices = None
+            if len(selected_feature_names) < len(feature_names):
+                self.selected_feature_indices = [feature_names.index(name) for name in selected_feature_names]
+
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_selected, y, test_size=test_size, random_state=42, stratify=y
+            )
+
+            self.feature_columns = selected_feature_names
+
+            # Get the model configuration
+            model_config = self.models[model_name]
+            if model_config['model'] is None:
+                raise ValueError(f"Model '{model_name}' is not available (library not installed)")
+
+            # Train the single model
+            model = model_config['model']
+            model.fit(X_train, y_train)
+
+            # Evaluate on test set
+            y_pred = model.predict(X_test)
+            y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, 'predict_proba') else None
+
+            # Calculate metrics
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred, zero_division=0)
+            recall = recall_score(y_test, y_pred, zero_division=0)
+            f1 = f1_score(y_test, y_pred, zero_division=0)
+
+            # Robust cross-validation
+            cv_validator = RobustCrossValidator(cv_method='time_series', n_splits=5)
+            cv_results = cv_validator.cross_validate_model(
+                model, X_selected, y,
+                scoring=['accuracy', 'precision', 'recall', 'f1']
+            )
+
+            results = {
+                model_name: {
+                    'accuracy': accuracy,
+                    'precision': precision,
+                    'recall': recall,
+                    'f1_score': f1,
+                    'cv_f1_mean': cv_results['f1']['mean'],
+                    'cv_f1_std': cv_results['f1']['std'],
+                    'cv_stability_score': cv_validator.get_cv_summary()['overall_stability'],
+                    'model': model
+                }
+            }
+
+            # Set as best model
+            self.best_model = model
+            self.model_performance = results
+            self.is_trained = True
+
+            # Save the model
+            self.save_model()
+
+            # Log training completion
+            audit_logger.log_system_event(
+                event_type="ML_SINGLE_MODEL_TRAINING_COMPLETED",
+                message=f"Single ML model training completed for {self.symbol} {self.timeframe}",
+                details={
+                    'model': model_name,
+                    'f1_score': f1,
+                    'samples': len(X),
+                    'features': len(feature_names)
+                }
+            )
+
+            print(f"✅ {model_config['name']} trained: F1={f1:.3f}, CV-F1={cv_results['f1']['mean']:.3f}±{cv_results['f1']['std']:.3f}, Stability={cv_validator.get_cv_summary()['overall_stability']:.3f}")
+
+            return {
+                'success': True,
+                'best_model': model_name,
+                'performance': results,
+                'samples': len(X),
+                'features': len(feature_names)
+            }
+
+        except Exception as e:
+            error_msg = f"Single model training failed: {str(e)}"
+            print(f"❌ {error_msg}")
+
+            audit_logger.log_error(
+                error_type="ML_SINGLE_MODEL_TRAINING_ERROR",
+                message=error_msg,
+                context={'symbol': self.symbol, 'timeframe': self.timeframe, 'model': model_name}
             )
 
             return {'success': False, 'error': str(e)}
@@ -774,7 +938,7 @@ class MLSignalPredictor:
 
         try:
             # Prepare features for prediction (use last row)
-            X, _ = self.prepare_features(df)
+            X, feature_names = self.prepare_features(df)
             if len(X) == 0:
                 return {
                     'signal': 'HOLD',
@@ -786,6 +950,9 @@ class MLSignalPredictor:
             X_scaled = self.scaler.transform(X) if hasattr(self, 'scaler') and self.scaler else X
             if hasattr(self, 'selected_feature_indices') and self.selected_feature_indices is not None:
                 X_scaled = X_scaled[:, self.selected_feature_indices]
+                # Update feature names if feature selection was applied
+                if hasattr(self, 'feature_columns') and self.feature_columns:
+                    feature_names = [self.feature_columns[i] for i in self.selected_feature_indices]
 
             last_features = X_scaled[-1:].reshape(1, -1)
 
@@ -817,15 +984,28 @@ class MLSignalPredictor:
                 }
 
             # Get prediction and probability
-            prediction = self.best_model.predict(last_features)[0]
-
-            if hasattr(self.best_model, 'predict_proba'):
-                prob = self.best_model.predict_proba(last_features)[0]
-                confidence = max(prob)  # Highest probability
-                predicted_class_prob = prob[1] if len(prob) > 1 else prob[0]
+            # Handle LightGBM feature name warnings by using feature_name_or_number
+            if 'LGBM' in str(type(self.best_model)):
+                # For LightGBM, create a DataFrame with proper column names to avoid warnings
+                import pandas as pd
+                last_features_df = pd.DataFrame(last_features, columns=feature_names[:last_features.shape[1]])
+                prediction = self.best_model.predict(last_features_df)[0]
+                if hasattr(self.best_model, 'predict_proba'):
+                    prob = self.best_model.predict_proba(last_features_df)[0]
+                    confidence = max(prob)  # Highest probability
+                    predicted_class_prob = prob[1] if len(prob) > 1 else prob[0]
+                else:
+                    confidence = 0.5  # Default confidence for models without predict_proba
+                    predicted_class_prob = 0.5
             else:
-                confidence = 0.5  # Default confidence for models without predict_proba
-                predicted_class_prob = 0.5
+                prediction = self.best_model.predict(last_features)[0]
+                if hasattr(self.best_model, 'predict_proba'):
+                    prob = self.best_model.predict_proba(last_features)[0]
+                    confidence = max(prob)  # Highest probability
+                    predicted_class_prob = prob[1] if len(prob) > 1 else prob[0]
+                else:
+                    confidence = 0.5  # Default confidence for models without predict_proba
+                    predicted_class_prob = 0.5
 
             # Determine signal based on prediction and threshold
             if predicted_class_prob > threshold:
@@ -1638,7 +1818,7 @@ if TENSORFLOW_AVAILABLE:
                 return {
                     'signal': signal,
                     'confidence': float(confidence),
-                    'predicted_prob': float(predicted_class_prob),
+                    'predicted_prob': float(prediction_prob),
                     'threshold': threshold,
                     'reason': f'LSTM prediction with {confidence:.2f} confidence'
                 }
@@ -2238,197 +2418,18 @@ if TENSORFLOW_AVAILABLE:
                     return {
                         'signal': 'HOLD',
                         'confidence': 0.0,
-                        'reason': f'Insufficient data: need {self.sequence_length} periods, got {len(features)}'
+                        'reason': 'insufficient_data'
                     }
 
-                # Get the last sequence
-                last_sequence = features[-self.sequence_length:].reshape(1, self.sequence_length, -1)
-
-                # Make prediction
-                prediction_prob = self.model.predict(last_sequence, verbose=0)[0][0]
-                confidence = max(prediction_prob, 1 - prediction_prob)  # Highest probability
-
-                # Determine signal
-                if prediction_prob > threshold:
-                    signal = 'BUY'
-                elif prediction_prob < (1 - threshold):
-                    signal = 'SELL'
-                else:
-                    signal = 'HOLD'
-
-                return {
-                    'signal': signal,
-                    'confidence': float(confidence),
-                    'predicted_prob': float(prediction_prob),
-                    'threshold': threshold,
-                    'reason': f'Transformer prediction with {confidence:.2f} confidence'
-                }
+                feature_matrix = np.zeros((len(df), len(expected_features)))
 
             except Exception as e:
-                error_msg = f"Transformer prediction failed: {str(e)}"
-                print(f"❌ {error_msg}")
-
-                audit_logger.log_error(
-                    error_type="TRANSFORMER_PREDICTION_ERROR",
-                    message=error_msg,
-                    context={'symbol': self.symbol, 'timeframe': self.timeframe}
-                )
-
+                print(f"❌ Error in predict method: {e}")
                 return {
                     'signal': 'HOLD',
                     'confidence': 0.0,
-                    'reason': f'Prediction error: {str(e)}'
+                    'reason': 'prediction_error'
                 }
-
-        def explain_prediction(self, df: pd.DataFrame, background_samples: int = 100) -> Optional[Dict[str, Any]]:
-            """
-            Explain the Transformer prediction using SHAP values.
-
-            Args:
-                df: DataFrame with technical indicators
-                background_samples: Number of background samples for SHAP
-
-            Returns:
-                Dictionary with SHAP explanations or None if not available
-            """
-            if not SHAP_AVAILABLE or not self.is_trained:
-                return None
-
-            try:
-                # Prepare background data
-                features, feature_names = self.prepare_features(df)
-
-                if len(features) < background_samples + self.sequence_length:
-                    return None
-
-                # Use recent data for background
-                background_data = features[-background_samples-self.sequence_length:-self.sequence_length]
-                background_sequences = []
-
-                for i in range(len(background_data) - self.sequence_length + 1):
-                    background_sequences.append(background_data[i:i+self.sequence_length])
-
-                background_sequences = np.array(background_sequences)
-
-                # Create SHAP explainer
-                def model_predict(sequences):
-                    return self.model.predict(sequences, verbose=0).flatten()
-
-                explainer = shap.DeepExplainer(model_predict, background_sequences)
-
-                # Explain the last sequence
-                last_sequence = features[-self.sequence_length:].reshape(1, self.sequence_length, -1)
-                shap_values = explainer.shap_values(last_sequence)
-
-                # Aggregate SHAP values across time steps for each feature
-                feature_importance = np.abs(shap_values[0]).mean(axis=0)  # Mean absolute SHAP across time steps
-
-                # Create feature importance dictionary
-                importance_dict = dict(zip(feature_names, feature_importance))
-
-                return {
-                    'feature_importance': importance_dict,
-                    'top_features': sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)[:10],
-                    'shap_values': shap_values[0].tolist()
-                }
-
-            except Exception as e:
-                print(f"⚠️  SHAP explanation failed: {e}")
-                return None
-
-        def prepare_features(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
-            """
-            Prepare features from technical indicators for Transformer training/prediction.
-
-            Args:
-                df: DataFrame with technical indicators
-
-            Returns:
-                Tuple of (feature_matrix, feature_names)
-            """
-            features = []
-
-            # Expected features from trained Transformer models - maintain compatibility
-            expected_features = [
-                'close_pct_value', 'close_pct_roc', 'close_ma5_value', 'close_ma5_roc',
-                'close_ma20_value', 'close_ma20_roc', 'EMA9_value', 'EMA9_roc',
-                'EMA21_value', 'EMA21_roc', 'RSI_value', 'RSI_roc',
-                'BB_upper_value', 'BB_upper_roc', 'BB_lower_value', 'BB_lower_roc',
-                'ATR_value', 'ATR_roc', 'ADX_value'
-            ]
-
-            # Build features in the exact order expected by trained models
-            if 'close' in df.columns:
-                # close_pct_value: Price change value
-                price_pct = df['close'].pct_change().fillna(0)
-                features.append(price_pct)
-
-                # close_pct_roc: Price change rate of change
-                features.append(price_pct.pct_change().fillna(0))
-
-                # close_ma5_value: 5-period MA value
-                ma5 = df['close'].rolling(window=5).mean().fillna(0)
-                features.append(ma5)
-
-                # close_ma5_roc: 5-period MA rate of change
-                features.append(ma5.pct_change().fillna(0))
-
-                # close_ma20_value: 20-period MA value
-                ma20 = df['close'].rolling(window=20).mean().fillna(0)
-                features.append(ma20)
-
-                # close_ma20_roc: 20-period MA rate of change
-                features.append(ma20.pct_change().fillna(0))
-
-            # EMA9_value and EMA9_roc
-            if 'EMA9' in df.columns:
-                features.append(df['EMA9'].fillna(0))
-                features.append(df['EMA9'].pct_change().fillna(0))
-
-            # EMA21_value and EMA21_roc
-            if 'EMA21' in df.columns:
-                features.append(df['EMA21'].fillna(0))
-                features.append(df['EMA21'].pct_change().fillna(0))
-
-            # RSI_value and RSI_roc
-            if 'RSI' in df.columns:
-                features.append(df['RSI'].fillna(50))
-                features.append(df['RSI'].pct_change().fillna(0))
-
-            # BB_upper_value and BB_upper_roc
-            if 'BB_upper' in df.columns:
-                features.append(df['BB_upper'].fillna(0))
-                features.append(df['BB_upper'].pct_change().fillna(0))
-
-            # BB_lower_value and BB_lower_roc
-            if 'BB_lower' in df.columns:
-                features.append(df['BB_lower'].fillna(0))
-                features.append(df['BB_lower'].pct_change().fillna(0))
-
-            # ATR_value and ATR_roc
-            if 'ATR' in df.columns:
-                features.append(df['ATR'].fillna(0))
-                features.append(df['ATR'].pct_change().fillna(0))
-
-            # ADX_value (no ROC for ADX as it's not stored)
-            if 'ADX' in df.columns:
-                features.append(df['ADX'].fillna(25))
-            else:
-                # Fallback: use a default ADX value if not available
-                features.append(np.full(len(df), 25.0))  # Default neutral ADX value
-
-            # Ensure we have exactly the expected number of features
-            if len(features) != len(expected_features):
-                print(f"⚠️  Transformer Feature count mismatch: expected {len(expected_features)}, got {len(features)}")
-                # Pad with zeros if needed
-                while len(features) < len(expected_features):
-                    features.append(np.zeros(len(df)))
-
-            # Combine features
-            if features:
-                feature_matrix = np.column_stack(features)
-            else:
-                feature_matrix = np.zeros((len(df), len(expected_features)))
 
             # Replace infinities and NaN with 0
             feature_matrix = np.nan_to_num(feature_matrix, nan=0.0, posinf=0.0, neginf=0.0)
@@ -2604,3 +2605,279 @@ def is_transformer_available() -> bool:
 def is_shap_available() -> bool:
     """Check if SHAP explanations are available."""
     return SHAP_AVAILABLE
+
+class RobustCrossValidator:
+    """
+    Robust cross-validation system for trading ML models.
+
+    Supports multiple CV strategies: KFold, StratifiedKFold, TimeSeriesSplit,
+    and custom walk-forward validation for time series data.
+    """
+
+    def __init__(self, cv_method: str = 'time_series', n_splits: int = 5, random_state: int = 42):
+        """
+        Initialize the cross-validator.
+
+        Args:
+            cv_method: Cross-validation method ('kfold', 'stratified', 'time_series', 'walk_forward')
+            n_splits: Number of CV splits
+            random_state: Random state for reproducibility
+        """
+        valid_methods = ['kfold', 'stratified', 'time_series', 'walk_forward']
+        if cv_method not in valid_methods:
+            raise ValueError(f"Unknown CV method: {cv_method}. Valid methods: {valid_methods}")
+
+        self.cv_method = cv_method
+        self.n_splits = n_splits
+        self.random_state = random_state
+        self.cv_results = {}
+        self.cv = None  # Store the CV splitter
+
+    def get_cv_strategy(self, y: np.ndarray = None):
+        """
+        Get the appropriate cross-validation strategy.
+
+        Args:
+            y: Target labels (for stratified CV)
+
+        Returns:
+            Cross-validation splitter object
+        """
+        if self.cv_method == 'kfold':
+            self.cv = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+        elif self.cv_method == 'stratified':
+            # Check if stratification is possible
+            if y is not None:
+                unique_classes, class_counts = np.unique(y, return_counts=True)
+                min_class_count = min(class_counts)
+                if min_class_count < self.n_splits:
+                    print(f"⚠️  Not enough samples per class for stratified CV (min: {min_class_count}, need: {self.n_splits}). Falling back to regular KFold.")
+                    self.cv = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+                else:
+                    self.cv = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+            else:
+                self.cv = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+        elif self.cv_method == 'time_series':
+            self.cv = TimeSeriesSplit(n_splits=self.n_splits)
+        elif self.cv_method == 'walk_forward':
+            self.cv = self._walk_forward_split(y)
+        else:
+            raise ValueError(f"Unknown CV method: {self.cv_method}")
+
+        return self.cv
+
+    def _walk_forward_split(self, y: np.ndarray):
+        """
+        Custom walk-forward validation for time series.
+
+        Args:
+            y: Target labels
+
+        Returns:
+            Generator yielding (train_idx, test_idx) tuples
+        """
+        n_samples = len(y)
+        test_size = max(1, n_samples // (self.n_splits + 1))
+
+        for i in range(self.n_splits):
+            train_end = n_samples - (self.n_splits - i) * test_size
+            test_end = train_end + test_size
+
+            train_idx = np.arange(train_end)
+            test_idx = np.arange(train_end, min(test_end, n_samples))
+
+            if len(test_idx) > 0:
+                yield train_idx, test_idx
+
+    def cross_validate_model(self, model, X: np.ndarray, y: np.ndarray,
+                           scoring: list = None, cv: int = None) -> Dict[str, Any]:
+        """
+        Perform comprehensive cross-validation with multiple metrics.
+
+        Args:
+            model: ML model to evaluate
+            X: Feature matrix
+            y: Target labels
+            scoring: List of scoring metrics
+            cv: Number of CV folds (overrides self.n_splits)
+
+        Returns:
+            Dictionary with detailed CV results
+        """
+        if scoring is None:
+            scoring = ['accuracy', 'precision', 'recall', 'f1']  # Removed roc_auc due to compatibility issues
+
+        if cv is None:
+            cv = self.n_splits
+
+        # Get CV strategy
+        cv_strategy = self.get_cv_strategy(y)
+
+        # Define scorers
+        scorers = {}
+        for metric in scoring:
+            if metric == 'precision':
+                scorers[metric] = make_scorer(precision_score, zero_division=0)
+            elif metric == 'recall':
+                scorers[metric] = make_scorer(recall_score, zero_division=0)
+            elif metric == 'f1':
+                scorers[metric] = make_scorer(f1_score, zero_division=0)
+            else:
+                scorers[metric] = metric
+
+        # Perform cross-validation
+        cv_results = cross_validate(
+            model, X, y,
+            cv=cv_strategy,
+            scoring=scorers,
+            return_train_score=True,
+            n_jobs=-1
+        )
+
+        # Calculate additional statistics
+        detailed_results = {}
+
+        for metric in scoring:
+            scores = cv_results[f'test_{metric}']
+            train_scores = cv_results[f'train_{metric}']
+
+            detailed_results[metric] = {
+                'mean': float(scores.mean()),
+                'std': float(scores.std()),
+                'min': float(scores.min()),
+                'max': float(scores.max()),
+                'scores': scores.tolist(),
+                'train_mean': float(train_scores.mean()),
+                'train_std': float(train_scores.std()),
+                'overfitting_gap': float(train_scores.mean() - scores.mean())
+            }
+
+        # Overall fit time statistics
+        detailed_results['fit_time'] = {
+            'mean': float(cv_results['fit_time'].mean()),
+            'std': float(cv_results['fit_time'].std()),
+            'total': float(cv_results['fit_time'].sum())
+        }
+
+        # Store results
+        self.cv_results = detailed_results
+
+        return detailed_results
+
+    def compare_cv_strategies(self, model, X: np.ndarray, y: np.ndarray,
+                            strategies: list = None) -> Dict[str, Dict[str, Any]]:
+        """
+        Compare different cross-validation strategies.
+
+        Args:
+            model: ML model to evaluate
+            X: Feature matrix
+            y: Target labels
+            strategies: List of CV strategies to compare
+
+        Returns:
+            Dictionary comparing CV strategies
+        """
+        if strategies is None:
+            strategies = ['kfold', 'stratified', 'time_series']
+
+        comparison_results = {}
+
+        for strategy in strategies:
+            try:
+                self.cv_method = strategy
+                results = self.cross_validate_model(model, X, y)
+                comparison_results[strategy] = {
+                    'f1_mean': results['f1']['mean'],
+                    'f1_std': results['f1']['std'],
+                    'accuracy_mean': results['accuracy']['mean'],
+                    'precision_mean': results['precision']['mean'],
+                    'recall_mean': results['recall']['mean'],
+                    'overfitting_gap': results['f1']['overfitting_gap']
+                }
+            except Exception as e:
+                comparison_results[strategy] = {'error': str(e)}
+
+        return comparison_results
+
+    def plot_learning_curves(self, model, X: np.ndarray, y: np.ndarray,
+                           cv: int = None, train_sizes: np.ndarray = None) -> Dict[str, Any]:
+        """
+        Generate learning curves to diagnose overfitting/underfitting.
+
+        Args:
+            model: ML model
+            X: Feature matrix
+            y: Target labels
+            cv: Number of CV folds
+            train_sizes: Array of training set sizes
+
+        Returns:
+            Learning curve data
+        """
+        if cv is None:
+            cv = self.n_splits
+
+        if train_sizes is None:
+            train_sizes = np.linspace(0.1, 1.0, 10)
+
+        cv_strategy = self.get_cv_strategy(y)
+
+        # Generate learning curves
+        train_sizes_abs, train_scores, validation_scores = learning_curve(
+            model, X, y,
+            cv=cv_strategy,
+            train_sizes=train_sizes,
+            scoring='f1',
+            n_jobs=-1
+        )
+
+        return {
+            'train_sizes': train_sizes_abs.tolist(),
+            'train_scores_mean': train_scores.mean(axis=1).tolist(),
+            'train_scores_std': train_scores.std(axis=1).tolist(),
+            'validation_scores_mean': validation_scores.mean(axis=1).tolist(),
+            'validation_scores_std': validation_scores.std(axis=1).tolist()
+        }
+
+    def get_cv_summary(self) -> Dict[str, Any]:
+        """
+        Get a summary of cross-validation results.
+
+        Returns:
+            Summary statistics
+        """
+        if not self.cv_results:
+            return {'status': 'no_results'}
+
+        summary = {
+            'cv_method': self.cv_method,
+            'n_splits': self.n_splits,
+            'metrics': {}
+        }
+
+        for metric, results in self.cv_results.items():
+            if isinstance(results, dict) and 'mean' in results and 'scores' in results:
+                scores = np.array(results['scores'])
+                summary['metrics'][metric] = {
+                    'mean': results['mean'],
+                    'std': results['std'],
+                    'stability_score': 1.0 - (results['std'] / max(results['mean'], 0.001))  # Lower std = more stable
+                }
+
+                # Add best and worst fold indices
+                if len(scores) > 0:
+                    summary['metrics'][metric]['best_fold'] = int(np.argmax(scores))
+                    summary['metrics'][metric]['worst_fold'] = int(np.argmin(scores))
+
+        # Overall stability score (average across metrics)
+        stability_scores = [m['stability_score'] for m in summary['metrics'].values() if 'stability_score' in m]
+        summary['overall_stability'] = np.mean(stability_scores) if stability_scores else 0.0
+
+        # Add fold scores for the primary metric (f1)
+        if 'f1' in self.cv_results and 'scores' in self.cv_results['f1']:
+            summary['fold_scores'] = self.cv_results['f1']['scores']
+            summary['best_fold'] = int(np.argmax(self.cv_results['f1']['scores']))
+            summary['worst_fold'] = int(np.argmin(self.cv_results['f1']['scores']))
+
+        return summary
