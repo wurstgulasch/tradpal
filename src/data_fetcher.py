@@ -92,6 +92,15 @@ except ImportError:
     except ImportError:
         WEBSOCKET_FETCHER_AVAILABLE = False
 
+# Import data quality monitoring
+try:
+    from .data_quality_monitor import monitor_data_source
+    QUALITY_MONITORING_AVAILABLE = True
+except ImportError:
+    QUALITY_MONITORING_AVAILABLE = False
+    def monitor_data_source(*args, **kwargs):
+        pass
+
 logger = logging.getLogger(__name__)
 
 # Global data source instance
@@ -417,6 +426,12 @@ def fetch_historical_data(symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
         # Validate data
         validate_data(df)
 
+        # Monitor data quality
+        if QUALITY_MONITORING_AVAILABLE:
+            quality_report = monitor_data_source(df, "historical_fetch")
+            if quality_report['alerts']:
+                logger.warning(f"Data quality issues detected: {len(quality_report['alerts'])} alerts")
+
         if show_progress:
             total_time = time.time() - start_time
             print(f"✅ Completed: {len(df)} candles fetched in {total_time:.1f}s")
@@ -428,6 +443,106 @@ def fetch_historical_data(symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
         if show_progress:
             print(f"❌ Error fetching historical data: {e}")
         raise
+
+@cache_api_call(ttl_seconds=CACHE_TTL_HISTORICAL)  # Cache for historical data
+def fetch_historical_data_with_fallback(symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
+                                       limit: int = HISTORICAL_DATA_LIMIT, start_date: Optional[datetime] = None,
+                                       show_progress: bool = True) -> pd.DataFrame:
+    """
+    Fetches historical data with automatic fallback between sources.
+    Priority: Yahoo Finance → CCXT → Error
+
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe string
+        limit: Maximum records
+        start_date: Start date
+        show_progress: Show progress indicators
+
+    Returns:
+        DataFrame with OHLCV data
+    """
+    fallback_sources = ['yahoo_finance', 'ccxt']  # Priority order
+
+    for source_name in fallback_sources:
+        try:
+            if show_progress:
+                print(f"🔄 Trying data source: {source_name}")
+
+            # Temporarily set data source
+            original_source = get_data_source()
+            set_data_source(source_name)
+
+            df = fetch_historical_data(
+                symbol=symbol,
+                timeframe=timeframe,
+                limit=limit,
+                start_date=start_date,
+                show_progress=False  # Don't show progress for individual attempts
+            )
+
+            if not df.empty and len(df) > 10:  # Minimum data requirement
+                # Validate data quality
+                quality_score = _calculate_data_quality_score(df)
+                if quality_score >= 70:  # Acceptable quality threshold
+                    if show_progress:
+                        print(f"✅ Successfully fetched {len(df)} records from {source_name} (Quality: {quality_score:.1f})")
+                    return df
+                else:
+                    if show_progress:
+                        print(f"⚠️  {source_name} data quality too low ({quality_score:.1f}), trying next source")
+
+            # Restore original source
+            # Note: This is a simplified approach - in production you'd want better source management
+
+        except Exception as e:
+            if show_progress:
+                print(f"❌ {source_name} failed: {e}")
+            continue
+
+    # All sources failed
+    raise RuntimeError(f"All data sources failed for {symbol} {timeframe}")
+
+def _calculate_data_quality_score(df: pd.DataFrame) -> float:
+    """
+    Calculate a simple data quality score (0-100).
+
+    Args:
+        df: DataFrame to analyze
+
+    Returns:
+        Quality score
+    """
+    if df.empty:
+        return 0
+
+    score = 100
+
+    # Completeness check
+    required_cols = ['open', 'high', 'low', 'close', 'volume']
+    for col in required_cols:
+        if col not in df.columns:
+            score -= 20
+        else:
+            null_ratio = df[col].isnull().mean()
+            score -= null_ratio * 20
+
+    # Validity check (OHLC relationships)
+    if all(col in df.columns for col in ['open', 'high', 'low', 'close']):
+        invalid_ohlc = (
+            (df['high'] < df['low']) |
+            (df['open'] < df['low']) | (df['open'] > df['high']) |
+            (df['close'] < df['low']) | (df['close'] > df['high'])
+        )
+        invalid_ratio = invalid_ohlc.mean()
+        score -= invalid_ratio * 30
+
+    # Volume check
+    if 'volume' in df.columns:
+        zero_volume_ratio = (df['volume'] <= 0).mean()
+        score -= zero_volume_ratio * 10
+
+    return max(0, min(100, score))
 
 def _timeframe_to_minutes(timeframe: str) -> int:
     """

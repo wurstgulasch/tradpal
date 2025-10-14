@@ -41,6 +41,16 @@ JSON_INDENT = 4  # JSON output indentation
 SYMBOL = 'BTC/USDT'  # For ccxt
 EXCHANGE = 'binance'  # Changed from kraken to binance for funding rate support
 
+# Redis Configuration
+REDIS_ENABLED = os.getenv('REDIS_ENABLED', 'false').lower() == 'true'
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+REDIS_TTL_INDICATORS = int(os.getenv('REDIS_TTL_INDICATORS', '3600'))  # 1 hour for indicators
+REDIS_TTL_API = int(os.getenv('REDIS_TTL_API', '300'))  # 5 minutes for API responses
+REDIS_MAX_CONNECTIONS = int(os.getenv('REDIS_MAX_CONNECTIONS', '20'))
+
 # Timeframe
 TIMEFRAME = '1m'
 
@@ -144,6 +154,7 @@ ATR_PERIOD = current_params['atr_period']
 # Risk management
 CAPITAL = 10000  # Realistic starting capital for trading
 RISK_PER_TRADE = 0.01  # 1% risk per trade (conservative risk management)
+INITIAL_CAPITAL = CAPITAL  # Initial capital for paper trading and backtesting
 
 # Risk management parameters
 SL_MULTIPLIER = current_params['atr_sl_multiplier']
@@ -216,12 +227,28 @@ OPTIMIZED_CONFIG = {
     'cmf': {'enabled': False}
 }
 
+# Get current indicator configuration based on mode
+def get_current_indicator_config():
+    """Get the current indicator configuration based on CONFIG_MODE"""
+    if CONFIG_MODE == 'conservative':
+        return CONSERVATIVE_CONFIG
+    elif CONFIG_MODE == 'discovery':
+        return DISCOVERY_CONFIG
+    elif CONFIG_MODE == 'optimized':
+        return OPTIMIZED_CONFIG
+    else:
+        # Default fallback
+        return DEFAULT_INDICATOR_CONFIG
+
 # Discovery Mode Parameters
 DISCOVERY_POPULATION_SIZE = 100  # Population size for GA optimization
 DISCOVERY_GENERATIONS = 20  # Number of generations
 DISCOVERY_MUTATION_RATE = 0.2  # Mutation probability
 DISCOVERY_CROSSOVER_RATE = 0.8  # Crossover probability
 DISCOVERY_LOOKBACK_DAYS = 30  # Historical data period for optimization
+
+# LOOKBACK_DAYS for backward compatibility
+LOOKBACK_DAYS = DISCOVERY_LOOKBACK_DAYS
 
 # Adaptive optimization settings (for discovery mode)
 ADAPTIVE_OPTIMIZATION_ENABLED = os.getenv('ADAPTIVE_OPTIMIZATION_ENABLED', 'true').lower() == 'true'  # Enable/disable periodic discovery optimization
@@ -243,7 +270,7 @@ ADAPTIVE_CONFIG_FILE_LIVE = os.getenv('ADAPTIVE_CONFIG_FILE', 'config/adaptive_c
 # Machine Learning settings
 ML_ENABLED = os.getenv('ML_ENABLED', 'true').lower() == 'true'  # Enable/disable ML signal enhancement
 ML_MODEL_DIR = 'cache/ml_models'  # Directory to store trained ML models
-ML_CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for ML signal override (lowered from 0.6)
+ML_CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for ML signal override
 ML_TRAINING_HORIZON = 5  # Prediction horizon for training labels (periods ahead)
 ML_RETRAINING_INTERVAL_HOURS = 24  # How often to retrain models (hours)
 ML_MIN_TRAINING_SAMPLES = 1000  # Minimum samples required for training
@@ -318,6 +345,13 @@ ML_USE_ENSEMBLE = False  # Enable ensemble predictions (GA + ML)
 ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
 ML_ENSEMBLE_VOTING = 'weighted'  # Voting strategy: 'weighted', 'majority', 'unanimous'
 ML_ENSEMBLE_MIN_CONFIDENCE = 0.7  # Minimum confidence for ensemble signal
+
+# Advanced ML Features Configuration
+ML_ADVANCED_FEATURES_ENABLED = os.getenv('ML_ADVANCED_FEATURES_ENABLED', 'true').lower() == 'true'  # Enable advanced ML features
+ML_ENSEMBLE_MODELS = os.getenv('ML_ENSEMBLE_MODELS', 'torch_ensemble,random_forest,gradient_boosting,lstm,transformer').split(',')  # Models to include in ensemble
+ML_MARKET_REGIME_DETECTION = os.getenv('ML_MARKET_REGIME_DETECTION', 'true').lower() == 'true'  # Enable market regime detection
+ML_REINFORCEMENT_LEARNING = os.getenv('ML_REINFORCEMENT_LEARNING', 'false').lower() == 'true'  # Enable reinforcement learning (future feature)
+ML_GPU_OPTIMIZATION = os.getenv('ML_GPU_OPTIMIZATION', 'true').lower() == 'true'  # Enable GPU optimization when available
 
 # Kelly Criterion Configuration
 KELLY_ENABLED = os.getenv('KELLY_ENABLED', 'false').lower() == 'true'  # Enable Kelly Criterion position sizing
@@ -401,174 +435,206 @@ RATE_LIMIT_MAX_RETRIES = 5  # Maximum retries for rate-limited requests
 RATE_LIMIT_BASE_BACKOFF = 2.0  # Base backoff multiplier for retries
 RATE_LIMIT_MAX_BACKOFF = 300  # Maximum backoff time in seconds
 
-def get_current_indicator_config() -> Dict[str, Any]:
-    """
-    Get the current indicator configuration based on the selected mode.
-
-    Returns:
-        Dictionary containing the current indicator configuration
-    """
-    if CONFIG_MODE == 'conservative':
-        return CONSERVATIVE_CONFIG.copy()
-    elif CONFIG_MODE == 'optimized':
-        return OPTIMIZED_CONFIG.copy()
-    elif CONFIG_MODE == 'discovery':
-        # Try to load optimized config first
-        try:
-            if os.path.exists(ADAPTIVE_CONFIG_FILE):
-                with open(ADAPTIVE_CONFIG_FILE, 'r') as f:
-                    data = json.load(f)
-                if 'best_configuration' in data:
-                    config = data['best_configuration']
-                    print(f"Loaded optimized discovery configuration (fitness: {data.get('fitness_score', 'N/A')})")
-                    return config
-        except Exception as e:
-            print(f"Warning: Could not load optimized config: {e}")
-
-        # Fallback to default discovery config
-        return DISCOVERY_CONFIG.copy()
-    else:
-        return CONSERVATIVE_CONFIG.copy()
-
-# Set DEFAULT_INDICATOR_CONFIG based on mode
-DEFAULT_INDICATOR_CONFIG = get_current_indicator_config()
-
-# Data Source Configuration
-DATA_SOURCE = os.getenv('DATA_SOURCE', 'yahoo_finance')  # Options: 'ccxt', 'yahoo_finance', 'alpha_vantage', 'polygon'
-DATA_SOURCE_CONFIG = {
-    'ccxt': {
-        'exchange': EXCHANGE,
-        'api_key': os.getenv('TRADPAL_API_KEY'),
-        'api_secret': os.getenv('TRADPAL_API_SECRET')
-    },
-    'yahoo_finance': {
-        'adjust_prices': True,  # Adjust for splits and dividends
-        'auto_adjust': True,    # Automatically adjust OHLC
-        'prepost': False        # Include pre/post market data
-    },
-    'funding_rate': {
-        'exchange': EXCHANGE,  # Same exchange as main data source
-        'api_key': os.getenv('TRADPAL_API_KEY'),
-        'api_secret': os.getenv('TRADPAL_API_SECRET')
-    },
-    'alpha_vantage': {
-        'api_key': os.getenv('ALPHA_VANTAGE_API_KEY'),
-        'outputsize': 'full'  # 'compact' or 'full'
-    },
-    'polygon': {
-        'api_key': os.getenv('POLYGON_API_KEY'),
-        'adjusted': True  # Adjust for splits
-    }
+# Fitness Function Configuration (Shared between Discovery and Backtester)
+# These weights determine how different metrics contribute to the overall fitness score
+FITNESS_WEIGHTS = {
+    'sharpe_ratio': float(os.getenv('FITNESS_SHARPE_WEIGHT', '30.0')),      # Risk-adjusted returns (30%)
+    'calmar_ratio': float(os.getenv('FITNESS_CALMAR_WEIGHT', '25.0')),     # Return-to-drawdown ratio (25%)
+    'total_pnl': float(os.getenv('FITNESS_PNL_WEIGHT', '30.0')),           # Total profit/loss - OUTPERFORMANCE (30%)
+    'profit_factor': float(os.getenv('FITNESS_PROFIT_FACTOR_WEIGHT', '10.0')), # Gross profit / gross loss (10%)
+    'win_rate': float(os.getenv('FITNESS_WIN_RATE_WEIGHT', '5.0'))         # Win rate percentage (5%)
 }
 
-# Logging
-LOG_LEVEL = 'INFO'
-LOG_FILE = 'logs/tradpal.log'
+# Fitness calculation bounds and normalization
+FITNESS_BOUNDS = {
+    'sharpe_ratio': {'min': -5, 'max': 8},      # Sharpe ratio bounds for normalization
+    'calmar_ratio': {'min': -10, 'max': 15},    # Calmar ratio bounds
+    'total_pnl': {'min': -100, 'max': 200},     # Total P&L percentage bounds
+    'profit_factor': {'min': 0, 'max': 10},     # Profit factor bounds
+    'win_rate': {'min': 0, 'max': 100}          # Win rate percentage bounds
+}
 
-API_KEY = os.getenv('TRADPAL_API_KEY', '')
-API_SECRET = os.getenv('TRADPAL_API_SECRET', '')
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+# Risk penalty multipliers
+FITNESS_RISK_PENALTIES = {
+    'max_drawdown_15': 0.9,    # 10% penalty for drawdown > 15%
+    'max_drawdown_20': 0.7,    # 30% penalty for drawdown > 20%
+    'max_drawdown_30': 0.5,    # 50% penalty for drawdown > 30%
+    'insufficient_trades': 0.7,  # 30% penalty for < 10 trades
+    'overtrading': 0.8,        # 20% penalty for > 500 trades
+    'negative_pnl_high_risk': 0.3,  # 70% penalty for negative P&L + high drawdown
+    'positive_pnl_bonus': 1.05   # 5% bonus for positive P&L
+}
+
+# Default Indicator Configuration (fallback for adaptive optimization)
+DEFAULT_INDICATOR_CONFIG = {
+    'ema': {'enabled': True, 'periods': [9, 21]},
+    'rsi': {'enabled': True, 'period': 14, 'oversold': 30, 'overbought': 70},
+    'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0},
+    'atr': {'enabled': True, 'period': 14},
+    'adx': {'enabled': False, 'period': 14},
+    'fibonacci': {'enabled': False},
+    'macd': {'enabled': True, 'fast_period': 12, 'slow_period': 26, 'signal_period': 9},
+    'obv': {'enabled': True},
+    'stochastic': {'enabled': True, 'k_period': 14, 'd_period': 3},
+    'cmf': {'enabled': False, 'period': 21}
+}
+
+# Discovery Mode Configuration (Genetic Algorithm Parameters)
+DISCOVERY_PARAMS = {
+    'population_size': 120,      # Optimal: 120 (balance between diversity and speed)
+    'generations': 30,           # Optimal: 30 (enough evolution without overfitting)
+    'mutation_rate': 0.18,       # Optimal: 0.18 (good exploration vs stability)
+    'crossover_rate': 0.87,      # Optimal: 0.87 (standard in GA literature)
+    'tournament_size': 3,        # Selection pressure
+    'elitism_count': 5,          # Preserve best individuals
+    'max_evaluations': 2000,     # Safety limit for evaluations
+    'early_stopping_patience': 10,  # Stop if no improvement for N generations
+    'diversity_threshold': 0.1,   # Minimum population diversity
+    'fitness_convergence_threshold': 0.001  # Stop if fitness change < 0.1%
+}
 
 # Output configuration
 OUTPUT_FILE = 'output/signals.json'  # Default output file for signals
 OUTPUT_FORMAT = 'json'  # Output format: 'json', 'csv', 'both'
 
-def validate_timeframe(timeframe):
-    """Validate timeframe string format and logical constraints."""
-    if not isinstance(timeframe, str) or not timeframe:
+# Logging configuration
+LOG_FILE = 'logs/tradpal.log'  # Main log file
+LOG_LEVEL = 'INFO'  # Logging level: DEBUG, INFO, WARNING, ERROR
+LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB max log file size
+LOG_BACKUP_COUNT = 5  # Number of backup log files to keep
+
+# Data Source Configuration
+DATA_SOURCE = os.getenv('DATA_SOURCE', 'yahoo_finance')  # Default data source: 'yahoo_finance', 'ccxt', 'funding_rate'
+
+# WebSocket Configuration
+WEBSOCKET_DATA_ENABLED = os.getenv('WEBSOCKET_DATA_ENABLED', 'false').lower() == 'true'
+
+# Data source configurations
+DATA_SOURCE_CONFIG = {
+    'yahoo_finance': {
+        'adjust_prices': True,
+        'auto_adjust': True,
+        'prepost': False,
+        'description': 'Yahoo Finance - Best for historical data and traditional assets'
+    },
+    'ccxt': {
+        'exchange': os.getenv('CCXT_EXCHANGE', 'binance'),
+        'api_key': os.getenv('CCXT_API_KEY', ''),
+        'api_secret': os.getenv('CCXT_API_SECRET', ''),
+        'description': 'CCXT - Best for crypto exchanges with real-time data'
+    },
+    'funding_rate': {
+        'exchange': os.getenv('FUNDING_RATE_EXCHANGE', 'binance'),
+        'api_key': os.getenv('FUNDING_RATE_API_KEY', ''),
+        'api_secret': os.getenv('FUNDING_RATE_API_SECRET', ''),
+        'description': 'Funding Rate - Specialized for perpetual futures funding rate analysis'
+    }
+}
+
+# Broker Configuration for Live Trading
+BROKER_ENABLED = os.getenv('BROKER_ENABLED', 'false').lower() == 'true'  # Enable/disable live trading
+BROKER_EXCHANGE = os.getenv('BROKER_EXCHANGE', 'binance')  # Exchange for live trading
+BROKER_API_KEY = os.getenv('BROKER_API_KEY', '')  # API key for exchange
+BROKER_API_SECRET = os.getenv('BROKER_API_SECRET', '')  # API secret for exchange
+BROKER_TESTNET = os.getenv('BROKER_TESTNET', 'true').lower() == 'true'  # Use testnet/sandbox
+BROKER_MAX_POSITION_SIZE_PERCENT = float(os.getenv('BROKER_MAX_POSITION_SIZE_PERCENT', '1.0'))  # Max position size as % of capital
+BROKER_MIN_ORDER_SIZE = float(os.getenv('BROKER_MIN_ORDER_SIZE', '10.0'))  # Minimum order size in USD
+BROKER_RETRY_ATTEMPTS = int(os.getenv('BROKER_RETRY_ATTEMPTS', '3'))  # Retry attempts for failed orders
+BROKER_RETRY_DELAY = float(os.getenv('BROKER_RETRY_DELAY', '1.0'))  # Delay between retries
+BROKER_TIMEOUT = int(os.getenv('BROKER_TIMEOUT', '30'))  # Request timeout in seconds
+
+# Live Trading Risk Management
+LIVE_TRADING_ENABLED = BROKER_ENABLED  # Alias for backward compatibility
+LIVE_TRADING_MAX_DRAWDOWN = float(os.getenv('LIVE_TRADING_MAX_DRAWDOWN', '0.1'))  # Max drawdown before emergency stop (10%)
+LIVE_TRADING_MAX_TRADES_PER_DAY = int(os.getenv('LIVE_TRADING_MAX_TRADES_PER_DAY', '5'))  # Conservative limit
+LIVE_TRADING_MIN_SIGNAL_CONFIDENCE = float(os.getenv('LIVE_TRADING_MIN_SIGNAL_CONFIDENCE', '0.7'))  # Minimum signal confidence
+LIVE_TRADING_AUTO_EXECUTE = os.getenv('LIVE_TRADING_AUTO_EXECUTE', 'false').lower() == 'true'  # Auto-execute orders
+LIVE_TRADING_CONFIRMATION_REQUIRED = os.getenv('LIVE_TRADING_CONFIRMATION_REQUIRED', 'true').lower() == 'true'  # Require manual confirmation
+
+# Live Trading Monitoring
+LIVE_TRADING_MONITOR_ENABLED = os.getenv('LIVE_TRADING_MONITOR_ENABLED', 'true').lower() == 'true'
+LIVE_TRADING_POSITION_UPDATE_INTERVAL = int(os.getenv('LIVE_TRADING_POSITION_UPDATE_INTERVAL', '60'))  # Update interval in seconds
+LIVE_TRADING_PNL_LOG_FILE = os.getenv('LIVE_TRADING_PNL_LOG_FILE', 'output/live_pnl.json')  # P&L log file
+LIVE_TRADING_TRADE_LOG_FILE = os.getenv('LIVE_TRADING_TRADE_LOG_FILE', 'output/live_trades.json')  # Trade log file
+
+# Additional API configuration constants for testing
+API_KEY = os.getenv('API_KEY', '')  # Generic API key
+API_SECRET = os.getenv('API_SECRET', '')  # Generic API secret
+WEBSOCKET_RECONNECT_ATTEMPTS = int(os.getenv('WEBSOCKET_RECONNECT_ATTEMPTS', '5'))
+PERFORMANCE_ENABLED = os.getenv('PERFORMANCE_ENABLED', 'true').lower() == 'true'
+MAX_BACKTEST_WORKERS = int(os.getenv('MAX_BACKTEST_WORKERS', '4'))
+WEBSOCKET_RECONNECT_DELAY = float(os.getenv('WEBSOCKET_RECONNECT_DELAY', '1.0'))
+PARALLEL_PROCESSING_ENABLED = os.getenv('PARALLEL_PROCESSING_ENABLED', 'true').lower() == 'true'
+BACKTEST_BATCH_SIZE = int(os.getenv('BACKTEST_BATCH_SIZE', '1000'))
+WEBSOCKET_PING_TIMEOUT = int(os.getenv('WEBSOCKET_PING_TIMEOUT', '30'))
+VECTORIZATION_ENABLED = os.getenv('VECTORIZATION_ENABLED', 'true').lower() == 'true'
+MEMORY_OPTIMIZATION_ENABLED = os.getenv('MEMORY_OPTIMIZATION_ENABLED', 'true').lower() == 'true'
+PERFORMANCE_MONITORING_ENABLED = os.getenv('PERFORMANCE_MONITORING_ENABLED', 'true').lower() == 'true'
+MAX_WORKERS = int(os.getenv('MAX_WORKERS', '4'))
+CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', '1000'))
+PERFORMANCE_LOG_LEVEL = os.getenv('PERFORMANCE_LOG_LEVEL', 'INFO')
+FUNDING_RATE_ENABLED = os.getenv('FUNDING_RATE_ENABLED', 'false').lower() == 'true'
+FUNDING_RATE_THRESHOLD = float(os.getenv('FUNDING_RATE_THRESHOLD', '0.01'))
+FUNDING_RATE_WEIGHT = float(os.getenv('FUNDING_RATE_WEIGHT', '0.2'))
+
+# Validation functions
+def validate_timeframe(timeframe: str) -> bool:
+    """
+    Validate if a timeframe string is supported.
+
+    Args:
+        timeframe: Timeframe string (e.g., '1m', '5m', '1h', '1d')
+
+    Returns:
+        bool: True if timeframe is valid, False otherwise
+    """
+    valid_timeframes = ['1s', '1m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
+    return timeframe in valid_timeframes
+
+def validate_risk_params(risk_config) -> bool:
+    """
+    Validate risk management parameters.
+
+    Args:
+        risk_config: Dictionary containing risk parameters
+
+    Returns:
+        bool: True if parameters are valid, False otherwise
+    """
+    if not isinstance(risk_config, dict):
         return False
 
-    # Check format: number + unit (s, m, h, d, w, M)
-    import re
-    pattern = r'^(\d+)([smhdwM])$'
-    match = re.match(pattern, timeframe)
-    if not match:
-        return False
+    # Extract parameters with defaults
+    capital = risk_config.get('capital', 0)
+    risk_per_trade = risk_config.get('risk_per_trade', 0)
+    sl_multiplier = risk_config.get('sl_multiplier', 1)
 
-    # Extract number and check it's positive
-    number = int(match.group(1))
-    if number <= 0:
-        return False
+    # Validate parameters
+    return (capital > 0 and                    # Capital must be positive
+            0 < risk_per_trade <= 0.1 and     # Risk per trade: 0 < x <= 10%
+            sl_multiplier > 0)                # Stop loss multiplier must be positive
 
-    # Valid units
-    unit = match.group(2)
-    valid_units = ['s', 'm', 'h', 'd', 'w', 'M']
-    if unit not in valid_units:
-        return False
 
-    return True
+# Additional configuration constants for testing and modules
+PARALLEL_BACKTESTING_ENABLED = os.getenv('PARALLEL_BACKTESTING_ENABLED', 'true').lower() == 'true'
+WEBSOCKET_RECONNECT_ATTEMPTS = int(os.getenv('WEBSOCKET_RECONNECT_ATTEMPTS', '5'))
+PERFORMANCE_ENABLED = os.getenv('PERFORMANCE_ENABLED', 'true').lower() == 'true'
+MAX_BACKTEST_WORKERS = int(os.getenv('MAX_BACKTEST_WORKERS', '4'))
+WEBSOCKET_RECONNECT_DELAY = float(os.getenv('WEBSOCKET_RECONNECT_DELAY', '1.0'))
+PARALLEL_PROCESSING_ENABLED = os.getenv('PARALLEL_PROCESSING_ENABLED', 'true').lower() == 'true'
+BACKTEST_BATCH_SIZE = int(os.getenv('BACKTEST_BATCH_SIZE', '1000'))
+WEBSOCKET_PING_TIMEOUT = int(os.getenv('WEBSOCKET_PING_TIMEOUT', '30'))
+VECTORIZATION_ENABLED = os.getenv('VECTORIZATION_ENABLED', 'true').lower() == 'true'
+MEMORY_OPTIMIZATION_ENABLED = os.getenv('MEMORY_OPTIMIZATION_ENABLED', 'true').lower() == 'true'
+PERFORMANCE_MONITORING_ENABLED = os.getenv('PERFORMANCE_MONITORING_ENABLED', 'true').lower() == 'true'
+MAX_WORKERS = int(os.getenv('MAX_WORKERS', '4'))
+CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', '1000'))
+PERFORMANCE_LOG_LEVEL = os.getenv('PERFORMANCE_LOG_LEVEL', 'INFO')
+FUNDING_RATE_ENABLED = os.getenv('FUNDING_RATE_ENABLED', 'false').lower() == 'true'
+FUNDING_RATE_THRESHOLD = float(os.getenv('FUNDING_RATE_THRESHOLD', '0.01'))
+FUNDING_RATE_WEIGHT = float(os.getenv('FUNDING_RATE_WEIGHT', '0.2'))
 
-def validate_risk_params(params):
-    """Validate risk management parameters."""
-    required_keys = ['capital', 'risk_per_trade', 'sl_multiplier']
-
-    # Check required keys
-    if not all(key in params for key in required_keys):
-        return False
-
-    # Check value ranges
-    if params['capital'] <= 0:
-        return False
-    if not 0 < params['risk_per_trade'] <= 1:  # Risk should be 0-100%
-        return False
-    if params['sl_multiplier'] <= 0:
-        return False
-
-    return True
-
-# Performance Optimization Settings
-PERFORMANCE_ENABLED = os.getenv('PERFORMANCE_ENABLED', 'true').lower() == 'true'  # Enable/disable performance optimizations
-PARALLEL_PROCESSING_ENABLED = os.getenv('PARALLEL_PROCESSING_ENABLED', 'true').lower() == 'true'  # Enable parallel processing for indicators
-VECTORIZATION_ENABLED = True  # Enable vectorized calculations
-MEMORY_OPTIMIZATION_ENABLED = True  # Enable memory optimization for DataFrames
-PERFORMANCE_MONITORING_ENABLED = os.getenv('PERFORMANCE_MONITORING_ENABLED', 'true').lower() == 'true'  # Enable performance monitoring
-MAX_WORKERS = None  # Maximum worker threads (None = auto-detect CPU cores)
-CHUNK_SIZE = 1000  # Chunk size for parallel processing
-PERFORMANCE_LOG_LEVEL = 'INFO'  # Performance logging level
-
-# WebSocket Streaming Settings
-WEBSOCKET_ENABLED = True  # Enable/disable WebSocket server
-WEBSOCKET_HOST = '0.0.0.0'  # WebSocket server host
-WEBSOCKET_PORT = 8765  # WebSocket server port
-WEBSOCKET_MAX_CONNECTIONS = 100  # Maximum concurrent WebSocket connections
-WEBSOCKET_PING_INTERVAL = 30  # Ping interval in seconds
-WEBSOCKET_TIMEOUT = 60  # Connection timeout in seconds
-WEBSOCKET_BUFFER_SIZE = 1024  # Message buffer size
-WEBSOCKET_COMPRESSION = True  # Enable message compression
-WEBSOCKET_DATA_ENABLED = os.getenv('WEBSOCKET_DATA_ENABLED', 'false').lower() == 'true'  # Enable WebSocket data fetching
-WEBSOCKET_RECONNECT_ATTEMPTS = int(os.getenv('WEBSOCKET_RECONNECT_ATTEMPTS', '5'))  # Number of reconnection attempts
-WEBSOCKET_RECONNECT_DELAY = int(os.getenv('WEBSOCKET_RECONNECT_DELAY', '5'))  # Delay between reconnection attempts (seconds)
-WEBSOCKET_PING_TIMEOUT = int(os.getenv('WEBSOCKET_PING_TIMEOUT', '30'))  # Ping timeout in seconds
-
-# Real-time Streaming Settings
-REALTIME_ENABLED = True  # Enable real-time data streaming
-REALTIME_UPDATE_INTERVAL = 10  # Update interval in seconds
-REALTIME_MAX_SUBSCRIPTIONS = 50  # Maximum active subscriptions per client
-REALTIME_DATA_RETENTION = 3600  # Data retention time in seconds (1 hour)
-REALTIME_BROADCAST_SIGNALS = True  # Broadcast trading signals
-REALTIME_BROADCAST_MARKET_DATA = True  # Broadcast market data updates
-
-# Funding Rate Analysis Settings
-FUNDING_RATE_ENABLED = os.getenv('FUNDING_RATE_ENABLED', 'false').lower() == 'true'  # Enable funding rate analysis for perpetual futures
-FUNDING_RATE_WEIGHT = float(os.getenv('FUNDING_RATE_WEIGHT', '0.3'))  # Weight for funding rate signals (0-1)
-FUNDING_RATE_THRESHOLD = float(os.getenv('FUNDING_RATE_THRESHOLD', '0.0001'))  # Threshold for funding rate signals (0.01% = 0.0001)
-
-# ML Lookback Settings
-LOOKBACK_DAYS = int(os.getenv('LOOKBACK_DAYS', '365'))  # Default lookback period for ML training (days)
-
-# Redis Cache Settings (New)
-REDIS_ENABLED = os.getenv('REDIS_ENABLED', 'false').lower() == 'true'  # Enable Redis caching
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Redis server host
-REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))  # Redis server port
-REDIS_DB = int(os.getenv('REDIS_DB', '0'))  # Redis database number
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)  # Redis password (if required)
-REDIS_TTL_INDICATORS = 300  # Cache TTL for indicators (seconds)
-REDIS_TTL_API = 60  # Cache TTL for API calls (seconds)
-REDIS_MAX_CONNECTIONS = 10  # Maximum Redis connection pool size
-
-# Parallel Processing Settings (New)
-PARALLEL_BACKTESTING_ENABLED = os.getenv('PARALLEL_BACKTESTING_ENABLED', 'true').lower() == 'true'  # Enable parallel backtesting
-MAX_BACKTEST_WORKERS = int(os.getenv('MAX_BACKTEST_WORKERS', '0'))  # Max workers for parallel backtesting (0 = auto)
-BACKTEST_BATCH_SIZE = int(os.getenv('BACKTEST_BATCH_SIZE', '10'))  # Batch size for parallel processing
+# Additional API configuration constants for testing
+API_KEY = os.getenv('API_KEY', '')  # Generic API key
+API_SECRET = os.getenv('API_SECRET', '')  # Generic API secret
 

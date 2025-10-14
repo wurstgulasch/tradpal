@@ -12,7 +12,7 @@ Dieses Projekt, **TradPal**, ist ein modulares Trading-Indikator-System, primär
 - `integrations/`: Module für Telegram, Discord, Email-Notifications und Webhooks (telegram/, discord/, email/, sms/, webhook/).
 - `main.py`: Orchestriert Module; Modi: "live", "backtest", "multi-timeframe", "optimize" (genetische Algorithmen), "multi-model", "paper".
 - `output/`: JSON-Dateien mit Signalen, Risiko-Parametern, Backtest-Resultaten; Plotly-Charts für Web-UI.
-- `tests/`: Unit-Tests (pytest) für Module; Integrationstests für Workflows (629+ Tests).
+- `tests/`: Unit-Tests (pytest) für Module; Integrationstests für Workflows (708 Tests - alle bestehen).
 - `Dockerfile` & `docker-compose.yml`: Container-Setup für Umbrel/Kubernetes; Volumes für Config und Output. Alternative: Ausführung in `tradpal_env` (Conda).
 - `.env.light/.env.heavy`: Performance-Profile-Konfigurationen (light für minimal Ressourcen, heavy für alle Features).
 - `examples/`: Beispiel-Daten und Demo-Skripte (btc_usdt_backtest.ipynb, ml_training_guide.ipynb, portfolio_management_demo.py, sentiment_analysis_demo.py, shap_integration_demo.py).
@@ -34,9 +34,10 @@ Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für
 - `Position_Size = (Kapital * Risikoprozent, z. B. 1%) / (ATR * Multiplier, z. B. 1.5)`.
 - `SL = close - (ATR * 1–1.5); TP = close + (ATR * 2–3)`.
 - Leverage: `min(MAX_LEVERAGE, BASE_LEVERAGE / (ATR / ATR_MEAN))`.
-- Erweiterung: ADX für Trade-Dauer; Fibonacci-Levels für TP.
+- Erweiterung: ADX für Trade-Dauer; Fibonacci-Levels für TP; Funding Rate Analysis für Leverage-Adjustment.
+- **Funding Rate Analysis:** Integration mit Exchanges für Echtzeit/Historische Funding Rates; Signal-Enhancement und Risikomanagement basierend auf Funding Rate Daten (z. B. Leverage-Reduzierung bei extremen Rates).
 - **Backtesting:** Historische Simulation mit Walk-Forward-Analyse, vorrangig für `BTC/USDT`; Metriken exportieren (CSV/JSON).
-- **Web-UI:** Echtzeit-Dashboards, Konfiguration, Backtest-Visualisierung via Streamlit/Plotly.
+- **Web-UI:** Interaktive Dashboards mit Strategy Builder, Live Charts, Performance Analytics via Streamlit/Plotly; sichere Authentifizierung (OAuth/JWT); API-Endpoints (Flask) für externe Integrationen. Copilot soll Tutorials für UI-Setup und Screenshots/GIFs vorschlagen.
 - **Ausgabe:** JSON mit OHLCV, Indikatoren, Signalen, Risiko-Parametern, Meta-Infos (Timeframe, Backtest-Metriken).
 - **Paper-Trading und Portfolio-Management:** Simuliere Trades ohne reales Kapital; tracke Portfolio-Performance über mehrere Assets. Copilot soll Prototypen für Paper-Trading-Modus (z. B. in main.py --mode paper) vorschlagen, inklusive Integration mit CCXT für simulierte Orders.
 
@@ -86,7 +87,7 @@ Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für
 - **Outperformance-Ziele:** Entwickle ML-Modelle, die Buy&Hold und traditionelle Indikatoren konsistent outperformen. Implementiere fortgeschrittene Feature-Engineering, Ensemble-Methoden und Risikomanagement für maximale Sharpe-Ratio und Profit-Faktor.
 - **Experimentelle Features:** Schlage neue Ansätze vor wie Reinforcement Learning für Trading, Market Regime Classification, Alternative Data Integration (Social Sentiment, On-Chain-Metrics), und Advanced Risk-Parity-Strategien.
 - **Code-Vorschläge:** Fokussiere auf skalierbare ML-Architekturen, Performance-Optimierung und robuste Error-Handling. Implementiere modulare Broker-Adapter für zukünftige Live-Trading-Integration.
-- **Tests:** Schreibe Unit-Tests für neue Features; ziele auf >85% Coverage (aktuell 629+ Tests). Erstelle Integrationstests für Outperformance-Workflows.
+- **Tests:** Schreibe Unit-Tests für neue Features; ziele auf >85% Coverage (aktuell 708 Tests - alle bestehen). Erstelle Integrationstests für Outperformance-Workflows.
 - **Dokumentation:** Halte docs/ aktuell und reorganisiere README für Übersichtlichkeit. Erstelle separate Dokumentationen für komplexe Features.
 - **Sicherheit:** Implementiere sichere Broker-API-Integration mit Key-Management und Rate-Limiting.
 - **Lizenz:** MIT-Lizenz ist integriert.
@@ -100,11 +101,12 @@ Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für
 3. **Experimentelle Features:** Ensemble-Modelle mit Confidence-Weighting; Walk-Forward-Optimierung mit Overfitting-Detection; GPU-Training für PyTorch-Modelle; Real-time Model Updating.
 4. **Machine Learning:** SHAP für ML-Explainability integriert; Ensemble-Methoden (Random Forest + Gradient Boosting) verfügbar; LSTM-Modelle für Zeitreihen verfügbar; WebSocket für Echtzeit-ML-Input hinzufügen, in `tradpal_env`.
 5. **Sicherheit:** Standard-Login ersetzt; OAuth/JWT hinzugefügt; Disclaimer für Risiken verfügbar; Vault standardmäßig. Entferne sensible Daten aus Git-Repository.
-6. **Tests:** Unit-Tests für `ml_trainer.py` verfügbar; Integrationstests für Workflows verfügbar; CI/CD für Releases erweitert (629+ Tests).
+6. **Tests:** Unit-Tests für `ml_trainer.py` verfügbar; Integrationstests für Workflows verfügbar; CI/CD für Releases erweitert (708 Tests - alle bestehen). Test-Suite komplett überarbeitet mit behobenen Import-Fehlern und Funktionssignatur-Mismatches.
 7. **Performance:** Datenabruf für `BTC/USDT` optimiert (batchweise API-Calls); ML-Training auf GPU/Cloud auslagerbar; Redis-Caching integriert.
 8. **Community:** Issues für bekannte Bugs hinzugefügt; PRs gefördert; PyPI-Publikation verfügbar; Wiki erstellt.
-9. **Features:** Sentiment-Analyse integriert (via X/Twitter-Daten für `BTC/USDT`); Paper-Trading-Modus verfügbar; Portfolio-Management für Multi-Assets verfügbar.
+9. **Features:** Sentiment-Analyse integriert (via X/Twitter-Daten für `BTC/USDT`); Paper-Trading-Modus verfügbar; Portfolio-Management für Multi-Assets verfügbar; Funding Rate Analysis für Signal-Enhancement und Risikomanagement verfügbar.
 10. **Dokumentation:** README mit Screenshots/GIFs verfügbar; Jupyter-Notebook mit Beispiel-Backtests für `BTC/USDT` in `tradpal_env` verfügbar.
 11. **Profile-System:** Validierung und Dokumentation der light/heavy Profile verbessert für bessere Benutzerfreundlichkeit.
 12. **Deployment:** Releases mit Docker-Images verfügbar; Kubernetes-Deployment automatisiert.
+13. **Datenqualität & Fallback-System:** Automatische Datenquellen-Fallbacks (Yahoo Finance → CCXT) integriert; Indikator-Validierung mit automatischer Ausschließung ungültiger Werte verfügbar; Datenqualitäts-Monitoring mit Alerts implementiert; Qualitäts-Metriken (Vollständigkeit, Gültigkeit, Konsistenz) in Monitoring einbezogen. **Zukünftige Erweiterungen:** WebSocket-Integration für Echtzeit-Daten (teilweise implementiert); Multi-Source-Ensemble für verbesserte Datenqualität; Historische Validierung mit verschiedenen Datenquellen; Alert-System-Integration mit Telegram/Discord für Qualitätsprobleme.
 *Letzte Aktualisierung: 14.10.2025*

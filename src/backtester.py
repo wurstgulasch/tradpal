@@ -658,6 +658,19 @@ class Backtester:
             enhanced_signals[enhanced_mask] == 'SELL', 1, 0
         )
 
+        # Also set signals for rows where ML enhancement creates new signals
+        # even if no traditional signals existed
+        ml_buy_mask = (ml_confidences >= ML_CONFIDENCE_THRESHOLD) & (ml_signals == 'BUY') & (signal_sources == 'TRADITIONAL')
+        ml_sell_mask = (ml_confidences >= ML_CONFIDENCE_THRESHOLD) & (ml_signals == 'SELL') & (signal_sources == 'TRADITIONAL')
+
+        data.loc[ml_buy_mask, 'Buy_Signal'] = 1
+        data.loc[ml_buy_mask, 'Sell_Signal'] = 0
+        data.loc[ml_buy_mask, 'Signal_Source'] = strategy_name.upper()
+
+        data.loc[ml_sell_mask, 'Sell_Signal'] = 1
+        data.loc[ml_sell_mask, 'Buy_Signal'] = 0
+        data.loc[ml_sell_mask, 'Signal_Source'] = strategy_name.upper()
+
         # Count enhanced signals
         enhanced_count = enhanced_mask.sum()
         print(f"✅ Applied {strategy_name} to {enhanced_count} signals")

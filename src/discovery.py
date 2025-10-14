@@ -36,6 +36,7 @@ try:
     from .signal_generator import generate_signals, calculate_risk_management
     from .error_handling import error_boundary
     from .logging_config import logger
+    from .discovery_cache import cached_discovery_fetch, get_discovery_cache_stats
 except ImportError:
     # Fall back to absolute imports (when imported directly)
     from backtester import run_backtest
@@ -44,8 +45,9 @@ except ImportError:
     from signal_generator import generate_signals, calculate_risk_management
     from error_handling import error_boundary
     from logging_config import logger
+    from discovery_cache import cached_discovery_fetch, get_discovery_cache_stats
 
-from config.settings import SYMBOL, EXCHANGE, TIMEFRAME
+from config.settings import SYMBOL, EXCHANGE, TIMEFRAME, DISCOVERY_PARAMS
 
 logger = logger.getChild(__name__)
 
@@ -118,10 +120,10 @@ class DiscoveryOptimizer:
     def __init__(self, symbol=SYMBOL, exchange=EXCHANGE, timeframe=TIMEFRAME,
                  start_date: str = '2024-01-01',
                  end_date: str = '2024-12-31',
-                 population_size: int = 100,  # Increased for better exploration
-                 generations: int = 30,       # Increased for more thorough optimization
-                 mutation_rate: float = 0.15, # Slightly reduced for stability
-                 crossover_rate: float = 0.85, # Slightly increased for exploration
+                 population_size: int = None,  # Will use DISCOVERY_PARAMS if None
+                 generations: int = None,       # Will use DISCOVERY_PARAMS if None
+                 mutation_rate: float = None,   # Will use DISCOVERY_PARAMS if None
+                 crossover_rate: float = None,  # Will use DISCOVERY_PARAMS if None
                  initial_capital: float = 10000.0,
                  use_walk_forward: bool = True):  # New parameter for WFA
         """
@@ -133,25 +135,30 @@ class DiscoveryOptimizer:
             timeframe: Timeframe for backtesting
             start_date: Start date for historical data
             end_date: End date for historical data
-            population_size: Number of individuals in GA population (increased)
-            generations: Number of GA generations (increased)
-            mutation_rate: Probability of mutation (optimized)
-            crossover_rate: Probability of crossover (optimized)
+            population_size: GA population size (uses DISCOVERY_PARAMS if None)
+            generations: Number of GA generations (uses DISCOVERY_PARAMS if None)
+            mutation_rate: Probability of mutation (uses DISCOVERY_PARAMS if None)
+            crossover_rate: Probability of crossover (uses DISCOVERY_PARAMS if None)
             initial_capital: Initial capital for backtesting
             use_walk_forward: Whether to use walk-forward analysis for evaluation
         """
         if not DEAP_AVAILABLE:
             raise ImportError("Discovery module requires 'deap' package. Install with: pip install deap")
 
+        # Import discovery parameters
+        from config.settings import DISCOVERY_PARAMS
+
+        # Use optimized parameters from settings if not explicitly provided
+        self.population_size = population_size if population_size is not None else DISCOVERY_PARAMS['population_size']
+        self.generations = generations if generations is not None else DISCOVERY_PARAMS['generations']
+        self.mutation_rate = mutation_rate if mutation_rate is not None else DISCOVERY_PARAMS['mutation_rate']
+        self.crossover_rate = crossover_rate if crossover_rate is not None else DISCOVERY_PARAMS['crossover_rate']
+
         self.symbol = symbol
         self.exchange = exchange
         self.timeframe = timeframe
         self.start_date = start_date
         self.end_date = end_date
-        self.population_size = population_size
-        self.generations = generations
-        self.mutation_rate = mutation_rate
-        self.crossover_rate = crossover_rate
         self.initial_capital = initial_capital
         self.use_walk_forward = use_walk_forward  # Store WFA preference
 
@@ -584,7 +591,7 @@ class DiscoveryOptimizer:
         # Calculate basic metrics
         total_trades = len(trades_df)
         winning_trades = len(trades_df[trades_df['pnl'] > 0])
-        win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
+        win_rate = (winning_trades / total_trades) if total_trades > 0 else 0.0
         total_pnl = trades_df['pnl'].sum()
 
         # Calculate Sharpe ratio (simplified)
@@ -620,39 +627,56 @@ class DiscoveryOptimizer:
         })
 
     def _load_historical_data(self) -> pd.DataFrame:
-        """Load and cache historical data for evaluation."""
+        """Load and cache historical data for evaluation using discovery-optimized caching."""
         if self.historical_data is None:
             logger.info("Loading historical data for discovery...")
             start_dt = pd.to_datetime(self.start_date) if isinstance(self.start_date, str) else self.start_date
+            end_dt = pd.to_datetime(self.end_date) if isinstance(self.end_date, str) else self.end_date
 
-            # Try different timeframes if 1m fails (for testing/backwards compatibility)
-            timeframes_to_try = [self.timeframe]
-            if self.timeframe == '1m':
-                timeframes_to_try.extend(['5m', '15m', '1h'])
+            # Use discovery-optimized caching to minimize API calls
+            logger.info(f"Fetching data using discovery cache: {self.symbol} {self.timeframe} from {start_dt.date()} to {end_dt.date()}")
 
-            data = None
-            for tf in timeframes_to_try:
-                try:
-                    logger.info(f"Trying timeframe {tf} for historical data...")
-                    data = fetch_historical_data(
-                        symbol=self.symbol,
-                        timeframe=tf,
-                        limit=1000,
-                        start_date=start_dt
-                    )
-                    if len(data) >= 100:
-                        logger.info(f"Successfully loaded {len(data)} data points with timeframe {tf}")
-                        break
-                    else:
-                        logger.warning(f"Insufficient data ({len(data)} points) with timeframe {tf}, trying next...")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch data with timeframe {tf}: {e}")
+            try:
+                # Use the discovery cache which shares data across all evaluations
+                data = cached_discovery_fetch(
+                    symbol=self.symbol,
+                    timeframe=self.timeframe,
+                    start_date=start_dt.strftime('%Y-%m-%d'),
+                    end_date=end_dt.strftime('%Y-%m-%d')
+                )
 
-            if data is None or len(data) < 100:
-                # Last resort: create mock data for testing
+                if len(data) >= 100:
+                    logger.info(f"Successfully loaded {len(data)} data points for discovery")
+                    self.historical_data = data
+                else:
+                    logger.warning(f"Insufficient data ({len(data)} points), trying fallback timeframes...")
+
+                    # Try different timeframes if current one fails
+                    fallback_timeframes = ['5m', '15m', '1h'] if self.timeframe == '1m' else ['1m', '5m', '15m']
+                    for tf in fallback_timeframes:
+                        try:
+                            logger.info(f"Trying fallback timeframe {tf}...")
+                            data = cached_discovery_fetch(
+                                symbol=self.symbol,
+                                timeframe=tf,
+                                start_date=start_dt.strftime('%Y-%m-%d'),
+                                end_date=end_dt.strftime('%Y-%m-%d')
+                            )
+                            if len(data) >= 100:
+                                logger.info(f"Successfully loaded {len(data)} data points with timeframe {tf}")
+                                self.historical_data = data
+                                break
+                        except Exception as e:
+                            logger.warning(f"Failed to fetch data with timeframe {tf}: {e}")
+
+            except Exception as e:
+                logger.error(f"Error loading historical data: {e}")
+
+            # If all attempts failed, create mock data for testing
+            if self.historical_data is None or len(self.historical_data) < 100:
                 logger.warning("Using mock data for testing purposes")
                 dates = pd.date_range(start=start_dt, periods=200, freq='1H')
-                data = pd.DataFrame({
+                self.historical_data = pd.DataFrame({
                     'timestamp': dates,
                     'open': 50000 + np.random.randn(200) * 1000,
                     'high': 51000 + np.random.randn(200) * 1000,
@@ -660,9 +684,11 @@ class DiscoveryOptimizer:
                     'close': 50000 + np.random.randn(200) * 1000,
                     'volume': np.random.randint(1000000, 10000000, 200)
                 })
-                data.set_index('timestamp', inplace=True)
+                self.historical_data.set_index('timestamp', inplace=True)
 
-            self.historical_data = data
+            # Log cache statistics
+            cache_stats = get_discovery_cache_stats()
+            logger.info(f"Discovery cache stats: {cache_stats}")
 
         return self.historical_data
 
@@ -691,82 +717,9 @@ class DiscoveryOptimizer:
         return pd.DataFrame(trades) if trades else pd.DataFrame()
 
     def _calculate_fitness_from_backtest_metrics(self, backtest_metrics):
-        """Calculate fitness from backtest metrics with enhanced risk management and overfitting prevention."""
-        total_pnl = backtest_metrics.get('total_pnl', 0)
-        win_rate = backtest_metrics.get('win_rate', 0)
-        sharpe_ratio = backtest_metrics.get('sharpe_ratio', 0)
-        max_drawdown = backtest_metrics.get('max_drawdown', 0)
-        total_trades = backtest_metrics.get('total_trades', 0)
-        profit_factor = backtest_metrics.get('profit_factor', 1.0)
-        calmar_ratio = backtest_metrics.get('calmar_ratio', 0)
-
-        # Enhanced Fitness function with multiple risk-adjusted metrics
-        # Primary: Sharpe Ratio (risk-adjusted returns) - 40% weight
-        # Secondary: Calmar Ratio (return vs max drawdown) - 30% weight
-        # Tertiary: Profit Factor (gross profit / gross loss) - 20% weight
-        # Quaternary: Win Rate (consistency) - 10% weight
-
-        sharpe_weight = 40.0
-        calmar_weight = 30.0
-        profit_factor_weight = 20.0
-        win_rate_weight = 10.0
-
-        # Normalize and score each metric
-        # Sharpe Ratio: Cap at reasonable range, penalize negative heavily
-        sharpe_score = max(min(sharpe_ratio, 5), -2) * sharpe_weight
-
-        # Calmar Ratio: Return-to-drawdown ratio, very important for risk management
-        calmar_score = max(min(calmar_ratio, 10), -5) * calmar_weight
-
-        # Profit Factor: >1 means profitable, penalize <1 heavily
-        profit_factor_score = max(min(profit_factor - 1, 5), -10) * profit_factor_weight
-
-        # Win Rate: Reward consistency, but not too heavily
-        win_rate_score = win_rate * win_rate_weight
-
-        # Base fitness from risk-adjusted metrics
-        fitness = sharpe_score + calmar_score + profit_factor_score + win_rate_score
-
-        # Risk management penalties
-        # Heavy penalty for excessive drawdown (>30%)
-        if max_drawdown > 30:
-            fitness *= 0.3  # 70% penalty
-        elif max_drawdown > 20:
-            fitness *= 0.6  # 40% penalty
-        elif max_drawdown > 15:
-            fitness *= 0.8  # 20% penalty
-
-        # Penalty for too few trades (insufficient testing)
-        if total_trades < 10:
-            fitness *= 0.5
-
-        # Penalty for too many trades (overtrading/overfitting)
-        if total_trades > 500:
-            fitness *= 0.7
-
-        # Reward for reasonable trade frequency (20-100 trades)
-        if 20 <= total_trades <= 100:
-            fitness *= 1.1
-
-        # Additional penalty for negative P&L with high drawdown (worst case)
-        if total_pnl < -10 and max_drawdown > 15:
-            fitness *= 0.2  # 80% penalty for losing strategies with high risk
-
-        # Small bonus for positive P&L
-        if total_pnl > 0:
-            fitness *= 1.05
-
-        metrics = {
-            'total_pnl': total_pnl,
-            'win_rate': win_rate,
-            'sharpe_ratio': sharpe_ratio,
-            'max_drawdown': max_drawdown,
-            'total_trades': total_trades,
-            'profit_factor': profit_factor,
-            'calmar_ratio': calmar_ratio
-        }
-
-        return fitness, metrics
+        """Calculate fitness from backtest metrics using shared fitness function."""
+        from src.fitness import calculate_fitness_from_metrics
+        return calculate_fitness_from_metrics(backtest_metrics)
 
     def _evaluate_with_walk_forward(self, config: Dict[str, Any], data: pd.DataFrame) -> Tuple[float, Dict[str, float]]:
         """
@@ -1075,8 +1028,8 @@ def run_discovery(symbol: str = SYMBOL,
                   timeframe: str = TIMEFRAME,
                   start_date: str = '2024-01-01',
                   end_date: str = '2024-12-31',
-                  population_size: int = 100,  # Increased for robustness
-                  generations: int = 30,       # Increased for thorough optimization
+                  population_size: int = None,  # Uses DISCOVERY_PARAMS if None
+                  generations: int = None,       # Uses DISCOVERY_PARAMS if None
                   use_walk_forward: bool = True) -> List[IndividualResult]:  # New parameter
     """
     Run discovery optimization for trading indicator configurations with enhanced robustness.
@@ -1087,8 +1040,8 @@ def run_discovery(symbol: str = SYMBOL,
         timeframe: Timeframe for backtesting
         start_date: Start date for historical data
         end_date: End date for historical data
-        population_size: GA population size (increased for better exploration)
-        generations: Number of GA generations (increased for thorough optimization)
+        population_size: GA population size (uses DISCOVERY_PARAMS if None)
+        generations: Number of GA generations (uses DISCOVERY_PARAMS if None)
         use_walk_forward: Whether to use walk-forward analysis for out-of-sample validation
 
     Returns:
@@ -1099,6 +1052,10 @@ def run_discovery(symbol: str = SYMBOL,
     """
     if not DEAP_AVAILABLE:
         raise ImportError("Discovery module requires 'deap' package. Install with: pip install deap")
+
+    logger.info("Starting Discovery optimization with enhanced caching...")
+    logger.info(f"Parameters: symbol={symbol}, timeframe={timeframe}, period={start_date} to {end_date}")
+    logger.info(f"GA settings: population={population_size or 'default'}, generations={generations or 'default'}")
 
     optimizer = DiscoveryOptimizer(
         symbol=symbol,
@@ -1114,4 +1071,43 @@ def run_discovery(symbol: str = SYMBOL,
     results = optimizer.optimize()
     optimizer.save_results(results)
 
+    # Log final cache statistics
+    cache_stats = get_discovery_cache_stats()
+    logger.info(f"Discovery completed. Final cache stats: {cache_stats}")
+
     return results
+
+def clear_discovery_cache():
+    """
+    Clear the discovery data cache.
+
+    This function clears both memory and file caches used by the discovery system.
+    Useful for freeing up disk space or forcing fresh data fetches.
+    """
+    try:
+        from .discovery_cache import clear_discovery_cache as clear_cache
+        clear_cache()
+        logger.info("Discovery cache cleared successfully")
+    except ImportError:
+        from discovery_cache import clear_discovery_cache as clear_cache
+        clear_cache()
+        logger.info("Discovery cache cleared successfully")
+    except Exception as e:
+        logger.error(f"Error clearing discovery cache: {e}")
+
+def get_discovery_cache_info() -> Dict[str, Any]:
+    """
+    Get information about the discovery cache status.
+
+    Returns:
+        Dictionary with cache statistics and status information
+    """
+    try:
+        from .discovery_cache import get_discovery_cache_stats
+        return get_discovery_cache_stats()
+    except ImportError:
+        from discovery_cache import get_discovery_cache_stats
+        return get_discovery_cache_stats()
+    except Exception as e:
+        logger.error(f"Error getting discovery cache info: {e}")
+        return {"error": str(e)}

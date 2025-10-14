@@ -203,7 +203,7 @@ class AdaptiveOptimizer:
 
                 print(f"✅ Adaptive optimization completed!")
                 print(f"   Best Fitness: {best_result.fitness:.2f}")
-                print(f"   Win Rate: {best_result.win_rate:.1%}")
+                print(f"   Win Rate: {best_result.win_rate:.1f}%")
                 print(f"   Total P&L: {best_result.pnl:.2f}%")
 
                 # Save the best configuration
@@ -233,226 +233,476 @@ class AdaptiveOptimizer:
         return self.current_config
 
 def run_paper_trading_mode(args, performance_monitor=None):
-    """Run paper trading mode with simulated orders."""
-    print("📈 Starting TradPal - Paper Trading Mode")
-    print("💰 Virtual portfolio trading - NO REAL MONEY AT RISK")
-    print("Press Ctrl+C to stop paper trading\n")
+    """Run paper trading mode using optimized Discovery configurations."""
+    print("📈 Starting Paper Trading Mode - Simulated Trading")
+    print(f"Trading {args.symbol} on {args.timeframe} timeframe")
+    print("⚠️  This is SIMULATED trading - no real money involved")
 
-    log_system_status("Paper trading mode started")
+    try:
+        import json
+        import time
+        from datetime import datetime, timedelta
+        from src.data_fetcher import fetch_data
+        from src.indicators import calculate_indicators
+        from src.signal_generator import generate_signals, calculate_risk_management
+        from src.output import save_signals_to_json
+        from config.settings import INITIAL_CAPITAL, RISK_PER_TRADE
 
-    # Initialize virtual portfolio
-    virtual_capital = 10000.0  # $10,000 starting capital
-    current_position = None  # None, 'long', or 'short'
-    entry_price = 0.0
-    position_size = 0.0
-    total_trades = 0
-    winning_trades = 0
-    total_pnl = 0.0
+        # Load discovery results
+        results_file = 'output/discovery_results.json'
+        if not os.path.exists(results_file):
+            print("❌ No discovery results found. Run discovery mode first:")
+            print("   python main.py --mode discovery --symbol BTC/USDT --timeframe 1h")
+            return
 
-    print(f"💼 Initial Virtual Capital: ${virtual_capital:.2f}")
-    print(f"📊 Trading {args.symbol} on {args.timeframe} timeframe\n")
+        with open(results_file, 'r') as f:
+            discovery_data = json.load(f)
 
-    # Initialize adaptive optimizer only if enabled and config file exists
-    from config.settings import ADAPTIVE_OPTIMIZATION_ENABLED_LIVE, ADAPTIVE_CONFIG_FILE_LIVE
-    import os
-    if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE and ADAPTIVE_CONFIG_FILE_LIVE and os.path.exists(ADAPTIVE_CONFIG_FILE_LIVE):
-        adaptive_optimizer = AdaptiveOptimizer()
-    else:
-        adaptive_optimizer = None
+        top_configs = discovery_data['top_configurations'][:3]  # Use top 3 configs
+        print(f"✅ Loaded {len(top_configs)} optimized configurations from discovery")
 
-    last_signal_time = 0
-    signal_cooldown = 60  # Minimum seconds between signals
+        # Initialize paper trading state
+        portfolio = {
+            'cash': INITIAL_CAPITAL,
+            'position': 0,  # 0 = no position, 1 = long, -1 = short
+            'entry_price': 0,
+            'position_size': 0,
+            'total_trades': 0,
+            'winning_trades': 0,
+            'total_pnl': 0,
+            'max_drawdown': 0,
+            'peak_value': INITIAL_CAPITAL,
+            'current_value': INITIAL_CAPITAL,
+            'trade_history': []
+        }
 
-    while True:
-        try:
-            # Check if adaptive optimization should run
-            if adaptive_optimizer and adaptive_optimizer.should_run_optimization():
-                adaptive_optimizer.run_optimization()
+        print(f"💰 Initial Capital: ${INITIAL_CAPITAL:.2f}")
+        print(f"🎯 Risk per Trade: {RISK_PER_TRADE*100:.1f}%")
+        print("🔄 Starting continuous paper trading simulation...")
+
+        # Use ensemble approach: combine signals from top configurations
+        last_signal_time = None
+        cycle_count = 0
+
+        while True:  # Continuous loop
+            try:
+                cycle_count += 1
+                current_time = datetime.now()
+
+                # Fetch latest data
+                data = fetch_data(limit=100, symbol=args.symbol, timeframe=args.timeframe)
+
+                if data.empty:
+                    print("⚠️  No data available, waiting...")
+                    time.sleep(60)  # Wait 1 minute
+                    continue
+
+                # Calculate indicators for each configuration
+                config_signals = []
+                for i, config_data in enumerate(top_configs):
+                    config = config_data['configuration']
+
+                    # Create data copy for this configuration
+                    data_config = data.copy()
+
+                    # Calculate indicators with config
+                    data_config = calculate_indicators(data_config, config_override=config)
+
+                    # Generate signals
+                    data_config = generate_signals(data_config, config_override=config)
+
+                    # Calculate risk management
+                    data_config = calculate_risk_management(data_config, config_override=config)
+
+                    # Get latest signals
+                    latest_signals = data_config.tail(5)  # Last 5 candles
+                    buy_signals = latest_signals['Buy_Signal'].sum()
+                    sell_signals = latest_signals['Sell_Signal'].sum()
+
+                    config_signals.append({
+                        'config_id': i+1,
+                        'buy_signals': buy_signals,
+                        'sell_signals': sell_signals,
+                        'latest_data': latest_signals.iloc[-1] if len(latest_signals) > 0 else None
+                    })
+
+                # Ensemble decision: majority vote
+                total_buy_signals = sum(cs['buy_signals'] for cs in config_signals)
+                total_sell_signals = sum(cs['sell_signals'] for cs in config_signals)
+
+                # Execute trades based on ensemble signals
+                current_price = data.iloc[-1]['close'] if len(data) > 0 else 0
+
+                if total_buy_signals > total_sell_signals and portfolio['position'] == 0:
+                    # Enter long position
+                    position_size = (portfolio['cash'] * RISK_PER_TRADE) / current_price
+                    portfolio['position'] = 1
+                    portfolio['entry_price'] = current_price
+                    portfolio['position_size'] = position_size
+
+                    trade_record = {
+                        'timestamp': current_time.isoformat(),
+                        'type': 'BUY',
+                        'price': current_price,
+                        'size': position_size,
+                        'reason': f'Ensemble signals: {total_buy_signals} buy vs {total_sell_signals} sell'
+                    }
+                    portfolio['trade_history'].append(trade_record)
+
+                    print(f"🟢 LONG ENTRY: {position_size:.4f} @ ${current_price:.2f} ({current_time.strftime('%H:%M:%S')})")
+                    print(f"   Reason: {total_buy_signals} buy vs {total_sell_signals} sell signals")
+
+                    # Record in performance monitor
+                    if performance_monitor:
+                        performance_monitor.record_signal(
+                            signal_type="PAPER_TRADE_ENTRY",
+                            price=current_price,
+                            rsi=0,  # Could calculate this
+                            position_size_pct=RISK_PER_TRADE
+                        )
+
+                elif total_sell_signals > total_buy_signals and portfolio['position'] == 1:
+                    # Exit long position
+                    exit_price = current_price
+                    pnl = (exit_price - portfolio['entry_price']) * portfolio['position_size']
+
+                    portfolio['cash'] += pnl
+                    portfolio['total_pnl'] += pnl
+                    portfolio['total_trades'] += 1
+                    portfolio['current_value'] = portfolio['cash']
+
+                    if pnl > 0:
+                        portfolio['winning_trades'] += 1
+
+                    # Update drawdown
+                    portfolio['peak_value'] = max(portfolio['peak_value'], portfolio['current_value'])
+                    current_drawdown = (portfolio['peak_value'] - portfolio['current_value']) / portfolio['peak_value']
+                    portfolio['max_drawdown'] = max(portfolio['max_drawdown'], current_drawdown)
+
+                    trade_record = {
+                        'timestamp': current_time.isoformat(),
+                        'type': 'SELL',
+                        'price': exit_price,
+                        'size': portfolio['position_size'],
+                        'pnl': pnl,
+                        'reason': f'Ensemble signals: {total_sell_signals} sell vs {total_buy_signals} buy'
+                    }
+                    portfolio['trade_history'].append(trade_record)
+
+                    print(f"🔴 LONG EXIT: {portfolio['position_size']:.4f} @ ${exit_price:.2f} (PnL: ${pnl:.2f})")
+                    print(f"   Total P&L: ${portfolio['total_pnl']:.2f}, Win Rate: {(portfolio['winning_trades']/portfolio['total_trades']*100):.1f}%")
+
+                    # Reset position
+                    portfolio['position'] = 0
+                    portfolio['entry_price'] = 0
+                    portfolio['position_size'] = 0
+
+                    # Record in performance monitor
+                    if performance_monitor:
+                        performance_monitor.record_trade(
+                            symbol=args.symbol,
+                            trade_type='paper_exit',
+                            pnl=pnl
+                        )
+
+                # Show status every 10 cycles
+                if cycle_count % 10 == 0:
+                    win_rate = (portfolio['winning_trades'] / portfolio['total_trades'] * 100) if portfolio['total_trades'] > 0 else 0
+                    print(f"📊 Status: Cash: ${portfolio['cash']:.2f}, Total P&L: ${portfolio['total_pnl']:.2f}, Trades: {portfolio['total_trades']}, Win Rate: {win_rate:.1f}%")
+
+                # Save portfolio state periodically
+                if cycle_count % 50 == 0:
+                    portfolio_file = 'output/paper_trading_portfolio.json'
+                    with open(portfolio_file, 'w') as f:
+                        json.dump(portfolio, f, indent=2, default=str)
+                    print(f"💾 Portfolio saved to {portfolio_file}")
+
+                # Wait before next cycle (respect API limits)
+                time.sleep(30)  # 30 second intervals
+
+            except KeyboardInterrupt:
+                print("\n🛑 Paper trading stopped by user")
+                break
+            except Exception as e:
+                print(f"❌ Error in paper trading cycle: {e}")
+                time.sleep(60)  # Wait longer on error
+                continue
+
+        # Final summary
+        print("\n" + "="*60)
+        print("📈 PAPER TRADING SESSION SUMMARY")
+        print("="*60)
+        print(f"Total Trades: {portfolio['total_trades']}")
+        print(f"Winning Trades: {portfolio['winning_trades']}")
+        print(f"Win Rate: {(portfolio['winning_trades']/portfolio['total_trades']*100):.1f}%" if portfolio['total_trades'] > 0 else "0%")
+        print(f"Total P&L: ${portfolio['total_pnl']:.2f}")
+        print(f"Final Capital: ${portfolio['cash']:.2f}")
+        print(f"Max Drawdown: {portfolio['max_drawdown']*100:.2f}%")
+        print(f"Return: {(portfolio['total_pnl']/INITIAL_CAPITAL*100):.2f}%")
+
+        # Save final results
+        final_results = {
+            'session_summary': {
+                'start_time': datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat(),
+                'end_time': datetime.now().isoformat(),
+                'symbol': args.symbol,
+                'timeframe': args.timeframe,
+                'total_trades': portfolio['total_trades'],
+                'winning_trades': portfolio['winning_trades'],
+                'win_rate': (portfolio['winning_trades']/portfolio['total_trades']) if portfolio['total_trades'] > 0 else 0,
+                'total_pnl': portfolio['total_pnl'],
+                'final_capital': portfolio['cash'],
+                'max_drawdown': portfolio['max_drawdown'],
+                'return_pct': portfolio['total_pnl']/INITIAL_CAPITAL
+            },
+            'portfolio': portfolio,
+            'discovery_configs_used': len(top_configs),
+            'ensemble_method': 'majority_vote'
+        }
+
+        results_file = 'output/paper_trading_results.json'
+        with open(results_file, 'w') as f:
+            json.dump(final_results, f, indent=2, default=str)
+
+        print(f"📁 Results saved to {results_file}")
+        print("🎯 Paper trading session completed!")
+
+    except Exception as e:
+        print(f"❌ Paper trading failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+def run_live_trading_mode(args, performance_monitor=None):
+    """Run live trading mode with real broker integration."""
+    from config.settings import (
+        BROKER_ENABLED, BROKER_EXCHANGE, BROKER_API_KEY, BROKER_API_SECRET,
+        BROKER_TESTNET, LIVE_TRADING_MAX_DRAWDOWN, LIVE_TRADING_MAX_TRADES_PER_DAY,
+        LIVE_TRADING_MIN_SIGNAL_CONFIDENCE, LIVE_TRADING_AUTO_EXECUTE,
+        LIVE_TRADING_CONFIRMATION_REQUIRED, LIVE_TRADING_MONITOR_ENABLED,
+        LIVE_TRADING_POSITION_UPDATE_INTERVAL, LIVE_TRADING_PNL_LOG_FILE,
+        LIVE_TRADING_TRADE_LOG_FILE
+    )
+    from integrations.brokers import broker_manager, BrokerConfig, CCXTBroker
+    import json
+    import time
+    from datetime import datetime
+
+    print("🚀 Starting TradPal - Live Trading Mode")
+    print("⚠️  WARNING: This mode executes REAL TRADES!")
+    print(f"📊 Broker: {BROKER_EXCHANGE} ({'TESTNET' if BROKER_TESTNET else 'LIVE'})")
+    print(f"💰 Max Drawdown: {LIVE_TRADING_MAX_DRAWDOWN*100}%")
+    print(f"📈 Max Trades/Day: {LIVE_TRADING_MAX_TRADES_PER_DAY}")
+    print(f"🤖 Auto Execute: {LIVE_TRADING_AUTO_EXECUTE}")
+    print()
+
+    # Safety checks
+    if not BROKER_ENABLED:
+        print("❌ Live trading is disabled in configuration. Set BROKER_ENABLED=true to enable.")
+        return
+
+    if not BROKER_API_KEY or not BROKER_API_SECRET:
+        print("❌ Broker API credentials not configured. Set BROKER_API_KEY and BROKER_API_SECRET.")
+        return
+
+    if not BROKER_TESTNET and not LIVE_TRADING_CONFIRMATION_REQUIRED:
+        print("❌ LIVE TRADING WITHOUT CONFIRMATION DISABLED FOR SAFETY!")
+        print("   Set LIVE_TRADING_CONFIRMATION_REQUIRED=true for live trading.")
+        return
+
+    # Initialize broker
+    broker_config = BrokerConfig(
+        enabled=True,
+        exchange=BROKER_EXCHANGE,
+        api_key=BROKER_API_KEY,
+        api_secret=BROKER_API_SECRET,
+        testnet=BROKER_TESTNET
+    )
+
+    broker = CCXTBroker(broker_config)
+    broker_manager.register_broker('primary', broker)
+
+    if not broker_manager.initialize_all()['primary']:
+        print("❌ Failed to initialize broker. Check API credentials and network connection.")
+        return
+
+    print("✅ Broker initialized successfully")
+
+    # Initialize trading state
+    trading_state = {
+        'capital': 10000.0,  # Start with $10k
+        'trades_today': 0,
+        'last_reset_date': datetime.now().date(),
+        'open_positions': {},
+        'pnl_history': [],
+        'trade_log': []
+    }
+
+    # Load existing state if available
+    try:
+        with open(LIVE_TRADING_PNL_LOG_FILE, 'r') as f:
+            trading_state.update(json.load(f))
+        print("📊 Loaded existing trading state")
+    except FileNotFoundError:
+        print("📊 Starting with fresh trading state")
+
+    log_system_status("Live trading mode started")
+
+    try:
+        while True:
+            current_time = datetime.now()
+
+            # Reset daily counters if needed
+            if current_time.date() != trading_state['last_reset_date']:
+                trading_state['trades_today'] = 0
+                trading_state['last_reset_date'] = current_time.date()
+                print(f"📅 Daily reset: {current_time.date()}")
+
+            # Check drawdown limit
+            if trading_state['capital'] < 10000 * (1 - LIVE_TRADING_MAX_DRAWDOWN):
+                print(f"🚨 EMERGENCY STOP: Drawdown limit reached ({LIVE_TRADING_MAX_DRAWDOWN*100}%)")
+                print(f"   Current capital: ${trading_state['capital']:.2f}")
+                break
+
+            # Check daily trade limit
+            if trading_state['trades_today'] >= LIVE_TRADING_MAX_TRADES_PER_DAY:
+                print(f"📊 Daily trade limit reached ({LIVE_TRADING_MAX_TRADES_PER_DAY})")
+                time.sleep(3600)  # Wait 1 hour
+                continue
 
             # Fetch latest data
             data = fetch_data()
-
             if data.empty:
                 print("No data available, retrying in 30 seconds...")
                 time.sleep(30)
                 continue
 
-            # Calculate indicators (use adaptive config if available)
-            if adaptive_optimizer:
-                adaptive_config = adaptive_optimizer.get_current_config()
-                if adaptive_config:
-                    data = calculate_indicators(data, config=adaptive_config)
-                else:
-                    data = calculate_indicators(data)
-            else:
-                data = calculate_indicators(data)
-
-            # Generate signals
+            # Calculate indicators and signals
+            data = calculate_indicators(data)
             data = generate_signals(data)
-
-            # Calculate risk management
             data = calculate_risk_management(data)
 
-            # Check for new signals
-            latest = data.iloc[-1]  # Get most recent data point
+            # Get latest signal
+            latest = data.iloc[-1]
 
-            current_time = time.time()
-            has_new_signal = False
+            # Check for trading signals
+            signal_detected = False
+            signal_type = None
+            confidence = 0.0
 
-            # Handle BUY signals
-            if latest['Buy_Signal'] == 1 and (current_time - last_signal_time) > signal_cooldown:
-                if current_position is None:  # Only enter if no current position
-                    entry_price = latest['close']
-                    position_size_pct = latest['Position_Size_Percent']
-                    position_size = (virtual_capital * position_size_pct / 100) / entry_price
-                    stop_loss = latest['Stop_Loss_Buy']
-                    take_profit = latest['Take_Profit_Buy']
-                    leverage = latest['Leverage']
+            if latest['Buy_Signal'] == 1:
+                signal_type = 'BUY'
+                confidence = 0.8  # Placeholder confidence
+                signal_detected = True
+            elif latest['Sell_Signal'] == 1:
+                signal_type = 'SELL'
+                confidence = 0.8  # Placeholder confidence
+                signal_detected = True
 
-                    current_position = 'long'
+            if signal_detected and confidence >= LIVE_TRADING_MIN_SIGNAL_CONFIDENCE:
+                print(f"🎯 {signal_type} SIGNAL detected at {current_time.strftime('%H:%M:%S')}")
+                print(f"   Price: {latest['close']:.5f}, Confidence: {confidence:.2f}")
+                print(f"   Position Size: {latest['Position_Size_Percent']:.2f}%")
 
-                    print(f"🟢 PAPER BUY SIGNAL at {time.strftime('%H:%M:%S')}")
-                    print(f"   Entry Price: ${entry_price:.5f}")
-                    print(f"   Position Size: {position_size:.6f} {args.symbol.split('/')[0]} (${position_size * entry_price:.2f})")
-                    print(f"   Stop Loss: ${stop_loss:.5f}")
-                    print(f"   Take Profit: ${take_profit:.5f}")
-                    print(f"   Leverage: {leverage}x")
-                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
-                    print()
+                # Check confirmation requirement
+                if LIVE_TRADING_CONFIRMATION_REQUIRED:
+                    response = input(f"⚠️  Execute {signal_type} trade? (y/N): ")
+                    if response.lower() not in ['y', 'yes']:
+                        print("⏭️  Trade cancelled by user")
+                        time.sleep(60)
+                        continue
 
-                    # Log signal for audit trail
-                    log_signal(
-                        signal_type="PAPER_BUY",
-                        price=entry_price,
-                        rsi=latest['RSI'],
-                        ema9=latest['EMA9'],
-                        ema21=latest['EMA21'],
-                        position_size_pct=position_size_pct,
-                        stop_loss=stop_loss,
-                        take_profit=take_profit,
-                        leverage=leverage
-                    )
+                # Execute trade if auto-execute is enabled
+                if LIVE_TRADING_AUTO_EXECUTE:
+                    try:
+                        # Calculate position size
+                        position_size = trading_state['capital'] * latest['Position_Size_Percent'] / 100
 
-                    last_signal_time = current_time
-                    has_new_signal = True
+                        # For simplicity, assume market order
+                        if signal_type == 'BUY':
+                            order_result = broker.place_order(
+                                symbol=args.symbol,
+                                side='buy',
+                                amount=position_size / latest['close'],  # Convert to crypto amount
+                                order_type='market'
+                            )
+                        else:  # SELL
+                            # For sell, we need existing position - simplified for now
+                            order_result = broker.place_order(
+                                symbol=args.symbol,
+                                side='sell',
+                                amount=position_size / latest['close'],  # Simplified
+                                order_type='market'
+                            )
 
-            # Handle SELL signals
-            elif latest['Sell_Signal'] == 1 and (current_time - last_signal_time) > signal_cooldown:
-                if current_position == 'long':  # Only exit if we have a long position
-                    exit_price = latest['close']
-                    pnl = (exit_price - entry_price) * position_size * leverage
-                    total_pnl += pnl
-                    virtual_capital += pnl
-                    total_trades += 1
+                        if order_result.status in ['filled', 'partial']:
+                            print(f"✅ Order executed: {order_result.to_dict()}")
 
-                    if pnl > 0:
-                        winning_trades += 1
+                            # Update trading state
+                            trading_state['trades_today'] += 1
+                            trade_record = {
+                                'timestamp': current_time.isoformat(),
+                                'type': signal_type,
+                                'price': latest['close'],
+                                'size': position_size,
+                                'order_id': order_result.order_id,
+                                'status': order_result.status
+                            }
+                            trading_state['trade_log'].append(trade_record)
 
-                    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+                            # Save state
+                            with open(LIVE_TRADING_TRADE_LOG_FILE, 'w') as f:
+                                json.dump(trading_state, f, indent=2)
 
-                    print(f"🔴 PAPER SELL SIGNAL at {time.strftime('%H:%M:%S')}")
-                    print(f"   Exit Price: ${exit_price:.5f}")
-                    print(f"   P&L: ${pnl:.2f} ({'+' if pnl > 0 else ''}{pnl/entry_price*100:.2f}%)")
-                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
-                    print(f"   Total Trades: {total_trades}, Win Rate: {win_rate:.1f}%")
-                    print(f"   Total P&L: ${total_pnl:.2f}")
-                    print()
+                        else:
+                            print(f"❌ Order failed: {order_result.error}")
 
-                    # Log signal for audit trail
-                    log_signal(
-                        signal_type="PAPER_SELL",
-                        price=exit_price,
-                        rsi=latest['RSI'],
-                        ema9=latest['EMA9'],
-                        ema21=latest['EMA21'],
-                        position_size_pct=0,  # Exit position
-                        stop_loss=0,
-                        take_profit=0,
-                        leverage=leverage
-                    )
+                    except Exception as e:
+                        print(f"❌ Trade execution failed: {e}")
+                else:
+                    print("📋 Trade signal logged (auto-execute disabled)")
 
-                    # Reset position
-                    current_position = None
-                    entry_price = 0.0
-                    position_size = 0.0
+            # Update position monitoring
+            if LIVE_TRADING_MONITOR_ENABLED:
+                try:
+                    positions = broker.get_positions()
+                    balance = broker.get_balance()
 
-                    last_signal_time = current_time
-                    has_new_signal = True
+                    # Update capital estimate
+                    trading_state['capital'] = balance
 
-                elif current_position is None:  # Could implement short selling here
-                    print(f"🔴 SELL SIGNAL at {time.strftime('%H:%M:%S')} (no position to sell)")
-                    print(f"   Price: {latest['close']:.5f}")
-                    print()
+                    # Log PNL
+                    pnl_record = {
+                        'timestamp': current_time.isoformat(),
+                        'capital': balance,
+                        'positions': {k: v.to_dict() for k, v in positions.items()}
+                    }
+                    trading_state['pnl_history'].append(pnl_record)
 
-            # Check for stop loss / take profit hits (simplified)
-            elif current_position == 'long':
-                current_price = latest['close']
+                    # Save PNL log
+                    with open(LIVE_TRADING_PNL_LOG_FILE, 'w') as f:
+                        json.dump(trading_state, f, indent=2)
 
-                # Check stop loss
-                if current_price <= stop_loss:
-                    exit_price = stop_loss
-                    pnl = (exit_price - entry_price) * position_size * leverage
-                    total_pnl += pnl
-                    virtual_capital += pnl
-                    total_trades += 1
+                except Exception as e:
+                    print(f"⚠️  Position monitoring failed: {e}")
 
-                    print(f"🛑 PAPER STOP LOSS HIT at {time.strftime('%H:%M:%S')}")
-                    print(f"   Exit Price: ${exit_price:.5f}")
-                    print(f"   P&L: ${pnl:.2f} ({pnl/entry_price*100:.2f}%)")
-                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
-                    print()
+            # Wait before next cycle
+            time.sleep(LIVE_TRADING_POSITION_UPDATE_INTERVAL)
 
-                    current_position = None
-                    entry_price = 0.0
-                    position_size = 0.0
+    except KeyboardInterrupt:
+        print("\n🛑 Live trading stopped by user")
+        log_system_status("Live trading mode stopped by user")
 
-                # Check take profit
-                elif current_price >= take_profit:
-                    exit_price = take_profit
-                    pnl = (exit_price - entry_price) * position_size * leverage
-                    total_pnl += pnl
-                    virtual_capital += pnl
-                    total_trades += 1
-                    winning_trades += 1
+    except Exception as e:
+        print(f"❌ Live trading error: {e}")
+        log_error(f"Live trading error: {e}")
 
-                    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
-
-                    print(f"🎯 PAPER TAKE PROFIT HIT at {time.strftime('%H:%M:%S')}")
-                    print(f"   Exit Price: ${exit_price:.5f}")
-                    print(f"   P&L: ${pnl:.2f} ({pnl/entry_price*100:.2f}%)")
-                    print(f"   Virtual Capital: ${virtual_capital:.2f}")
-                    print(f"   Total Trades: {total_trades}, Win Rate: {win_rate:.1f}%")
-                    print()
-
-                    current_position = None
-                    entry_price = 0.0
-                    position_size = 0.0
-
-            # Save signals to JSON only when there are actual signals
-            if has_new_signal:
-                save_signals_to_json(data)
-
-            # Wait before next check (30 seconds for 1-minute charts)
-            time.sleep(30)
-
-        except KeyboardInterrupt:
-            print("\nStopping Paper Trading...")
-            print(f"📊 Final Results:")
-            print(f"   Virtual Capital: ${virtual_capital:.2f}")
-            print(f"   Total Trades: {total_trades}")
-            if total_trades > 0:
-                win_rate = winning_trades / total_trades * 100
-                print(f"   Win Rate: {win_rate:.1f}%")
-                print(f"   Total P&L: ${total_pnl:.2f}")
-                print(f"   Return: {total_pnl/10000*100:.2f}%")
-
-            log_system_status("Paper trading mode stopped by user")
-            break
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            log_error(f"Paper trading error: {e}")
-            print("Retrying in 60 seconds...")
-            time.sleep(60)
+    # Final state save
+    try:
+        with open(LIVE_TRADING_PNL_LOG_FILE, 'w') as f:
+            json.dump(trading_state, f, indent=2)
+        print("💾 Trading state saved")
+    except Exception as e:
+        print(f"⚠️  Failed to save final state: {e}")
 
 def run_live_monitoring(performance_monitor=None):
     """Run continuous live monitoring mode."""
@@ -890,7 +1140,7 @@ def run_discovery_mode(args):
 
         for i, result in enumerate(results, 1):
             print(f"\n#{i} - Fitness: {result.fitness:.2f}")
-            print(f"   P&L: {result.pnl:.2f}%, Win Rate: {result.win_rate:.1%}")
+            print(f"   P&L: {result.pnl:.2f}%, Win Rate: {result.win_rate:.1f}%")
             print(f"   Sharpe: {result.sharpe_ratio:.2f}, Trades: {result.total_trades}")
             print(f"   Daily Perf: {result.pnl / max(result.backtest_duration_days, 1):.3f}%")
 
@@ -980,7 +1230,7 @@ def main():
     )
 
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
-    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
+    parser.add_argument('--mode', choices=['live', 'live-trading', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
                        default='live', help='Operation mode (default: live)')
     parser.add_argument('--profile', choices=['light', 'heavy'],
                        default='default', help='Performance profile (default: default .env)')
@@ -1022,6 +1272,8 @@ def main():
         run_single_analysis(performance_monitor)
     elif args.mode == 'discovery':
         run_discovery_mode(args)
+    elif args.mode == 'live-trading':
+        run_live_trading_mode(args, performance_monitor)
     elif args.mode == 'paper':
         run_paper_trading_mode(args, performance_monitor)
     elif args.mode == 'multi-model':
@@ -1436,7 +1688,7 @@ def main():
     )
 
     parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
-    parser.add_argument('--mode', choices=['live', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
+    parser.add_argument('--mode', choices=['live', 'live-trading', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
                        default='live', help='Operation mode (default: live)')
     parser.add_argument('--profile', choices=['light', 'heavy'],
                        default='default', help='Performance profile (default: default .env)')
@@ -1478,6 +1730,8 @@ def main():
         run_single_analysis(performance_monitor)
     elif args.mode == 'discovery':
         run_discovery_mode(args)
+    elif args.mode == 'live-trading':
+        run_live_trading_mode(args, performance_monitor)
     elif args.mode == 'paper':
         run_paper_trading_mode(args, performance_monitor)
     elif args.mode == 'multi-model':

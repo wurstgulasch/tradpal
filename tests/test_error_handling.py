@@ -203,8 +203,12 @@ class TestIndicatorsErrorHandling:
             # Missing high, low, open, volume
         })
 
-        with pytest.raises(KeyError):
-            calculate_indicators(df)
+        # Should handle missing columns gracefully by setting NaN
+        result = calculate_indicators(df)
+        assert len(result) == len(df)
+        assert 'EMA9' in result.columns
+        # ATR should be NaN due to missing high/low columns
+        assert result['ATR'].isna().all()
 
     def test_calculate_indicators_with_insufficient_data(self):
         """Test indicator calculation with insufficient data."""

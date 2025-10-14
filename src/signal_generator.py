@@ -82,6 +82,10 @@ def generate_signals(df: pd.DataFrame, config=None) -> pd.DataFrame:
     ema_enabled = config.get('ema', {}).get('enabled', False)
     rsi_enabled = config.get('rsi', {}).get('enabled', False)
     bb_enabled = config.get('bb', {}).get('enabled', False)
+    macd_enabled = config.get('macd', {}).get('enabled', False)
+    stochastic_enabled = config.get('stochastic', {}).get('enabled', False)
+    adx_enabled = config.get('adx', {}).get('enabled', False)
+    obv_enabled = config.get('obv', {}).get('enabled', False)
 
     # Basic signal generation - use dynamic EMA column names
     if ema_enabled and ema_short_col in df.columns and ema_long_col in df.columns:
@@ -108,6 +112,18 @@ def generate_signals(df: pd.DataFrame, config=None) -> pd.DataFrame:
             
         if bb_enabled:
             valid_indicators &= df['BB_lower'].notna() & df['BB_upper'].notna()
+            
+        if macd_enabled:
+            valid_indicators &= df['MACD_line'].notna() & df['MACD_signal'].notna() & df['MACD_histogram'].notna()
+            
+        if stochastic_enabled:
+            valid_indicators &= df['stoch_k'].notna()
+            
+        if adx_enabled:
+            valid_indicators &= df['ADX'].notna()
+            
+        if obv_enabled:
+            valid_indicators &= df['OBV'].notna()
         
         # Generate signals based on enabled indicators
         if ema_enabled and rsi_enabled and bb_enabled:
@@ -146,13 +162,52 @@ def generate_signals(df: pd.DataFrame, config=None) -> pd.DataFrame:
             sell_condition = (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values) & valid_indicators
             df['Sell_Signal'] = sell_condition.astype(int)
             
-        elif ema_enabled:
-            # EMA only strategy - only validate EMA indicators
-            ema_valid = ema_short_valid & ema_long_valid
-            buy_condition = (df['EMA_crossover'].values == 1) & ema_valid
+        elif ema_enabled and rsi_enabled and macd_enabled:
+            # EMA + RSI + MACD strategy
+            macd_buy_condition = (df['MACD_line'].values > df['MACD_signal'].values) & (df['MACD_histogram'].values > 0)
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & macd_buy_condition & valid_indicators
             df['Buy_Signal'] = buy_condition.astype(int)
             
-            sell_condition = (df['EMA_crossover'].values == -1) & ema_valid
+            macd_sell_condition = (df['MACD_line'].values < df['MACD_signal'].values) & (df['MACD_histogram'].values < 0)
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & macd_sell_condition & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and rsi_enabled and macd_enabled and stochastic_enabled:
+            # EMA + RSI + MACD + Stochastic strategy
+            macd_buy_condition = (df['MACD_line'].values > df['MACD_signal'].values) & (df['MACD_histogram'].values > 0)
+            stoch_buy_condition = df['stoch_k'].values < 20
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & macd_buy_condition & stoch_buy_condition & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            macd_sell_condition = (df['MACD_line'].values < df['MACD_signal'].values) & (df['MACD_histogram'].values < 0)
+            stoch_sell_condition = df['stoch_k'].values > 80
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & macd_sell_condition & stoch_sell_condition & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and stochastic_enabled:
+            # EMA + Stochastic strategy
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['stoch_k'].values < 20) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['stoch_k'].values > 80) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and adx_enabled:
+            # EMA + ADX strategy (trend following)
+            adx_strong_trend = df.get('ADX', 25).values > 25
+            buy_condition = (df['EMA_crossover'].values == 1) & adx_strong_trend & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & adx_strong_trend & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and obv_enabled:
+            # EMA + OBV strategy (volume confirmation)
+            obv_trend = df['OBV'].pct_change(5).values > 0  # OBV trending up over last 5 periods
+            buy_condition = (df['EMA_crossover'].values == 1) & obv_trend & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & ~obv_trend & valid_indicators
             df['Sell_Signal'] = sell_condition.astype(int)
             
         elif rsi_enabled:
@@ -213,12 +268,52 @@ def generate_signals(df: pd.DataFrame, config=None) -> pd.DataFrame:
             sell_condition = (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values)
             df['Sell_Signal'] = sell_condition.astype(int)
             
-        elif ema_enabled:
-            # EMA only strategy
-            buy_condition = (df['EMA_crossover'].values == 1)
+        elif ema_enabled and rsi_enabled and macd_enabled:
+            # EMA + RSI + MACD strategy
+            macd_buy_condition = (df['MACD_line'].values > df['MACD_signal'].values) & (df['MACD_histogram'].values > 0)
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & macd_buy_condition
             df['Buy_Signal'] = buy_condition.astype(int)
             
-            sell_condition = (df['EMA_crossover'].values == -1)
+            macd_sell_condition = (df['MACD_line'].values < df['MACD_signal'].values) & (df['MACD_histogram'].values < 0)
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & macd_sell_condition
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and rsi_enabled and macd_enabled and stochastic_enabled:
+            # EMA + RSI + MACD + Stochastic strategy
+            macd_buy_condition = (df['MACD_line'].values > df['MACD_signal'].values) & (df['MACD_histogram'].values > 0)
+            stoch_buy_condition = df['stoch_k'].values < 20
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & macd_buy_condition & stoch_buy_condition
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            macd_sell_condition = (df['MACD_line'].values < df['MACD_signal'].values) & (df['MACD_histogram'].values < 0)
+            stoch_sell_condition = df['stoch_k'].values > 80
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & macd_sell_condition & stoch_sell_condition
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and stochastic_enabled:
+            # EMA + Stochastic strategy
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['stoch_k'].values < 20)
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['stoch_k'].values > 80)
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and adx_enabled:
+            # EMA + ADX strategy (trend following)
+            adx_strong_trend = df.get('ADX', 25).values > 25
+            buy_condition = (df['EMA_crossover'].values == 1) & adx_strong_trend
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & adx_strong_trend
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and obv_enabled:
+            # EMA + OBV strategy (volume confirmation)
+            obv_trend = df['OBV'].pct_change(5).values > 0  # OBV trending up over last 5 periods
+            buy_condition = (df['EMA_crossover'].values == 1) & obv_trend
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & ~obv_trend
             df['Sell_Signal'] = sell_condition.astype(int)
             
         elif rsi_enabled:

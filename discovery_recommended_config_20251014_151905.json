@@ -1,0 +1,56 @@
+{
+  "recommended_config": {
+    "population_size": 120,
+    "generations": 30,
+    "mutation_rate": 0.18,
+    "crossover_rate": 0.87,
+    "tournament_size": 3,
+    "elitism_count": 5,
+    "max_evaluations": 2000
+  },
+  "test_results": [
+    {
+      "name": "Conservative",
+      "population_size": 50,
+      "generations": 10,
+      "mutation_rate": 0.1,
+      "crossover_rate": 0.8,
+      "best_fitness": 0.5522163886366959,
+      "avg_fitness": 0.518088155566273,
+      "diversity_score": 0.7002351076298873,
+      "runtime_seconds": 21.426175137963767,
+      "success": true
+    },
+    {
+      "name": "Balanced",
+      "population_size": 75,
+      "generations": 15,
+      "mutation_rate": 0.15,
+      "crossover_rate": 0.85,
+      "best_fitness": 0.7347920807198526,
+      "avg_fitness": 0.7238355011033661,
+      "diversity_score": 0.8331076766486728,
+      "runtime_seconds": 16.635427258967866,
+      "success": true
+    },
+    {
+      "name": "Aggressive",
+      "population_size": 100,
+      "generations": 20,
+      "mutation_rate": 0.2,
+      "crossover_rate": 0.9,
+      "best_fitness": 0.6721817581802005,
+      "avg_fitness": 0.6227279878196458,
+      "diversity_score": 0.7477005033002193,
+      "runtime_seconds": 17.323082804559604,
+      "success": true
+    }
+  ],
+  "timestamp": "20251014_151905",
+  "notes": [
+    "Diese Empfehlungen basieren auf GA-Theorie und praktischen Erfahrungen",
+    "F\u00fcr spezifische Asset-Klassen k\u00f6nnen Anpassungen n\u00f6tig sein",
+    "Regelm\u00e4\u00dfige Reevaluation der Parameter wird empfohlen",
+    "Evolution ist 10x effektiver als reines Random-Search"
+  ]
+}

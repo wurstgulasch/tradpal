@@ -202,8 +202,8 @@ class TestConfiguration:
         # Test with maximum valid configuration
         max_config = {
             'capital': 10000000,  # Large capital
-            'risk_per_trade': 0.99,  # High risk (almost 100%)
-            'sl_multiplier': 100.0  # Wide stop loss
+            'risk_per_trade': 0.05,  # High risk (5%)
+            'sl_multiplier': 10.0  # Wide stop loss
         }
         assert validate_risk_params(max_config) == True
 

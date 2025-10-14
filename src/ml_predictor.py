@@ -255,56 +255,82 @@ class MLSignalPredictor:
         ]
 
         # Build features in the exact order expected by trained models
+        # Always create exactly 11 features, using zeros for missing indicators
+        features = []
+
+        # 1. close_pct_roc: Price change rate of change
         if 'close' in df.columns:
-            # close_pct_roc: Price change rate of change
             price_change = df['close'].pct_change().fillna(0)
             features.append(price_change.pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-            # close_ma20_roc: 20-period MA rate of change
+        # 2. close_ma20_roc: 20-period MA rate of change
+        if 'close' in df.columns:
             ma20 = df['close'].rolling(window=20).mean().fillna(0)
             features.append(ma20.pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-            # close_ma50_value: 50-period MA value
+        # 3. close_ma50_value: 50-period MA value
+        if 'close' in df.columns:
             ma50 = df['close'].rolling(window=50).mean().fillna(0)
             features.append(ma50)
+        else:
+            features.append(np.zeros(len(df)))
 
-            # close_dev_ma20_roc: Price deviation from MA rate of change
+        # 4. close_dev_ma20_roc: Price deviation from MA rate of change
+        if 'close' in df.columns:
+            ma20 = df['close'].rolling(window=20).mean().fillna(0)
             price_dev = (df['close'] - ma20).fillna(0)
             features.append(price_dev.pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # EMA9_value: EMA9 value
-        if 'EMA9' in df.columns:
-            features.append(df['EMA9'].fillna(0))
+        # 5. EMA9_value: EMA9 value
+        if 'ema_short' in df.columns:
+            features.append(df['ema_short'].fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # BB_upper_value: Bollinger Band upper value
-        if 'BB_upper' in df.columns:
-            features.append(df['BB_upper'].fillna(0))
+        # 6. BB_upper_value: Bollinger Band upper value
+        if 'bb_upper' in df.columns:
+            features.append(df['bb_upper'].fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # BB_lower_roc: Bollinger Band lower rate of change
-        if 'BB_lower' in df.columns:
-            features.append(df['BB_lower'].pct_change().fillna(0))
+        # 7. BB_lower_roc: Bollinger Band lower rate of change
+        if 'bb_lower' in df.columns:
+            features.append(df['bb_lower'].pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # MACD_hist_roc: MACD histogram rate of change
-        if 'MACD_hist' in df.columns:
-            features.append(df['MACD_hist'].pct_change().fillna(0))
+        # 8. MACD_hist_roc: MACD histogram rate of change
+        if 'macd_hist' in df.columns:
+            features.append(df['macd_hist'].pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # Stoch_K_roc: Stochastic K rate of change
-        if 'Stoch_K' in df.columns:
-            features.append(df['Stoch_K'].pct_change().fillna(0))
+        # 9. Stoch_K_roc: Stochastic K rate of change
+        if 'stoch_k' in df.columns:
+            features.append(df['stoch_k'].pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # Stoch_D_roc: Stochastic D rate of change
-        if 'Stoch_D' in df.columns:
-            features.append(df['Stoch_D'].pct_change().fillna(0))
+        # 10. Stoch_D_roc: Stochastic D rate of change
+        if 'stoch_d' in df.columns:
+            features.append(df['stoch_d'].pct_change().fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # BB_upper_lag1: Bollinger Band upper lagged by 1 period
-        if 'BB_upper' in df.columns:
-            features.append(df['BB_upper'].shift(1).fillna(0))
+        # 11. BB_upper_lag1: Bollinger Band upper lagged by 1 period
+        if 'bb_upper' in df.columns:
+            features.append(df['bb_upper'].shift(1).fillna(0))
+        else:
+            features.append(np.zeros(len(df)))
 
-        # Ensure we have exactly the expected number of features
-        if len(features) != len(expected_features):
-            # Fallback: create zero features if we don't have all expected features
-            print(f"⚠️  Feature count mismatch: expected {len(expected_features)}, got {len(features)}")
-            features = [np.zeros(len(df)) for _ in range(len(expected_features))]
+        # Ensure we have exactly 11 features
+        assert len(features) == 11, f"Expected 11 features, got {len(features)}"
 
         # Combine features
         if features:

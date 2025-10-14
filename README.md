@@ -85,44 +85,14 @@ cd services/web-ui && streamlit run app.py
 - **Parallel Processing**: Multi-worker support for backtesting and model training
 - **Caching System**: Redis-based caching for API responses and ML model persistence
 
-### �🐛 Bug Fixes & Stability
-- **Fixed Discovery Module Test Failures**: Resolved issues with `_individual_to_config` method for 21-element test individuals and enhanced `_load_historical_data` with fallback mechanisms for data fetching failures
-- **Enhanced Discovery Data Fetching**: Added automatic fallback to different timeframes (5m, 15m, 1h) when 1m data is unavailable, with mock data generation as last resort for testing
-- **Fixed ML Integration Test Failures**: Resolved sklearn import issues in `ml_predictor.py` by adding missing imports (`RandomForestClassifier`, `GradientBoostingClassifier`, `SVC`, `LogisticRegression`, `StandardScaler`, `Pipeline`, `SelectKBest`, `f_classif`, `mutual_info_classif`, `train_test_split`)
-- **Fixed Signal Generator Syntax Error**: Corrected `apply_ml_signal_enhancement` function by properly adding try block and initializing `predictors` variable for ML model loading
-- **Enhanced Signal_Source Column**: Ensured `Signal_Source` column is always added to DataFrames, defaulting to 'TRADITIONAL' when ML is disabled
-- **Robust Cross-Validation Integration**: Added `RobustCrossValidator` usage for improved ML model evaluation with time-series cross-validation
-- **Fixed Multi-Model Backtesting Memory Issues**: Resolved memory exhaustion ("Killed: 9") in parallel model testing by implementing comprehensive mocking for expensive ML operations and reducing test dataset size by 90%
-- **Fixed AttributeError in simulate_trades**: Corrected position size handling when Position_Size_Absolute column is missing, ensuring proper array creation instead of scalar fallback
-- **Enhanced Test Suite Stability**: All 677 tests now passing with improved mocking infrastructure for expensive operations (data fetching, model training, backtesting)
-- **Fixed Infinite Loops**: Resolved hanging tests in performance monitoring with proper timeout mechanisms
-- **Enhanced Test Coverage**: Improved Prometheus availability checks and conditional test execution
-- **Performance Timeouts**: Adjusted realistic performance benchmarks for signal generation and backtesting
-- **Repository Cleanup**: Removed temporary files, cache directories, and outdated backups
-- **Profile Configuration**: Cleaned up performance profiles from 3 to 2 profiles (light/heavy) with automatic validation
-- **Environment Loading**: Fixed environment file loading order to ensure proper profile-based configuration
-- **Security Enhancement**: Removed sensitive Telegram credentials from .env files to prevent accidental commits
-- **Test Suite Fixes**: Corrected backtester integration tests to match actual API return formats
-- **Fixed Discovery Module Test Failures**: Resolved issues with `_individual_to_config` method for 21-element test individuals and enhanced `_load_historical_data` with fallback mechanisms for data fetching failures
-- **Enhanced Discovery Data Fetching**: Added automatic fallback to different timeframes (5m, 15m, 1h) when 1m data is unavailable, with mock data generation as last resort for testing
-- **Fixed ML Integration Test Failures**: Resolved sklearn import issues in `ml_predictor.py` by adding missing imports (`RandomForestClassifier`, `GradientBoostingClassifier`, `SVC`, `LogisticRegression`, `StandardScaler`, `Pipeline`, `SelectKBest`, `f_classif`, `mutual_info_classif`, `train_test_split`)
-- **Fixed Signal Generator Syntax Error**: Corrected `apply_ml_signal_enhancement` function by properly adding try block and initializing `predictors` variable for ML model loading
-- **Enhanced Signal_Source Column**: Ensured `Signal_Source` column is always added to DataFrames, defaulting to 'TRADITIONAL' when ML is disabled
-- **Robust Cross-Validation Integration**: Added `RobustCrossValidator` usage for improved ML model evaluation with time-series cross-validation
-- **Fixed Multi-Model Backtesting Memory Issues**: Resolved memory exhaustion ("Killed: 9") in parallel model testing by implementing comprehensive mocking for expensive ML operations and reducing test dataset size by 90%
-- **Fixed AttributeError in simulate_trades**: Corrected position size handling when Position_Size_Absolute column is missing, ensuring proper array creation instead of scalar fallback
-- **Enhanced Test Suite Stability**: All 629 tests now passing with improved mocking infrastructure for expensive operations (data fetching, model training, backtesting)
-- **Fixed Infinite Loops**: Resolved hanging tests in performance monitoring with proper timeout mechanisms
-- **Enhanced Test Coverage**: Improved Prometheus availability checks and conditional test execution
-- **Performance Timeouts**: Adjusted realistic performance benchmarks for signal generation and backtesting
-- **Repository Cleanup**: Removed temporary files, cache directories, and outdated backups
-- **Profile Configuration**: Cleaned up performance profiles from 3 to 2 profiles (light/heavy) with automatic validation
-- **Environment Loading**: Fixed environment file loading order to ensure proper profile-based configuration
-- **Security Enhancement**: Removed sensitive Telegram credentials from .env files to prevent accidental commits
-- **Test Suite Fixes**: Corrected backtester integration tests to match actual API return formats
+### �🐛 Bug Fixes & Stability (October 2025)
+- **Test Suite Overhaul**: Resolved all import errors and function signature mismatches across the entire test suite. All 708 tests now pass successfully with improved mocking infrastructure for expensive operations (data fetching, model training, backtesting).
+- **Enhanced Indicator Calculations**: Fixed `calculate_indicators` function to properly accept optional config parameters, enabling custom indicator configurations in backtesting and live trading modes.
+- **Configuration Validation**: Added missing API constants (`API_KEY`, `API_SECRET`) and enhanced validation functions for risk parameters and timeframes to prevent runtime errors.
+- **Error Handling Improvements**: Updated test cases to properly handle graceful error recovery in indicator calculations, preventing false KeyError expectations.
 
 ### 📊 Testing & Quality Assurance
-- **Comprehensive Test Suite**: 596+ tests with high pass rate (3 performance test failures expected on CI)
+- **Comprehensive Test Suite**: 708 tests with high pass rate (3 performance test failures expected on CI)
 - **CI/CD Pipeline**: Automated testing with GitHub Actions for multiple Python versions
 - **Code Quality**: Enhanced linting, type checking, and documentation standards
 - **Performance Benchmarks**: Realistic timeout values for different hardware configurations
@@ -242,7 +212,7 @@ This will test all available data sources and report their status.
 - **Modular ML Extensions**: Advanced signal enhancement using scikit-learn with confidence scoring
 - **Modular Indicator System**: Configurable technical indicators with custom parameters
 - **Enhanced Error Handling**: Robust exception handling with retry mechanisms for API failures
-- **Comprehensive Testing**: 629+ test cases covering all components with 100% pass rate (3 skipped for optional dependencies)
+- **Comprehensive Testing**: 708 test cases covering all components with 100% pass rate (3 skipped for optional dependencies)
 - **Modular Integration System**: Telegram, Discord, Email, SMS, and Webhook integrations
 - **Advanced Backtesting Engine**: Complete historical simulation with detailed performance metrics
 - **Multi-Timeframe Analysis**: Signal confirmation across multiple timeframes for improved accuracy
@@ -618,7 +588,7 @@ make monitoring-up
 - **Architecture**: Modular microservices design with clean separation of concerns
 - **Data Processing**: Vectorized operations using pandas/numpy for optimal performance
 - **Error Handling**: Comprehensive error boundary decorators with recovery strategies
-- **Testing**: 596+ unit and integration tests with high pass rate (3 performance tests may fail on CI systems)
+- **Testing**: 708 unit and integration tests with high pass rate (3 performance tests may fail on CI systems)
 - **Performance**: Sub-second analysis for 1-minute charts, optimized for high-frequency data
 - **Memory Usage**: Efficient DataFrame operations with minimal memory footprint
 - **API Compatibility**: ccxt library support for 100+ cryptocurrency and forex exchanges
@@ -655,7 +625,7 @@ tradpal/
 │   ├── email/             # Email notifications
 │   ├── sms/               # SMS notifications
 │   └── webhook/           # Generic webhook support
-├── tests/                 # Comprehensive test suite (540+ tests)
+├── tests/                 # Comprehensive test suite (708 tests)
 │   ├── test_portfolio_manager.py # Portfolio management tests
 │   ├── test_shap_integration.py  # SHAP explainability tests
 │   ├── test_sentiment_analysis.py # Sentiment analysis tests

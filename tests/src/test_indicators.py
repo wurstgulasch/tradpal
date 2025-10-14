@@ -7,7 +7,7 @@ import os
 # Add src to path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from src.indicators import ema, rsi, bb, atr, adx, fibonacci_extensions, calculate_indicators
+from src.indicators import ema, rsi, bb, atr, adx, fibonacci_extensions, calculate_indicators, calculate_indicators_with_config
 from src.signal_generator import generate_signals, calculate_risk_management
 from config.settings import DEFAULT_INDICATOR_CONFIG
 
@@ -111,7 +111,7 @@ class TestIndicators:
             'bb': {'enabled': True, 'period': 10, 'std_dev': 1.5},
             'atr': {'enabled': True, 'period': 21}
         }
-        result = calculate_indicators(sample_data.copy(), config=custom_config)
+        result = calculate_indicators_with_config(sample_data.copy(), config=custom_config)
         expected_columns = ['EMA5', 'EMA10', 'RSI', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR']
         for col in expected_columns:
             assert col in result.columns
