@@ -638,3 +638,33 @@ FUNDING_RATE_WEIGHT = float(os.getenv('FUNDING_RATE_WEIGHT', '0.2'))
 API_KEY = os.getenv('API_KEY', '')  # Generic API key
 API_SECRET = os.getenv('API_SECRET', '')  # Generic API secret
 
+# Microservices Configuration
+DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://localhost:8001')
+CORE_SERVICE_URL = os.getenv('CORE_SERVICE_URL', 'http://localhost:8002')
+ML_TRAINER_URL = os.getenv('ML_TRAINER_URL', 'http://localhost:8003')
+BACKTESTING_SERVICE_URL = os.getenv('BACKTESTING_SERVICE_URL', 'http://localhost:8004')
+TRADING_BOT_LIVE_URL = os.getenv('TRADING_BOT_LIVE_URL', 'http://localhost:8005')
+RISK_SERVICE_URL = os.getenv('RISK_SERVICE_URL', 'http://localhost:8006')
+NOTIFICATION_SERVICE_URL = os.getenv('NOTIFICATION_SERVICE_URL', 'http://localhost:8007')
+WEB_UI_URL = os.getenv('WEB_UI_URL', 'http://localhost:8501')
+DISCOVERY_SERVICE_URL = os.getenv('DISCOVERY_SERVICE_URL', 'http://localhost:8008')
+MLOPS_SERVICE_URL = os.getenv('MLOPS_SERVICE_URL', 'http://localhost:8009')
+OPTIMIZER_URL = os.getenv('OPTIMIZER_URL', 'http://localhost:8010')
+
+# Service Feature Flags
+ENABLE_DATA_SERVICE = os.getenv('ENABLE_DATA_SERVICE', 'true').lower() == 'true'
+ENABLE_CORE_SERVICE = os.getenv('ENABLE_CORE_SERVICE', 'true').lower() == 'true'
+ENABLE_ML_TRAINER = os.getenv('ENABLE_ML_TRAINER', 'true').lower() == 'true'
+ENABLE_BACKTESTING = os.getenv('ENABLE_BACKTESTING', 'true').lower() == 'true'
+ENABLE_LIVE_TRADING = os.getenv('ENABLE_LIVE_TRADING', 'false').lower() == 'true'
+ENABLE_RISK_SERVICE = os.getenv('ENABLE_RISK_SERVICE', 'true').lower() == 'true'
+ENABLE_NOTIFICATIONS = os.getenv('ENABLE_NOTIFICATIONS', 'true').lower() == 'true'
+ENABLE_WEB_UI = os.getenv('ENABLE_WEB_UI', 'true').lower() == 'true'
+ENABLE_DISCOVERY = os.getenv('ENABLE_DISCOVERY', 'true').lower() == 'true'
+ENABLE_MLOPS = os.getenv('ENABLE_MLOPS', 'true').lower() == 'true'
+ENABLE_OPTIMIZER = os.getenv('ENABLE_OPTIMIZER', 'true').lower() == 'true'
+
+# Service Feature Flags (Legacy Aliases)
+ENABLE_ML = ENABLE_MLOPS
+ENABLE_BACKTEST = ENABLE_BACKTESTING
+

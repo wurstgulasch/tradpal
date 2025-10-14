@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-forwarder
+  namespace: tradpal-security
+  labels:
+    app: alert-forwarder
+    component: security-monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alert-forwarder
+  template:
+    metadata:
+      labels:
+        app: alert-forwarder
+        component: security-monitoring
+    spec:
+      serviceAccountName: alert-forwarder
+      containers:
+      - name: alert-forwarder
+        image: python:3.10-slim
+        command: ["python", "/app/services/alert_forwarder/cli.py"]
+        env:
+        - name: FALCO_LOG_PATH
+          value: "/var/log/falco/falco.log"
+        - name: FALCO_NAMESPACE
+          value: "tradpal-security"
+        - name: ALERT_MIN_PRIORITY
+          value: "WARNING"
+        - name: ALERT_BATCHING
+          value: "true"
+        - name: ALERT_BATCH_INTERVAL
+          value: "300"
+        - name: ALERT_MAX_BATCH_SIZE
+          value: "10"
+        - name: ALERT_RATE_LIMIT
+          value: "10"
+        - name: TELEGRAM_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: alert-forwarder-secrets
+              key: telegram-enabled
+              optional: true
+        - name: DISCORD_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: alert-forwarder-secrets
+              key: discord-enabled
+              optional: true
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: alert-forwarder-secrets
+              key: telegram-bot-token
+              optional: true
+        - name: TELEGRAM_CHAT_ID
+          valueFrom:
+            secretKeyRef:
+              name: alert-forwarder-secrets
+              key: telegram-chat-id
+              optional: true
+        - name: DISCORD_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: alert-forwarder-secrets
+              key: discord-webhook-url
+              optional: true
+        volumeMounts:
+        - name: falco-logs
+          mountPath: /var/log/falco
+          readOnly: true
+        - name: app-code
+          mountPath: /app
+          readOnly: true
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - import psutil; exit(0) if psutil.cpu_percent() < 90 else exit(1)
+          initialDelaySeconds: 30
+          periodSeconds: 60
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - import os; exit(0) if os.path.exists('/var/log/falco/falco.log') else exit(1)
+          initialDelaySeconds: 10
+          periodSeconds: 30
+      volumes:
+      - name: falco-logs
+        hostPath:
+          path: /var/log/falco
+      - name: app-code
+        configMap:
+          name: tradpal-code
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alert-forwarder
+  namespace: tradpal-security
+  labels:
+    app: alert-forwarder
+    component: security-monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alert-forwarder
+  labels:
+    app: alert-forwarder
+    component: security-monitoring
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alert-forwarder
+  labels:
+    app: alert-forwarder
+    component: security-monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: alert-forwarder
+subjects:
+- kind: ServiceAccount
+  name: alert-forwarder
+  namespace: tradpal-security
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alert-forwarder-secrets
+  namespace: tradpal-security
+  labels:
+    app: alert-forwarder
+    component: security-monitoring
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual secrets
+  telegram-enabled: "dHJ1ZQ=="  # true
+  discord-enabled: "dHJ1ZQ=="   # true
+  telegram-bot-token: ""         # Fill with base64 encoded bot token
+  telegram-chat-id: ""           # Fill with base64 encoded chat ID
+  discord-webhook-url: ""        # Fill with base64 encoded webhook URL

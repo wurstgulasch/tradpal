@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tradpal-code
+  namespace: tradpal-security
+  labels:
+    app: tradpal
+    component: shared-code
+data:
+  # This ConfigMap would contain the necessary Python modules
+  # In a real deployment, you would mount the actual codebase
+  # For now, this serves as a placeholder
+  placeholder: "TradPal shared code would be mounted here in production"

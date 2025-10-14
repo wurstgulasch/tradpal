@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-bot-live
+  labels:
+    app: trading-bot-live
+    component: trading-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trading-bot-live
+  template:
+    metadata:
+      labels:
+        app: trading-bot-live
+        component: trading-service
+    spec:
+      containers:
+      - name: trading-bot
+        image: tradpal/trading-bot-live:latest
+        ports:
+        - containerPort: 8000
+          name: health
+        env:
+        - name: REDIS_URL
+          value: "redis://redis-service:6379"
+        - name: TRADING_MODE
+          value: "paper"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: PYTHONPATH
+          value: "/app"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: output-volume
+          mountPath: /app/output
+      volumes:
+      - name: config-volume
+        configMap:
+          name: tradpal-config
+      - name: logs-volume
+        emptyDir: {}
+      - name: output-volume
+        emptyDir: {}
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-bot-live-service
+  labels:
+    app: trading-bot-live
+spec:
+  selector:
+    app: trading-bot-live
+  ports:
+  - name: health
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tradpal-config
+data:
+  settings.py: |
+    # Trading configuration
+    SYMBOL = "BTC/USDT"
+    TIMEFRAME = "1h"
+    INITIAL_CAPITAL = 10000.0
+    RISK_PER_TRADE = 0.01
+
+    # Live trading settings
+    LIVE_TRADING_MAX_DRAWDOWN = 0.1
+    LIVE_TRADING_MAX_TRADES_PER_DAY = 10
+    LIVE_TRADING_MIN_SIGNAL_CONFIDENCE = 0.7
+    LIVE_TRADING_AUTO_EXECUTE = False
+    LIVE_TRADING_CONFIRMATION_REQUIRED = True
+    LIVE_TRADING_MONITOR_ENABLED = True
+    LIVE_TRADING_POSITION_UPDATE_INTERVAL = 30
+
+    # File paths
+    LIVE_TRADING_PNL_LOG_FILE = "output/live_trading_pnl.json"
+    LIVE_TRADING_TRADE_LOG_FILE = "output/live_trading_trades.json"
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: trading-bot-live-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: trading-bot-live

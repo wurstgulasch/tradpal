@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discovery-service
+  namespace: tradpal
+  labels:
+    app: discovery-service
+    component: optimization
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: discovery-service
+  template:
+    metadata:
+      labels:
+        app: discovery-service
+        component: optimization
+    spec:
+      containers:
+      - name: discovery-service
+        image: tradpal/discovery-service:latest
+        ports:
+        - containerPort: 8003
+          name: http
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: redis-url
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /app/cache
+        - name: output-volume
+          mountPath: /app/output
+      volumes:
+      - name: cache-volume
+        persistentVolumeClaim:
+          claimName: tradpal-cache-pvc
+      - name: output-volume
+        persistentVolumeClaim:
+          claimName: tradpal-output-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-service
+  namespace: tradpal
+  labels:
+    app: discovery-service
+    component: optimization
+spec:
+  selector:
+    app: discovery-service
+  ports:
+  - name: http
+    port: 8003
+    targetPort: 8003
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: discovery-service-ingress
+  namespace: tradpal
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - discovery.tradpal.local
+    secretName: discovery-service-tls
+  rules:
+  - host: discovery.tradpal.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: discovery-service
+            port:
+              number: 8003
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: discovery-service-config
+  namespace: tradpal
+data:
+  config.yaml: |
+    service:
+      name: discovery-service
+      version: "1.0.0"
+      port: 8003
+    optimization:
+      default_population_size: 50
+      default_generations: 20
+      max_concurrent_optimizations: 5
+      timeout_seconds: 3600
+    logging:
+      level: INFO
+      format: json
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: discovery-service-pdb
+  namespace: tradpal
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: discovery-service

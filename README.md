@@ -2,6 +2,38 @@
 
 A comprehensive Python-based trading system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, advanced portfolio management, sentiment analysis, explainable AI, and automated deployment. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
 
+## 🏗️ **Architecture: Hybrid Microservices**
+
+**TradPal v3.0.0 features a hybrid architecture that combines microservices with legacy modules during migration.**
+
+### Current Architecture Status
+- ✅ **Available Services**: Data Service, Backtesting Service, Notification Service
+- 🔄 **Migration in Progress**: Core trading logic, ML training, Web UI
+- 🔄 **Legacy Fallback**: All functionality available via src/ modules
+
+### Service Architecture
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Main.py       │    │  Services       │    │   Legacy        │
+│  Orchestrator   │◄──►│  (Microservices)│◄──►│   Modules       │
+│                 │    │                 │    │   (src/)        │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### Available Services
+- **Data Service**: Time-series data management and caching
+- **Backtesting Service**: Historical strategy validation
+- **Notification Service**: Alert and communication management
+
+### Usage
+```bash
+# Use microservices (preferred)
+python main.py backtest --symbol BTC/USDT --timeframe 1d
+
+# Falls back to legacy modules if services unavailable
+# All existing functionality preserved during migration
+```
+
 ## 🎨 **NEW: Interactive Web UI**
 
 **Experience TradPal through a powerful web interface!**

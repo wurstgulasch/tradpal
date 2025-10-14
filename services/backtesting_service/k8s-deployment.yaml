@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backtesting-service
+  labels:
+    app: backtesting-service
+    component: trading-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backtesting-service
+  template:
+    metadata:
+      labels:
+        app: backtesting-service
+        component: trading-system
+    spec:
+      containers:
+      - name: backtesting-service
+        image: tradpal/backtesting-service:latest
+        ports:
+        - containerPort: 8001
+          name: http
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: REDIS_URL
+          value: "redis://redis-service:6379"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: output-storage
+          mountPath: /app/output
+      volumes:
+      - name: output-storage
+        persistentVolumeClaim:
+          claimName: backtesting-output-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backtesting-service
+  labels:
+    app: backtesting-service
+    component: trading-system
+spec:
+  selector:
+    app: backtesting-service
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backtesting-output-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

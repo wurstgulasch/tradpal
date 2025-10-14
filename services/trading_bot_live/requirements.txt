@@ -1,0 +1,16 @@
+# Trading Bot Live Service Requirements
+# Additional dependencies specific to this service
+
+# Async processing
+asyncio-mqtt>=0.11.0
+
+# Additional data processing (if needed beyond main requirements)
+# These are already included in main requirements.txt but listed here for clarity
+# pandas>=1.5.0
+# numpy>=1.21.0
+
+# Service monitoring (optional)
+psutil>=5.9.0
+
+# Configuration validation
+pydantic>=1.10.0

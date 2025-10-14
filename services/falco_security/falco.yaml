@@ -1,0 +1,65 @@
+# TradPal Falco Configuration
+# Runtime Security Monitoring for Zero-Trust Architecture
+
+# Falco configuration file
+# This file contains the main configuration for Falco runtime security monitoring
+
+# Global settings
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+
+# Log settings
+log_stderr: true
+log_syslog: false
+log_level: info
+
+# Falco engine settings
+buffered_outputs: false
+rule_matching: first
+
+# Output settings
+output_timeout: 2000
+
+# Webserver settings (disabled for containerized deployment)
+webserver:
+  enabled: false
+  listen_port: 8765
+  k8s_healthz_endpoint: /healthz
+  ssl_enabled: false
+
+# Metrics settings
+prometheus_metrics:
+  enabled: true
+  interval: 60s
+
+# Kubernetes settings
+k8s_meta:
+  enabled: true
+
+# Container runtime settings
+container_engine:
+  kind: docker
+
+# Rules file locations
+rules_files:
+  - /etc/falco/rules.d/tradpal_rules.yaml
+  - /etc/falco/rules.d/falco_rules.yaml
+
+# Watch files for rule changes
+watch_config_files: true
+
+# Syscall buffer settings
+syscall_event_drops:
+  actions:
+    - log
+    - alert
+  rate: 0.001
+  max_burst: 1
+  simulate_drops: false
+
+# Priority settings
+priority: debug
+
+# Time format
+time_format_iso_8601: true

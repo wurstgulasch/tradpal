@@ -1,0 +1,147 @@
+# TradPal Custom Falco Rules
+# Runtime Security Rules for Trading System Protection
+
+# Custom rules for TradPal trading system security monitoring
+
+- rule: Unauthorized API Key Access
+  desc: Detect unauthorized access to API keys or sensitive trading credentials
+  condition: >
+    (open_read or open_write) and
+    (fd.name contains "api_key" or fd.name contains "secret" or fd.name contains "credential") and
+    not (proc.name in (python, node, java) and proc.cmdline contains "tradpal")
+  output: >
+    Unauthorized access to sensitive file (file=%fd.name proc=%proc.name user=%user.name command=%proc.cmdline)
+  priority: WARNING
+  tags: [filesystem, trading, security]
+
+- rule: Suspicious Network Connection to Trading APIs
+  desc: Detect suspicious outbound connections to known trading exchanges
+  condition: >
+    outbound and
+    (fd.sip contains "binance" or fd.sip contains "kraken" or fd.sip contains "coinbase" or
+     fd.sip contains "bybit" or fd.sip contains "okx") and
+    not proc.name in (python, curl, wget) and
+    not proc.cmdline contains "tradpal"
+  output: >
+    Suspicious network connection to trading exchange (connection=%fd.name proc=%proc.name user=%user.name)
+  priority: WARNING
+  tags: [network, trading, anomaly]
+
+- rule: Unauthorized Process Execution in Trading Container
+  desc: Detect unauthorized process execution in trading service containers
+  condition: >
+    spawned_process and
+    container and
+    (container.name contains "tradpal" or container.name contains "trading") and
+    not proc.name in (python, python3, node, java, sh, bash) and
+    not proc.cmdline contains "tradpal"
+  output: >
+    Unauthorized process execution in trading container (proc=%proc.name user=%user.name container=%container.name)
+  priority: CRITICAL
+  tags: [process, container, trading, security]
+
+- rule: Sensitive Data Exfiltration Attempt
+  desc: Detect attempts to exfiltrate sensitive trading data
+  condition: >
+    (write or sendto) and
+    (fd.name contains ".csv" or fd.name contains ".json" or fd.name contains "trade" or fd.name contains "position") and
+    evt.dir = < and
+    not proc.name in (python, python3) and
+    not proc.cmdline contains "tradpal"
+  output: >
+    Potential data exfiltration attempt (file=%fd.name proc=%proc.name user=%user.name)
+  priority: CRITICAL
+  tags: [filesystem, data, exfiltration, trading]
+
+- rule: Unauthorized File Modification in Config Directory
+  desc: Detect unauthorized modifications to configuration files
+  condition: >
+    (open_write or create) and
+    (fd.name contains "/config/" or fd.name contains "/settings/") and
+    not proc.name in (python, python3, vi, vim, nano) and
+    not proc.cmdline contains "tradpal"
+  output: >
+    Unauthorized configuration file modification (file=%fd.name proc=%proc.name user=%user.name)
+  priority: WARNING
+  tags: [filesystem, config, security]
+
+- rule: Abnormal Memory Usage in Trading Service
+  desc: Detect abnormal memory usage that could indicate memory-based attacks
+  condition: >
+    proc.vmsize > 2000000000 and
+    (proc.name contains "tradpal" or container.name contains "trading") and
+    evt.type = switch
+  output: >
+    Abnormal memory usage detected (proc=%proc.name vmsize=%proc.vmsize user=%user.name container=%container.name)
+  priority: WARNING
+  tags: [memory, performance, security]
+
+- rule: Unauthorized Package Installation
+  desc: Detect unauthorized package installation attempts
+  condition: >
+    (spawned_process) and
+    (proc.cmdline contains "pip install" or proc.cmdline contains "npm install" or proc.cmdline contains "apt install") and
+    container and
+    (container.name contains "tradpal" or container.name contains "trading")
+  output: >
+    Unauthorized package installation attempt (proc=%proc.cmdline user=%user.name container=%container.name)
+  priority: CRITICAL
+  tags: [package, installation, security]
+
+- rule: Database Access Anomaly
+  desc: Detect anomalous database access patterns
+  condition: >
+    (open_read or open_write) and
+    (fd.name contains ".db" or fd.name contains "sqlite" or fd.name contains "redis") and
+    evt.count > 100 and
+    not proc.name in (python, python3) and
+    not proc.cmdline contains "tradpal"
+  output: >
+    Database access anomaly detected (file=%fd.name proc=%proc.name count=%evt.count user=%user.name)
+  priority: WARNING
+  tags: [database, anomaly, performance]
+
+- rule: Privileged Container Escape Attempt
+  desc: Detect attempts to escape from privileged containers
+  condition: >
+    (spawned_process) and
+    container and
+    container.privileged = true and
+    (proc.name contains "nsenter" or proc.name contains "docker" or proc.name contains "kubectl")
+  output: >
+    Privileged container escape attempt (proc=%proc.name user=%user.name container=%container.name)
+  priority: CRITICAL
+  tags: [container, privilege, escape, security]
+
+- rule: Unauthorized Cryptocurrency Wallet Access
+  desc: Detect unauthorized access to cryptocurrency wallet files
+  condition: >
+    (open_read or open_write) and
+    (fd.name contains "wallet" or fd.name contains ".key" or fd.name contains "keystore") and
+    not proc.name in (python, python3) and
+    not proc.cmdline contains "tradpal"
+  output: >
+    Unauthorized wallet access attempt (file=%fd.name proc=%proc.name user=%user.name)
+  priority: CRITICAL
+  tags: [cryptocurrency, wallet, security]
+
+# Notification rules for alerting
+- rule: High Priority Security Alert
+  desc: Alert on high-priority security events
+  condition: evt.priority >= CRITICAL
+  output: >
+    HIGH PRIORITY SECURITY ALERT: %evt.desc (proc=%proc.name user=%user.name container=%container.name)
+  priority: CRITICAL
+  tags: [alert, high-priority, security]
+
+- rule: Trading System Compromise Indicator
+  desc: Detect indicators of trading system compromise
+  condition: >
+    (spawned_process and proc.name contains "nc" or proc.name contains "netcat" or proc.name contains "ncat") or
+    (connect and fd.sip in (external_ip_ranges)) and
+    container and
+    (container.name contains "tradpal" or container.name contains "trading")
+  output: >
+    Potential trading system compromise (proc=%proc.name connection=%fd.name user=%user.name container=%container.name)
+  priority: CRITICAL
+  tags: [compromise, trading, security, alert]
