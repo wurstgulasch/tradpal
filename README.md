@@ -841,9 +841,27 @@ python setup_pypi.py test
 python setup_pypi.py publish
 ```
 
-## 📚 Examples & Tutorials
+## 📚 Documentation
 
-TradPal includes comprehensive Jupyter notebooks and example scripts to help you get started quickly.
+For detailed documentation, please refer to our comprehensive docs:
+
+### 📖 User Guides
+- **[User Guide](docs/USER_GUIDE.md)** - Complete user manual with tutorials and examples
+- **[Setup Guide](docs/SETUP_GUIDE.md)** - Detailed installation and configuration instructions
+- **[Contributing Guide](docs/CONTRIBUTING.md)** - How to contribute to the project
+
+### 🔧 Technical Documentation
+- **[Advanced ML Implementation](docs/ADVANCED_ML_IMPLEMENTATION.md)** - Deep dive into ML models and optimization
+- **[Implementation Summary](docs/IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
+- **[Performance Enhancements](docs/PERFORMANCE_ENHANCEMENTS.md)** - Performance optimization guide
+- **[Experimental Features](docs/EXPERIMENTAL_FEATURES.md)** - Research directions for market outperformance
+- **[Broker Integration](docs/BROKER_INTEGRATION.md)** - Autonomous trading system architecture
+
+### 🚀 Quick Links
+- [Web UI Screenshots](docs/screenshots/)
+- [API Documentation](docs/api/)
+- [Configuration Examples](config/)
+- [Example Scripts](examples/)
 
 ### 📓 Jupyter Notebooks
 

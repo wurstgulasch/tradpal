@@ -2,8 +2,7 @@
 
 ## Überblick
 Dieses Projekt, **TradPal**, ist ein modulares Trading-Indikator-System, primär optimiert für 1-Minuten-Charts, aber skalierbar auf höhere Timeframes (z. B. 1h, 1d, 1w, 1m). Es kombiniert technische Indikatoren (EMA, RSI, Bollinger Bands, ATR, ADX, Fibonacci-Extensions) mit Multi-Timeframe-Analyse (MTA), historischem Backtesting, Machine-Learning-Integration (PyTorch, Optuna) und genetischen Algorithmen für Signaloptimierung. Ziel ist die Generierung präziser Buy/Sell-Signale mit dynamischem Risikomanagement (Positionsgröße, Leverage, Stop-Loss, Take-Profit). Eine interaktive Web-UI (Streamlit/Plotly) ermöglicht Echtzeit-Überwachung und Backtesting. Das System ist containerisiert (Docker) und unterstützt Integrationen wie Telegram, Discord und Webhooks. Es ist für Kryptowährungen optimiert (via CCXT), mit primärem Fokus auf das Asset `BTC/USDT`, aber erweiterbar auf Forex und Aktien. Das Programm soll möglichst in der Conda-Umgebung `tradpal_env` (Python 3.10+) ausgeführt werden, um Abhängigkeiten wie TA-Lib, PyTorch und Optuna konsistent zu verwalten.
-**Aktueller Stand (Oktober 2025):** Version 2.5.1 fügt adaptive Optimierung, Ensemble-Methoden (Random Forest + Gradient Boosting) und Walk-Forward-Analyse hinzu. Copilot soll bei der Weiterentwicklung helfen, z. B. durch Verbesserung der ML-Modelle, Sicherheitsmaßnahmen und Community-Funktionen, mit Fokus auf `BTC/USDT`.
-Ziel ist nicht nur die Kernfunktionalität, sondern auch die Bereitstellung als nutzbares Open-Source-Projekt. Copilot soll bei der Erstellung von Releases (z. B. via GitHub Releases mit Binaries oder Docker-Images) und der Verbesserung der Skalierbarkeit (z. B. Push von Docker-Images zu Docker Hub, Kubernetes-Readiness) unterstützen. Aktuelle Priorität: Vorbereitung für Version 3.0.0 mit vollständiger Deployment-Automatisierung.
+**Aktueller Stand (Oktober 2025):** Version 3.0.0 mit Enterprise-Deployment, erweiterten ML-Funktionen und Monitoring. **NEUER FOKUS:** Entwicklung eines Outperformance-Systems mit ML-Modellen für eigenständige Marktüberlegenheit. Ziel ist ein Bot-System, das Märkte konsistent outperformt. Zukünftig: Modulare Broker-Integration für eigenständige Orderausführung (CCXT-Erweiterung für Live-Trading). Copilot soll bei der Entwicklung experimenteller Features für Outperformance helfen und Best Practices für skalierbare ML-Architekturen vorschlagen.
 
 ## Projektstruktur
 - `config/settings.py`: Zentrale Konfiguration für Indikator-Parameter, Timeframes, Exchanges, Assets (vorrangig `BTC/USDT`), Risikoparameter und Ausgabeformate. Skalierbare Parameter-Tabellen (z. B. `{'1m': {'ema_short': 9, 'ema_long': 21}, '1d': {'ema_short': 50, 'ema_long': 200}}`).
@@ -83,25 +82,29 @@ Copilot soll Vorschläge machen, fehlende Verzeichnisse zu ergänzen, z. B. für
 - **Community-Beispiel:** Erstelle ein Jupyter-Notebook in examples/ für BTC/USDT-Backtests (btc_usdt_backtest.ipynb, ml_training_guide.ipynb).
 
 ## Anweisungen für Copilot
-- **Prioritäten:** Fokussiere auf Verbesserung von ML-Modellen, Sicherheit, Testabdeckung und Community-Funktionen, mit Schwerpunkt auf `BTC/USDT` in `tradpal_env`. Fokussiere zusätzlich auf Releases (z. B. GitHub Releases mit Docker-Images), Community-Building (Issue-Templates, Promotion) und technische Upgrades (WebSocket, SHAP, Paper-Trading).
-- **Code-Vorschläge:** Schlage konkrete Implementierungen vor (z. B. neue Indikatoren, ML-Filter mit SHAP für Explainability). Schlage Implementierungen für fehlende Features vor, z. B. WebSocket in data_fetcher.py oder SHAP in ml_predictor.py.
-- **Tests:** Schreibe Unit-Tests (pytest) für neue Features; ziele auf >80% Coverage (aktuell 629+ Tests).
-- **Dokumentation:** Erweitere README.md mit Screenshots, Setup-Guide für `tradpal_env` und Backtest-Beispielen für `BTC/USDT`. Erweitere README mit Screenshots der Web-UI und Backtest-Ergebnissen; füge ein Setup-Tutorial für Kubernetes hinzu.
-- **Sicherheit:** Vorschläge für sichere Authentifizierung (z. B. OAuth statt admin/admin123) und Disclaimer für Trading-Risiken. Stelle sicher, dass sensible Daten nicht in Git-Repository gelangen.
-- **Lizenz:** Schlage eine Open-Source-Lizenz vor (z. B. MIT) und integriere in Repository.
-- **Optimierung:** Reduziere Abhängigkeiten (z. B. optionales ML-Modul); verbessere Caching (z. B. Redis). Verbessere Caching und reduziere Latenz; schlage Tests für Edge-Cases vor.
-- **Projektstruktur Best Practices:** Halte die modulare Struktur ein - `src/` für Kernlogik, `services/` für Service-Komponenten, `scripts/` für Utilities. Vermeide Verschachtelung von services/scripts unter src/. Neue Services gehören nach `services/`, neue Scripts nach `scripts/`, neue Kernmodule nach `src/`.
-- **Profile-System:** Achte darauf, dass Änderungen an Profilen beide Profile (.env.light und .env.heavy) berücksichtigen und validiert werden.
-- **Community und Deployment:** Vorschläge für PyPI-Publikation, Issue-Management und automatisierte Releases via CI/CD.
+- **PRIORITÄTEN (2025):** Fokus auf Outperformance-System Entwicklung - ML-Modelle für konsistente Marktüberlegenheit. Experimentelle Features für bessere Performance (Reinforcement Learning, Market Regime Detection, Advanced Feature Engineering). Vorbereitung für modulare Broker-Integration (CCXT-Erweiterung für Live-Trading). Zweite Priorität: Repository-Aufräumung nach Best Practices und Dokumentations-Reorganisation.
+- **Outperformance-Ziele:** Entwickle ML-Modelle, die Buy&Hold und traditionelle Indikatoren konsistent outperformen. Implementiere fortgeschrittene Feature-Engineering, Ensemble-Methoden und Risikomanagement für maximale Sharpe-Ratio und Profit-Faktor.
+- **Experimentelle Features:** Schlage neue Ansätze vor wie Reinforcement Learning für Trading, Market Regime Classification, Alternative Data Integration (Social Sentiment, On-Chain-Metrics), und Advanced Risk-Parity-Strategien.
+- **Code-Vorschläge:** Fokussiere auf skalierbare ML-Architekturen, Performance-Optimierung und robuste Error-Handling. Implementiere modulare Broker-Adapter für zukünftige Live-Trading-Integration.
+- **Tests:** Schreibe Unit-Tests für neue Features; ziele auf >85% Coverage (aktuell 629+ Tests). Erstelle Integrationstests für Outperformance-Workflows.
+- **Dokumentation:** Halte docs/ aktuell und reorganisiere README für Übersichtlichkeit. Erstelle separate Dokumentationen für komplexe Features.
+- **Sicherheit:** Implementiere sichere Broker-API-Integration mit Key-Management und Rate-Limiting.
+- **Lizenz:** MIT-Lizenz ist integriert.
+- **Optimierung:** Fokussiere auf ML-Performance (GPU-Training, Memory-Effizienz) und skalierbare Architekturen.
+- **Projektstruktur Best Practices:** Halte die modulare Struktur ein - `src/` für Kernlogik, `services/` für Service-Komponenten, `scripts/` für Utilities. Neue Broker-Integrationen nach `integrations/brokers/`.
+- **Community und Deployment:** PyPI-Publikation aktiv, automatisierte Releases via GitHub Actions verfügbar.
 
 ## Verbesserungsvorschläge
-1. **Machine Learning:** SHAP für ML-Explainability integriert; Ensemble-Methoden (Random Forest + Gradient Boosting) verfügbar; LSTM-Modelle für Zeitreihen verfügbar; WebSocket für Echtzeit-ML-Input hinzufügen, in `tradpal_env`.
-2. **Sicherheit:** Standard-Login ersetzt; OAuth/JWT hinzugefügt; Disclaimer für Risiken verfügbar; Vault standardmäßig. Entferne sensible Daten aus Git-Repository.
-3. **Tests:** Unit-Tests für `ml_trainer.py` verfügbar; Integrationstests für Workflows verfügbar; CI/CD für Releases erweitert (629+ Tests).
-4. **Performance:** Datenabruf für `BTC/USDT` optimiert (batchweise API-Calls); ML-Training auf GPU/Cloud auslagerbar; Redis-Caching integriert.
-5. **Community:** Issues für bekannte Bugs hinzugefügt; PRs gefördert; PyPI-Publikation verfügbar; Wiki erstellt.
-6. **Features:** Sentiment-Analyse integriert (via X/Twitter-Daten für `BTC/USDT`); Paper-Trading-Modus verfügbar; Portfolio-Management für Multi-Assets verfügbar.
-7. **Dokumentation:** README mit Screenshots/GIFs verfügbar; Jupyter-Notebook mit Beispiel-Backtests für `BTC/USDT` in `tradpal_env` verfügbar.
-8. **Profile-System:** Validierung und Dokumentation der light/heavy Profile verbessert für bessere Benutzerfreundlichkeit.
-9. **Deployment:** Releases mit Docker-Images verfügbar; Kubernetes-Deployment automatisiert.
-*Letzte Aktualisierung: 13.10.2025*
+1. **Outperformance-System:** Reinforcement Learning für Trading-Strategien; Market Regime Detection für adaptive Parameter; Alternative Data Integration (On-Chain-Metrics, Social Sentiment); Advanced Feature Engineering für bessere ML-Performance.
+2. **Broker-Integration:** Modulare Broker-Adapter-Architektur für CCXT-Erweiterung; Sichere API-Key-Management; Rate-Limiting und Error-Recovery; Paper-Trading-Modus als Übergang.
+3. **Experimentelle Features:** Ensemble-Modelle mit Confidence-Weighting; Walk-Forward-Optimierung mit Overfitting-Detection; GPU-Training für PyTorch-Modelle; Real-time Model Updating.
+4. **Machine Learning:** SHAP für ML-Explainability integriert; Ensemble-Methoden (Random Forest + Gradient Boosting) verfügbar; LSTM-Modelle für Zeitreihen verfügbar; WebSocket für Echtzeit-ML-Input hinzufügen, in `tradpal_env`.
+5. **Sicherheit:** Standard-Login ersetzt; OAuth/JWT hinzugefügt; Disclaimer für Risiken verfügbar; Vault standardmäßig. Entferne sensible Daten aus Git-Repository.
+6. **Tests:** Unit-Tests für `ml_trainer.py` verfügbar; Integrationstests für Workflows verfügbar; CI/CD für Releases erweitert (629+ Tests).
+7. **Performance:** Datenabruf für `BTC/USDT` optimiert (batchweise API-Calls); ML-Training auf GPU/Cloud auslagerbar; Redis-Caching integriert.
+8. **Community:** Issues für bekannte Bugs hinzugefügt; PRs gefördert; PyPI-Publikation verfügbar; Wiki erstellt.
+9. **Features:** Sentiment-Analyse integriert (via X/Twitter-Daten für `BTC/USDT`); Paper-Trading-Modus verfügbar; Portfolio-Management für Multi-Assets verfügbar.
+10. **Dokumentation:** README mit Screenshots/GIFs verfügbar; Jupyter-Notebook mit Beispiel-Backtests für `BTC/USDT` in `tradpal_env` verfügbar.
+11. **Profile-System:** Validierung und Dokumentation der light/heavy Profile verbessert für bessere Benutzerfreundlichkeit.
+12. **Deployment:** Releases mit Docker-Images verfügbar; Kubernetes-Deployment automatisiert.
+*Letzte Aktualisierung: 14.10.2025*
