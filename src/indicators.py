@@ -309,6 +309,10 @@ def calculate_indicators(df, config=None):
         periods = config['ema'].get('periods', [9, 21])
         for period in periods:
             df[f'EMA{period}'] = ema(df['close'], period)
+    
+    # Always calculate default EMA periods for backward compatibility
+    df['EMA9'] = ema(df['close'], 9)
+    df['EMA21'] = ema(df['close'], 21)
 
     # RSI
     if config.get('rsi', {}).get('enabled', False):

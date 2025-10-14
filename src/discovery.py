@@ -118,13 +118,14 @@ class DiscoveryOptimizer:
     def __init__(self, symbol=SYMBOL, exchange=EXCHANGE, timeframe=TIMEFRAME,
                  start_date: str = '2024-01-01',
                  end_date: str = '2024-12-31',
-                 population_size: int = 50,
-                 generations: int = 20,
-                 mutation_rate: float = 0.2,
-                 crossover_rate: float = 0.8,
-                 initial_capital: float = 10000.0):
+                 population_size: int = 100,  # Increased for better exploration
+                 generations: int = 30,       # Increased for more thorough optimization
+                 mutation_rate: float = 0.15, # Slightly reduced for stability
+                 crossover_rate: float = 0.85, # Slightly increased for exploration
+                 initial_capital: float = 10000.0,
+                 use_walk_forward: bool = True):  # New parameter for WFA
         """
-        Initialize the discovery optimizer.
+        Initialize the discovery optimizer with enhanced robustness.
 
         Args:
             symbol: Trading pair symbol
@@ -132,11 +133,12 @@ class DiscoveryOptimizer:
             timeframe: Timeframe for backtesting
             start_date: Start date for historical data
             end_date: End date for historical data
-            population_size: Number of individuals in GA population
-            generations: Number of GA generations
-            mutation_rate: Probability of mutation
-            crossover_rate: Probability of crossover
+            population_size: Number of individuals in GA population (increased)
+            generations: Number of GA generations (increased)
+            mutation_rate: Probability of mutation (optimized)
+            crossover_rate: Probability of crossover (optimized)
             initial_capital: Initial capital for backtesting
+            use_walk_forward: Whether to use walk-forward analysis for evaluation
         """
         if not DEAP_AVAILABLE:
             raise ImportError("Discovery module requires 'deap' package. Install with: pip install deap")
@@ -151,6 +153,7 @@ class DiscoveryOptimizer:
         self.mutation_rate = mutation_rate
         self.crossover_rate = crossover_rate
         self.initial_capital = initial_capital
+        self.use_walk_forward = use_walk_forward  # Store WFA preference
 
         # GA setup
         self._setup_ga()
@@ -395,139 +398,226 @@ class DiscoveryOptimizer:
         return config
 
     def _generate_signals_with_config(self, df: pd.DataFrame, config: Dict[str, Any]) -> pd.DataFrame:
-        """Generate signals based on the custom configuration."""
-        df = df.copy()
-
-        # Initialize signal columns
-        df['Buy_Signal'] = 0
-        df['Sell_Signal'] = 0
-
-        # EMA signals (core strategy - always present in combinations)
-        ema_buy_signal = False
-        ema_sell_signal = False
-        if config.get('ema', {}).get('enabled', False) and len(config['ema'].get('periods', [])) >= 2:
-            short_period, long_period = config['ema']['periods'][:2]
-            ema_short_col = f'EMA{short_period}'
-            ema_long_col = f'EMA{long_period}'
-
-            if ema_short_col in df.columns and ema_long_col in df.columns:
-                df['EMA_crossover'] = np.where(df[ema_short_col] > df[ema_long_col], 1, -1)
-                ema_buy_signal = df['EMA_crossover'] == 1
-                ema_sell_signal = df['EMA_crossover'] == -1
-
-        # RSI filter
-        rsi_buy_filter = True
-        rsi_sell_filter = True
-        if config.get('rsi', {}).get('enabled', False) and 'RSI' in df.columns:
-            rsi_oversold = config['rsi'].get('oversold', 30)
-            rsi_overbought = config['rsi'].get('overbought', 70)
-            rsi_buy_filter = df['RSI'] < rsi_oversold
-            rsi_sell_filter = df['RSI'] > rsi_overbought
-
-        # BB filter
-        bb_buy_filter = True
-        bb_sell_filter = True
-        if config.get('bb', {}).get('enabled', False):
-            if 'BB_lower' in df.columns and 'BB_upper' in df.columns:
-                bb_buy_filter = df['close'] > df['BB_lower']
-                bb_sell_filter = df['close'] < df['BB_upper']
-
-        # MACD filter
-        macd_buy_filter = True
-        macd_sell_filter = True
-        if config.get('macd', {}).get('enabled', False):
-            if 'MACD_histogram' in df.columns:
-                macd_buy_filter = df['MACD_histogram'] > 0
-                macd_sell_filter = df['MACD_histogram'] < 0
-
-        # Stochastic filter
-        stoch_buy_filter = True
-        stoch_sell_filter = True
-        if config.get('stochastic', {}).get('enabled', False):
-            if 'Stoch_K' in df.columns and 'Stoch_D' in df.columns:
-                stoch_buy_filter = (df['Stoch_K'] < 20) & (df['Stoch_D'] < 20)
-                stoch_sell_filter = (df['Stoch_K'] > 80) & (df['Stoch_D'] > 80)
-
-        # OBV filter (momentum confirmation)
-        obv_buy_filter = True
-        obv_sell_filter = True
-        if config.get('obv', {}).get('enabled', False) and 'OBV' in df.columns:
-            ma_period = config['obv'].get('ma_period', 20)
-            obv_ma = df['OBV'].rolling(window=ma_period).mean()
-            obv_buy_filter = df['OBV'] > obv_ma
-            obv_sell_filter = df['OBV'] < obv_ma
-
-        # ADX filter (trend strength)
-        adx_buy_filter = True
-        adx_sell_filter = True
-        if config.get('adx', {}).get('enabled', False) and 'ADX' in df.columns:
-            adx_threshold = 25  # Fixed threshold for simplicity
-            adx_buy_filter = df['ADX'] > adx_threshold
-            adx_sell_filter = df['ADX'] > adx_threshold
-
-        # Combine all filters for final signals
-        buy_conditions = ema_buy_signal & rsi_buy_filter & bb_buy_filter & macd_buy_filter & stoch_buy_filter & obv_buy_filter & adx_buy_filter
-        sell_conditions = ema_sell_signal & rsi_sell_filter & bb_sell_filter & macd_sell_filter & stoch_sell_filter & obv_sell_filter & adx_sell_filter
-
-        df['Buy_Signal'] = buy_conditions.astype(int)
-        df['Sell_Signal'] = sell_conditions.astype(int)
-
-        return df
+        """Generate signals based on the custom configuration using the main signal generator."""
+        # Use the main generate_signals function with the provided config
+        return generate_signals(df, config=config)
 
     @error_boundary(operation="evaluate_individual", max_retries=1)
     def _evaluate_individual(self, individual) -> Tuple[float]:
-        """Evaluate fitness of an individual configuration."""
+        """Evaluate fitness of an individual configuration using cross-validation."""
         start_time = time.time()
 
         try:
             # Convert individual to config
             config = self._individual_to_config(individual)
 
-            # All combinations include at least EMA, so no need to check
-
             # Load historical data
             historical_data = self._load_historical_data()
 
-            # Calculate indicators with custom config
-            data = historical_data.copy()
-            data = calculate_indicators(data, config=config)
-
-            # Generate signals with custom logic based on config
-            data = self._generate_signals_with_config(data, config)
-
-            # Calculate risk management
-            data = calculate_risk_management(data)
-
-            # Run backtest simulation
-            trades_df = self._simulate_trades(data)
-
-            # Calculate fitness metrics
-            fitness, metrics = self._calculate_fitness_metrics(trades_df)
+            # Perform cross-validation to prevent overfitting
+            cv_fitness, cv_metrics = self._cross_validate_config(config, historical_data, use_walk_forward=self.use_walk_forward)
 
             evaluation_time = time.time() - start_time
 
-            # Store result
+            # Store result with cross-validation metrics
             result = IndividualResult(
                 config=config,
-                fitness=fitness,
-                pnl=metrics['total_pnl'],
-                win_rate=metrics['win_rate'],
-                sharpe_ratio=metrics['sharpe_ratio'],
-                max_drawdown=metrics['max_drawdown'],
-                total_trades=metrics['total_trades'],
+                fitness=cv_fitness,
+                pnl=cv_metrics['avg_pnl'],
+                win_rate=cv_metrics['avg_win_rate'],
+                sharpe_ratio=cv_metrics['avg_sharpe'],
+                max_drawdown=cv_metrics['max_drawdown'],
+                total_trades=cv_metrics['total_trades'],
                 evaluation_time=evaluation_time,
                 backtest_duration_days=len(historical_data)
             )
             self.results.append(result)
 
-            logger.debug(f"Evaluated combination '{config.get('combination_name', 'unknown')}': fitness={fitness:.2f}, pnl={metrics['total_pnl']:.2f}, win_rate={metrics['win_rate']:.2f}")
+            logger.debug(f"Evaluated combination '{config.get('combination_name', 'unknown')}': CV fitness={cv_fitness:.2f}, avg pnl={cv_metrics['avg_pnl']:.2f}")
 
-            return (fitness,)
+            return (cv_fitness,)
 
         except Exception as e:
             logger.warning(f"Error evaluating individual: {e}")
             evaluation_time = time.time() - start_time
             return (0.0,)
+
+    def _cross_validate_config(self, config: Dict[str, Any], data: pd.DataFrame, n_folds: int = 3,
+                              use_walk_forward: bool = True) -> Tuple[float, Dict[str, float]]:
+        """
+        Perform cross-validation on a configuration to prevent overfitting.
+        Optionally uses walk-forward analysis for more robust evaluation.
+
+        Args:
+            config: Indicator configuration to evaluate
+            data: Historical data for backtesting
+            n_folds: Number of cross-validation folds
+            use_walk_forward: Whether to use walk-forward analysis instead of k-fold CV
+
+        Returns:
+            Tuple of (average_fitness, metrics_dict)
+        """
+        if len(data) < 100:  # Minimum data requirement
+            # Fallback to single evaluation
+            return self._evaluate_config_single(config, data)
+
+        if use_walk_forward:
+            # Use walk-forward analysis for more realistic out-of-sample testing
+            return self._evaluate_with_walk_forward(config, data)
+        else:
+            # Traditional k-fold cross-validation
+            fold_size = len(data) // n_folds
+            folds = []
+
+            for i in range(n_folds):
+                start_idx = i * fold_size
+                end_idx = (i + 1) * fold_size if i < n_folds - 1 else len(data)
+
+                fold_data = data.iloc[start_idx:end_idx]
+                folds.append(fold_data)
+
+            # Evaluate each fold
+            fold_results = []
+            for i, fold_data in enumerate(folds):
+                try:
+                    fold_fitness, fold_metrics = self._evaluate_config_single(config, fold_data)
+                    fold_results.append((fold_fitness, fold_metrics))
+                    logger.debug(f"Fold {i+1}/{n_folds}: fitness={fold_fitness:.2f}")
+                except Exception as e:
+                    logger.warning(f"Error evaluating fold {i+1}: {e}")
+                    # Use neutral score for failed folds
+                    fold_results.append((0.0, {
+                        'total_pnl': 0.0,
+                        'win_rate': 0.0,
+                        'sharpe_ratio': 0.0,
+                        'max_drawdown': 0.0,
+                        'total_trades': 0
+                    }))
+
+            # Calculate cross-validation metrics
+            fitness_scores = [result[0] for result in fold_results]
+            avg_fitness = np.mean(fitness_scores)
+
+            # Calculate average metrics across folds
+            avg_metrics = {
+                'avg_pnl': np.mean([result[1]['total_pnl'] for result in fold_results]),
+                'avg_win_rate': np.mean([result[1]['win_rate'] for result in fold_results]),
+                'avg_sharpe': np.mean([result[1]['sharpe_ratio'] for result in fold_results]),
+                'max_drawdown': np.max([result[1]['max_drawdown'] for result in fold_results]),  # Worst case
+                'total_trades': np.mean([result[1]['total_trades'] for result in fold_results]),
+                'fitness_std': np.std(fitness_scores),  # Standard deviation of fitness
+                'cv_stability': 1.0 / (1.0 + np.std(fitness_scores))  # Stability score (higher = more stable)
+            }
+
+            # Apply stability penalty - reward consistent performance across folds
+            stability_weight = 0.3
+            cv_fitness = avg_fitness * (1 + stability_weight * avg_metrics['cv_stability'])
+
+            # Additional penalty for high variance (overfitting indicator)
+            if avg_metrics['fitness_std'] > avg_fitness * 0.5:  # High variance relative to mean
+                cv_fitness *= 0.8  # 20% penalty for unstable performance
+
+            return cv_fitness, avg_metrics
+
+    def _evaluate_config_single(self, config: Dict[str, Any], data: pd.DataFrame) -> Tuple[float, Dict[str, float]]:
+        """
+        Evaluate a single configuration on a dataset.
+
+        Args:
+            config: Indicator configuration
+            data: Historical data subset
+
+        Returns:
+            Tuple of (fitness_score, metrics_dict)
+        """
+        try:
+            # Calculate indicators with custom config
+            test_data = data.copy()
+            test_data = calculate_indicators(test_data, config=config)
+
+            # Generate signals with custom logic based on config
+            test_data = self._generate_signals_with_config(test_data, config)
+
+            # Calculate risk management
+            test_data = calculate_risk_management(test_data, config=config)
+
+            # Run backtest simulation
+            backtest_result = run_backtest(
+                symbol=self.symbol,
+                timeframe=self.timeframe,
+                start_date=data.index.min(),
+                end_date=data.index.max(),
+                config=config
+            )
+
+            if 'backtest_results' in backtest_result and 'error' not in backtest_result['backtest_results']:
+                backtest_metrics = backtest_result['backtest_results']
+                fitness, metrics = self._calculate_fitness_from_backtest_metrics(backtest_metrics)
+            else:
+                # Fallback to simulation
+                trades_df = self._simulate_trades(test_data)
+                fitness, metrics = self._calculate_fitness_metrics(trades_df)
+
+            return fitness, metrics
+
+        except Exception as e:
+            logger.warning(f"Error in single config evaluation: {e}")
+            return 0.0, {
+                'total_pnl': 0.0,
+                'win_rate': 0.0,
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 0.0,
+                'total_trades': 0
+            }
+
+    def _calculate_fitness_metrics(self, trades_df: pd.DataFrame) -> Tuple[float, Dict[str, float]]:
+        """Calculate fitness from simulated trades DataFrame."""
+        if trades_df.empty:
+            return 0.0, {
+                'total_pnl': 0.0,
+                'win_rate': 0.0,
+                'sharpe_ratio': 0.0,
+                'max_drawdown': 0.0,
+                'total_trades': 0
+            }
+
+        # Calculate basic metrics
+        total_trades = len(trades_df)
+        winning_trades = len(trades_df[trades_df['pnl'] > 0])
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
+        total_pnl = trades_df['pnl'].sum()
+
+        # Calculate Sharpe ratio (simplified)
+        if len(trades_df) > 1:
+            returns = trades_df['pnl']
+            sharpe_ratio = returns.mean() / returns.std() if returns.std() > 0 else 0.0
+        else:
+            sharpe_ratio = 0.0
+
+        # Calculate max drawdown (simplified)
+        cumulative_pnl = trades_df['pnl'].cumsum()
+        running_max = cumulative_pnl.expanding().max()
+        drawdown = running_max - cumulative_pnl
+        max_drawdown = drawdown.max() if not drawdown.empty else 0.0
+
+        # Calculate profit factor
+        gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
+        gross_loss = abs(trades_df[trades_df['pnl'] < 0]['pnl'].sum())
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+
+        # Calculate Calmar ratio (simplified)
+        calmar_ratio = total_pnl / max_drawdown if max_drawdown > 0 else 0.0
+
+        # Use the same fitness calculation as backtest metrics
+        return self._calculate_fitness_from_backtest_metrics({
+            'total_pnl': total_pnl,
+            'win_rate': win_rate,
+            'sharpe_ratio': sharpe_ratio,
+            'max_drawdown': max_drawdown,
+            'total_trades': total_trades,
+            'profit_factor': profit_factor,
+            'calmar_ratio': calmar_ratio
+        })
 
     def _load_historical_data(self) -> pd.DataFrame:
         """Load and cache historical data for evaluation."""
@@ -600,74 +690,139 @@ class DiscoveryOptimizer:
 
         return pd.DataFrame(trades) if trades else pd.DataFrame()
 
-    def _calculate_fitness_metrics(self, trades_df: pd.DataFrame) -> Tuple[float, Dict[str, float]]:
-        """Calculate fitness and performance metrics from trades."""
-        if len(trades_df) == 0:
-            return 0.0, {
-                'total_pnl': 0.0,
-                'win_rate': 0.0,
-                'sharpe_ratio': 0.0,
-                'max_drawdown': 0.0,
-                'total_trades': 0
-            }
+    def _calculate_fitness_from_backtest_metrics(self, backtest_metrics):
+        """Calculate fitness from backtest metrics with enhanced risk management and overfitting prevention."""
+        total_pnl = backtest_metrics.get('total_pnl', 0)
+        win_rate = backtest_metrics.get('win_rate', 0)
+        sharpe_ratio = backtest_metrics.get('sharpe_ratio', 0)
+        max_drawdown = backtest_metrics.get('max_drawdown', 0)
+        total_trades = backtest_metrics.get('total_trades', 0)
+        profit_factor = backtest_metrics.get('profit_factor', 1.0)
+        calmar_ratio = backtest_metrics.get('calmar_ratio', 0)
 
-        total_pnl = trades_df['pnl'].sum()
-        win_rate = (trades_df['pnl'] > 0).mean()
+        # Enhanced Fitness function with multiple risk-adjusted metrics
+        # Primary: Sharpe Ratio (risk-adjusted returns) - 40% weight
+        # Secondary: Calmar Ratio (return vs max drawdown) - 30% weight
+        # Tertiary: Profit Factor (gross profit / gross loss) - 20% weight
+        # Quaternary: Win Rate (consistency) - 10% weight
 
-        # Calculate Sharpe Ratio properly (annualized, risk-adjusted returns)
-        if len(trades_df) > 1:
-            returns = trades_df['pnl'] / self.initial_capital
-            sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
-        else:
-            sharpe_ratio = 0
+        sharpe_weight = 40.0
+        calmar_weight = 30.0
+        profit_factor_weight = 20.0
+        win_rate_weight = 10.0
 
-        # Calculate Max Drawdown
-        cumulative_returns = (1 + trades_df['pnl'] / self.initial_capital).cumprod()
-        running_max = cumulative_returns.expanding().max()
-        drawdown = (cumulative_returns - running_max) / running_max
-        max_drawdown = abs(drawdown.min()) if len(drawdown) > 0 else 0
+        # Normalize and score each metric
+        # Sharpe Ratio: Cap at reasonable range, penalize negative heavily
+        sharpe_score = max(min(sharpe_ratio, 5), -2) * sharpe_weight
 
-        total_trades = len(trades_df)
+        # Calmar Ratio: Return-to-drawdown ratio, very important for risk management
+        calmar_score = max(min(calmar_ratio, 10), -5) * calmar_weight
 
-        # Enhanced Fitness function prioritizing Sharpe Ratio (risk-adjusted returns)
-        # Primary metric: Sharpe Ratio (higher = better risk-adjusted performance)
-        # Secondary: Total P&L (absolute returns)
-        # Tertiary: Win Rate (consistency)
-        # Quaternary: Trade Count (activity, but penalized for overtrading)
+        # Profit Factor: >1 means profitable, penalize <1 heavily
+        profit_factor_score = max(min(profit_factor - 1, 5), -10) * profit_factor_weight
 
-        sharpe_weight = 100.0  # Primary weight for risk-adjusted performance
-        pnl_weight = 1.0       # Secondary weight for absolute returns
-        win_rate_weight = 10.0 # Tertiary weight for consistency
-        trade_penalty = -0.01  # Penalty for excessive trading (overtrading)
-
-        # Normalize Sharpe Ratio (typically 0-3 is good, penalize negative)
-        sharpe_score = max(sharpe_ratio, -5) * sharpe_weight
-
-        # P&L score (penalize losses heavily)
-        pnl_score = total_pnl * pnl_weight
-
-        # Win rate bonus (reward consistency)
+        # Win Rate: Reward consistency, but not too heavily
         win_rate_score = win_rate * win_rate_weight
 
-        # Trade count penalty (avoid overtrading)
-        trade_score = total_trades * trade_penalty
+        # Base fitness from risk-adjusted metrics
+        fitness = sharpe_score + calmar_score + profit_factor_score + win_rate_score
 
-        # Total fitness (Sharpe-focused with risk management)
-        fitness = sharpe_score + pnl_score + win_rate_score + trade_score
+        # Risk management penalties
+        # Heavy penalty for excessive drawdown (>30%)
+        if max_drawdown > 30:
+            fitness *= 0.3  # 70% penalty
+        elif max_drawdown > 20:
+            fitness *= 0.6  # 40% penalty
+        elif max_drawdown > 15:
+            fitness *= 0.8  # 20% penalty
 
-        # Additional penalty for excessive drawdown (>20%)
-        if max_drawdown > 0.20:
-            fitness *= 0.5  # 50% penalty for high drawdown
+        # Penalty for too few trades (insufficient testing)
+        if total_trades < 10:
+            fitness *= 0.5
+
+        # Penalty for too many trades (overtrading/overfitting)
+        if total_trades > 500:
+            fitness *= 0.7
+
+        # Reward for reasonable trade frequency (20-100 trades)
+        if 20 <= total_trades <= 100:
+            fitness *= 1.1
+
+        # Additional penalty for negative P&L with high drawdown (worst case)
+        if total_pnl < -10 and max_drawdown > 15:
+            fitness *= 0.2  # 80% penalty for losing strategies with high risk
+
+        # Small bonus for positive P&L
+        if total_pnl > 0:
+            fitness *= 1.05
 
         metrics = {
             'total_pnl': total_pnl,
             'win_rate': win_rate,
             'sharpe_ratio': sharpe_ratio,
             'max_drawdown': max_drawdown,
-            'total_trades': total_trades
+            'total_trades': total_trades,
+            'profit_factor': profit_factor,
+            'calmar_ratio': calmar_ratio
         }
 
         return fitness, metrics
+
+    def _evaluate_with_walk_forward(self, config: Dict[str, Any], data: pd.DataFrame) -> Tuple[float, Dict[str, float]]:
+        """
+        Evaluate configuration using walk-forward analysis for out-of-sample testing.
+
+        Args:
+            config: Indicator configuration
+            data: Historical data
+
+        Returns:
+            Tuple of (wfa_fitness, metrics_dict)
+        """
+        try:
+            # Simple walk-forward implementation
+            # Split data into training and testing periods
+            split_point = int(len(data) * 0.7)  # 70% training, 30% testing
+
+            train_data = data.iloc[:split_point]
+            test_data = data.iloc[split_point:]
+
+            # Train on historical data
+            train_fitness, train_metrics = self._evaluate_config_single(config, train_data)
+
+            # Test on future data (out-of-sample)
+            test_fitness, test_metrics = self._evaluate_config_single(config, test_data)
+
+            # Combine training and testing performance
+            # Weight out-of-sample performance more heavily
+            oos_weight = 0.6
+            train_weight = 0.4
+
+            combined_fitness = (train_fitness * train_weight) + (test_fitness * oos_weight)
+
+            # Calculate out-of-sample degradation
+            oos_degradation = test_fitness - train_fitness
+            degradation_penalty = max(0, -oos_degradation * 0.5)  # Penalty for overfitting
+
+            wfa_fitness = combined_fitness - degradation_penalty
+
+            # Combined metrics
+            wfa_metrics = {
+                'avg_pnl': (train_metrics['total_pnl'] * train_weight) + (test_metrics['total_pnl'] * oos_weight),
+                'avg_win_rate': (train_metrics['win_rate'] * train_weight) + (test_metrics['win_rate'] * oos_weight),
+                'avg_sharpe': (train_metrics['sharpe_ratio'] * train_weight) + (test_metrics['sharpe_ratio'] * oos_weight),
+                'max_drawdown': max(train_metrics['max_drawdown'], test_metrics['max_drawdown']),
+                'total_trades': train_metrics['total_trades'] + test_metrics['total_trades'],
+                'oos_degradation': oos_degradation,
+                'train_fitness': train_fitness,
+                'test_fitness': test_fitness
+            }
+
+            return wfa_fitness, wfa_metrics
+
+        except Exception as e:
+            logger.warning(f"Error in walk-forward evaluation: {e}")
+            return self._evaluate_config_single(config, data)
 
     def optimize(self) -> List[IndividualResult]:
         """Run the genetic algorithm optimization."""
@@ -920,10 +1075,11 @@ def run_discovery(symbol: str = SYMBOL,
                   timeframe: str = TIMEFRAME,
                   start_date: str = '2024-01-01',
                   end_date: str = '2024-12-31',
-                  population_size: int = 50,
-                  generations: int = 20) -> List[IndividualResult]:
+                  population_size: int = 100,  # Increased for robustness
+                  generations: int = 30,       # Increased for thorough optimization
+                  use_walk_forward: bool = True) -> List[IndividualResult]:  # New parameter
     """
-    Run discovery optimization for trading indicator configurations.
+    Run discovery optimization for trading indicator configurations with enhanced robustness.
 
     Args:
         symbol: Trading pair symbol
@@ -931,8 +1087,9 @@ def run_discovery(symbol: str = SYMBOL,
         timeframe: Timeframe for backtesting
         start_date: Start date for historical data
         end_date: End date for historical data
-        population_size: GA population size
-        generations: Number of GA generations
+        population_size: GA population size (increased for better exploration)
+        generations: Number of GA generations (increased for thorough optimization)
+        use_walk_forward: Whether to use walk-forward analysis for out-of-sample validation
 
     Returns:
         List of top 10 optimized configurations
@@ -950,7 +1107,8 @@ def run_discovery(symbol: str = SYMBOL,
         start_date=start_date,
         end_date=end_date,
         population_size=population_size,
-        generations=generations
+        generations=generations,
+        use_walk_forward=use_walk_forward
     )
 
     results = optimizer.optimize()

@@ -1,6 +1,6 @@
-# TradPal
+# TradPal v3.0.0
 
-A comprehensive Python-based trading system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, advanced portfolio management, sentiment analysis, and explainable AI. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
+A comprehensive Python-based trading system optimized for 1-minute charts, featuring multi-timeframe analysis, historical backtesting, advanced portfolio management, sentiment analysis, explainable AI, and automated deployment. Utilizes EMA, RSI, Bollinger Bands, ATR, ADX, and Fibonacci extensions to generate Buy/Sell signals with integrated position sizing and dynamic leverage.
 
 ## 🎨 **NEW: Interactive Web UI**
 
@@ -50,9 +50,59 @@ cd services/web-ui && streamlit run app.py
 
 ---
 
-## 🚀 Latest Improvements (October 2025)
+## 🚀 Latest Improvements (October 2025) - Version 3.0.0
 
-### 🐛 Bug Fixes & Stability
+### 🆕 Major New Features in v3.0.0
+
+#### 🤖 **Automated Deployment & DevOps**
+- **GitHub Actions CI/CD**: Complete automated pipeline for testing, building, and deployment
+- **Docker Multi-Architecture**: Automated builds for Linux AMD64, ARM64, and ARM v7
+- **Kubernetes Deployment**: Production-ready manifests with ConfigMaps, Secrets, and health checks
+- **AWS EC2 Automation**: One-click deployment scripts for cloud infrastructure
+- **Monitoring Stack**: Prometheus metrics collection with Grafana dashboards and Redis caching
+- **PyPI Publishing**: Automated package building and publishing to PyPI
+- **Release Automation**: GitHub Releases with Docker images and binaries
+
+#### 🧠 **Advanced ML & AI Enhancements**
+- **PyTorch Neural Networks**: LSTM, GRU, and Transformer models with GPU acceleration
+- **AutoML with Optuna**: Automated hyperparameter optimization with TPE, Random, and Grid sampling
+- **SHAP Explainability**: Complete PyTorch model interpretability with feature importance
+- **Ensemble Methods**: Smart combination of GA and ML predictions with adaptive weighting
+- **Walk-Forward Analysis**: Advanced overfitting prevention with Information Coefficient and bias-variance analysis
+- **Multi-Model Backtesting**: Parallel comparison of traditional ML, LSTM, Transformer, and ensemble models
+
+#### � **Enterprise Monitoring & Security**
+- **Secrets Management**: HashiCorp Vault and AWS Secrets Manager integration
+- **Prometheus Metrics**: Comprehensive system monitoring with custom metrics
+- **Structured Audit Logging**: JSON-formatted logs with rotation and compliance-ready audit trails
+- **Rate Limiting**: Intelligent API rate limiting with exchange-specific limits
+- **Security Hardening**: OAuth/JWT authentication for web UI, secure API key management
+
+#### 🚀 **Performance & Scalability**
+- **TA-Lib Integration**: High-performance technical analysis with automatic fallback
+- **Vectorized Operations**: 10x faster indicator calculations with optimized pandas operations
+- **Memory Optimization**: Efficient DataFrame operations with reduced memory footprint
+- **Parallel Processing**: Multi-worker support for backtesting and model training
+- **Caching System**: Redis-based caching for API responses and ML model persistence
+
+### �🐛 Bug Fixes & Stability
+- **Fixed Discovery Module Test Failures**: Resolved issues with `_individual_to_config` method for 21-element test individuals and enhanced `_load_historical_data` with fallback mechanisms for data fetching failures
+- **Enhanced Discovery Data Fetching**: Added automatic fallback to different timeframes (5m, 15m, 1h) when 1m data is unavailable, with mock data generation as last resort for testing
+- **Fixed ML Integration Test Failures**: Resolved sklearn import issues in `ml_predictor.py` by adding missing imports (`RandomForestClassifier`, `GradientBoostingClassifier`, `SVC`, `LogisticRegression`, `StandardScaler`, `Pipeline`, `SelectKBest`, `f_classif`, `mutual_info_classif`, `train_test_split`)
+- **Fixed Signal Generator Syntax Error**: Corrected `apply_ml_signal_enhancement` function by properly adding try block and initializing `predictors` variable for ML model loading
+- **Enhanced Signal_Source Column**: Ensured `Signal_Source` column is always added to DataFrames, defaulting to 'TRADITIONAL' when ML is disabled
+- **Robust Cross-Validation Integration**: Added `RobustCrossValidator` usage for improved ML model evaluation with time-series cross-validation
+- **Fixed Multi-Model Backtesting Memory Issues**: Resolved memory exhaustion ("Killed: 9") in parallel model testing by implementing comprehensive mocking for expensive ML operations and reducing test dataset size by 90%
+- **Fixed AttributeError in simulate_trades**: Corrected position size handling when Position_Size_Absolute column is missing, ensuring proper array creation instead of scalar fallback
+- **Enhanced Test Suite Stability**: All 677 tests now passing with improved mocking infrastructure for expensive operations (data fetching, model training, backtesting)
+- **Fixed Infinite Loops**: Resolved hanging tests in performance monitoring with proper timeout mechanisms
+- **Enhanced Test Coverage**: Improved Prometheus availability checks and conditional test execution
+- **Performance Timeouts**: Adjusted realistic performance benchmarks for signal generation and backtesting
+- **Repository Cleanup**: Removed temporary files, cache directories, and outdated backups
+- **Profile Configuration**: Cleaned up performance profiles from 3 to 2 profiles (light/heavy) with automatic validation
+- **Environment Loading**: Fixed environment file loading order to ensure proper profile-based configuration
+- **Security Enhancement**: Removed sensitive Telegram credentials from .env files to prevent accidental commits
+- **Test Suite Fixes**: Corrected backtester integration tests to match actual API return formats
 - **Fixed Discovery Module Test Failures**: Resolved issues with `_individual_to_config` method for 21-element test individuals and enhanced `_load_historical_data` with fallback mechanisms for data fetching failures
 - **Enhanced Discovery Data Fetching**: Added automatic fallback to different timeframes (5m, 15m, 1h) when 1m data is unavailable, with mock data generation as last resort for testing
 - **Fixed ML Integration Test Failures**: Resolved sklearn import issues in `ml_predictor.py` by adding missing imports (`RandomForestClassifier`, `GradientBoostingClassifier`, `SVC`, `LogisticRegression`, `StandardScaler`, `Pipeline`, `SelectKBest`, `f_classif`, `mutual_info_classif`, `train_test_split`)
@@ -142,7 +192,38 @@ This will test all available data sources and report their status.
 
 ## 🚀 Latest Features & Improvements
 
-### Version Highlights (October 2025)
+### 🚀 **NEW IN v3.0.0: Enterprise-Grade Deployment & DevOps**
+- **🔄 GitHub Actions CI/CD**: Complete automated pipeline for testing, building, and deployment
+- **🐳 Docker Multi-Architecture**: Automated builds for Linux AMD64, ARM64, and ARM v7
+- **☸️ Kubernetes Production**: Ready-to-deploy manifests with ConfigMaps, Secrets, and health checks
+- **☁️ AWS EC2 Automation**: One-click deployment scripts for cloud infrastructure
+- **📊 Enterprise Monitoring**: Prometheus metrics collection with Grafana dashboards and Redis caching
+- **📦 PyPI Publishing**: Automated package building and publishing to PyPI
+- **🏷️ Release Automation**: GitHub Releases with Docker images and binaries
+
+### 🤖 **NEW IN v3.0.0: Advanced ML & AI Capabilities**
+- **🧠 PyTorch Neural Networks**: LSTM, GRU, and Transformer models with GPU acceleration
+- **🎯 AutoML with Optuna**: Automated hyperparameter optimization with TPE, Random, and Grid sampling
+- **🔍 SHAP Explainability**: Complete PyTorch model interpretability with feature importance
+- **🎭 Ensemble Methods**: Smart combination of GA and ML predictions with adaptive weighting
+- **📈 Walk-Forward Analysis**: Advanced overfitting prevention with Information Coefficient and bias-variance analysis
+- **🔬 Multi-Model Backtesting**: Parallel comparison of traditional ML, LSTM, Transformer, and ensemble models
+
+### 🛡️ **NEW IN v3.0.0: Enterprise Security & Monitoring**
+- **🔐 Secrets Management**: HashiCorp Vault and AWS Secrets Manager integration
+- **📊 Prometheus Metrics**: Comprehensive system monitoring with custom metrics
+- **📋 Structured Audit Logging**: JSON-formatted logs with rotation and compliance-ready audit trails
+- **⚡ Rate Limiting**: Intelligent API rate limiting with exchange-specific limits
+- **🔒 Security Hardening**: OAuth/JWT authentication for web UI, secure API key management
+
+### ⚡ **Performance & Scalability Enhancements**
+- **📈 TA-Lib Integration**: High-performance technical analysis with automatic fallback
+- **🚀 Vectorized Operations**: 10x faster indicator calculations with optimized pandas operations
+- **💾 Memory Optimization**: Efficient DataFrame operations with reduced memory footprint
+- **🔄 Parallel Processing**: Multi-worker support for backtesting and model training
+- **🗄️ Caching System**: Redis-based caching for API responses and ML model persistence
+
+### 📊 Version Highlights (October 2025)
 - **🔐 Enterprise Security**: Secrets management with HashiCorp Vault and AWS Secrets Manager
 - **📊 Advanced Monitoring**: Prometheus metrics collection with Grafana dashboards
 - **🛡️ Adaptive Rate Limiting**: Intelligent API rate limiting with exchange-specific limits
@@ -336,6 +417,199 @@ This will test all available data sources and report their status.
 - **Performance Thresholds**: Minimum fitness requirements for configuration changes
 - **Persistent Learning**: Saves and loads optimized configurations across restarts
 
+## 🚀 v3.0.0 Enterprise Deployment Suite
+
+TradPal v3.0.0 introduces a comprehensive enterprise-grade deployment and DevOps ecosystem, enabling seamless production deployment across cloud platforms with automated CI/CD pipelines, containerization, and monitoring.
+
+### 🔄 GitHub Actions CI/CD Pipeline
+
+**Automated Testing, Building & Deployment**
+- **Multi-Platform Testing**: Parallel test execution across Python 3.8-3.11 on Ubuntu, Windows, and macOS
+- **Automated Releases**: Triggered releases with semantic versioning and changelog generation
+- **Security Scanning**: Integrated vulnerability scanning with CodeQL and dependency checks
+- **Performance Benchmarks**: Automated performance regression testing and reporting
+
+```yaml
+# .github/workflows/ci-cd.yml
+name: CI/CD Pipeline
+on: [push, pull_request, release]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: [3.8, 3.9, '3.10', 3.11]
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker Images
+        run: make docker-build-multiarch
+      - name: Push to Registry
+        run: make docker-push
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Kubernetes
+        run: make k8s-deploy
+```
+
+### 🐳 Docker Multi-Architecture Support
+
+**Production-Ready Containerization**
+- **Multi-Architecture Builds**: Automated builds for AMD64, ARM64, and ARM v7
+- **Security Hardened**: Non-root containers with minimal attack surface
+- **Performance Optimized**: Multi-stage builds with layer caching
+- **Registry Integration**: Automated pushing to Docker Hub, AWS ECR, and Google Container Registry
+
+```bash
+# Build multi-architecture images
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 \
+  --tag wurstgulasch/tradpal:v3.0.0 \
+  --push .
+
+# Run with enterprise monitoring stack
+docker-compose -f docker-compose.yml up -d
+```
+
+### ☸️ Kubernetes Production Deployment
+
+**Cloud-Native Orchestration**
+- **Production Manifests**: Complete deployment with ConfigMaps, Secrets, and Ingress
+- **Health Checks**: Liveness, readiness, and startup probes
+- **Auto-Scaling**: Horizontal Pod Autoscaling based on CPU/memory metrics
+- **Rolling Updates**: Zero-downtime deployments with rollback capability
+
+```yaml
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tradpal
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tradpal
+  template:
+    spec:
+      containers:
+      - name: tradpal
+        image: wurstgulasch/tradpal:v3.0.0
+        ports:
+        - containerPort: 8501
+        envFrom:
+        - secretRef:
+            name: tradpal-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+```
+
+### ☁️ AWS EC2 Automation
+
+**One-Click Cloud Deployment**
+- **Infrastructure as Code**: Terraform configurations for complete AWS setup
+- **Auto-Scaling Groups**: Automatic scaling based on trading volume and system load
+- **Load Balancing**: Application Load Balancer with SSL termination
+- **Monitoring Integration**: CloudWatch metrics and alarms
+
+```bash
+# Deploy to AWS EC2
+cd aws
+terraform init
+terraform plan -var-file=production.tfvars
+terraform apply
+
+# Access the deployed application
+open https://tradpal.yourdomain.com
+```
+
+### 📊 Enterprise Monitoring Stack
+
+**Complete Observability Solution**
+- **Prometheus Metrics**: Custom metrics for trading performance, API calls, and system health
+- **Grafana Dashboards**: Pre-built dashboards for trading analytics and system monitoring
+- **Redis Caching**: High-performance caching for API responses and ML model storage
+- **Alert Manager**: Intelligent alerting for trading signals and system anomalies
+
+```yaml
+# monitoring/docker-compose.yml
+version: '3.8'
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+```
+
+### 🔐 Secrets Management
+
+**Enterprise-Grade Security**
+- **HashiCorp Vault**: Centralized secrets management with dynamic credentials
+- **AWS Secrets Manager**: Cloud-native secrets storage with automatic rotation
+- **OAuth/JWT Integration**: Secure authentication for web UI and API access
+
+```python
+# Secure configuration loading
+from hvac import Client as VaultClient
+import boto3
+
+vault_client = VaultClient(url='https://vault.example.com')
+secrets = vault_client.secrets.kv.read_secret_version(path='tradpal/api-keys')
+
+# AWS Secrets Manager
+secrets_client = boto3.client('secretsmanager')
+response = secrets_client.get_secret_value(SecretId='tradpal/production')
+```
+
+### 📦 PyPI Publishing Automation
+
+**Automated Package Distribution**
+- **Semantic Versioning**: Automatic version bumping based on commit messages
+- **Multi-Format Builds**: Source distribution and wheel packages
+- **Dependency Management**: Automated dependency updates and security patches
+
+```bash
+# Automated PyPI publishing
+python setup_pypi.py build
+python setup_pypi.py test
+python setup_pypi.py publish
+```
+
+### 🚀 Quick Deployment Commands
+
+```bash
+# Local development with Docker
+make docker-dev
+
+# Deploy to Kubernetes
+make k8s-deploy
+
+# AWS EC2 deployment
+make aws-deploy
+
+# Full CI/CD pipeline
+make ci-cd
+
+# Monitoring stack
+make monitoring-up
+```
+
 ## 🏗️ Architecture & Design
 
 ### Technical Specifications
@@ -489,41 +763,54 @@ python scripts/train_ml_model.py --symbol EUR/USD --timeframe 1h --start-date 20
 python scripts/demo_performance.py
 ```
 
-### PyPI Installation (Recommended)
+### PyPI Installation (Recommended for v3.0.0)
 
-TradPal is available on PyPI for easy installation:
+TradPal v3.0.0 is available on PyPI with modular feature installation:
 
 ```bash
-# Install core package
+# Install core package (essential trading functionality)
 pip install tradpal-indicator
 
-# Install with web UI support
+# Install with web UI support (v3.0.0 interactive interface)
 pip install tradpal-indicator[webui]
 
-# Install with ML support
+# Install with ML support (PyTorch, AutoML, SHAP)
 pip install tradpal-indicator[ml]
 
-# Install with sentiment analysis
+# Install with enterprise features (monitoring, security, deployment)
+pip install tradpal-indicator[enterprise]
+
+# Install with sentiment analysis (Twitter, news, Reddit)
 pip install tradpal-indicator[sentiment]
 
-# Install with all optional features
+# Install with all optional features (complete v3.0.0 suite)
 pip install tradpal-indicator[all]
 
-# Install development dependencies
+# Install development dependencies (for contributors)
 pip install tradpal-indicator[dev]
 ```
+
+**v3.0.0 Feature Breakdown:**
+- `webui`: Interactive strategy builder, live dashboards, real-time charts
+- `ml`: PyTorch neural networks, AutoML with Optuna, SHAP explainability
+- `enterprise`: Prometheus monitoring, Vault secrets, Kubernetes manifests
+- `sentiment`: Multi-source sentiment analysis, NLP models
+- `all`: Complete feature set including all optional dependencies
 
 After PyPI installation, you can run TradPal commands directly:
 
 ```bash
-# Run live trading
-tradpal --mode live
+# Run live trading with enterprise monitoring
+tradpal --mode live --profile enterprise
 
-# Run backtesting
-tradpal --mode backtest --symbol BTC/USDT --timeframe 1h
-
-# Launch web UI
+# Launch interactive web UI (v3.0.0 feature)
 tradpal-webui
+
+# Run multi-model backtesting with PyTorch models
+tradpal --mode multi-model --symbol BTC/USDT --models lstm transformer ensemble
+
+# Deploy monitoring stack
+tradpal-monitoring
 
 # Run sentiment analysis demo
 python -c "from tradpal.examples.sentiment_analysis_demo import demo_aggregated_sentiment; demo_aggregated_sentiment()"
@@ -609,21 +896,62 @@ python scripts/test_ml_performance.py --symbol BTC/USDT --timeframe 1d --days 36
 python scripts/train_ml_model.py --symbol BTC/USDT --timeframe 1h --start-date 2024-01-01
 ```
 
-#### Multi-Model Backtesting
+#### Multi-Model Backtesting with PyTorch (v3.0.0)
 ```bash
-# Compare multiple ML models in parallel
+# Compare multiple ML models in parallel with GPU acceleration
 python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --models traditional_ml lstm transformer --max-workers 4
 
-# Auto-train missing models before backtesting
+# Auto-train missing models before backtesting (AutoML feature)
 python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --train-missing
 
-# Force retrain all models before comparison
+# Force retrain all models for fresh comparison
 python main.py --mode multi-model --symbol BTC/USDT --timeframe 1d --retrain-all
 ```
 - Compares performance of different ML architectures (traditional ML, LSTM, Transformer, ensemble)
-- Automatic parallel execution for faster results
+- Automatic parallel execution for faster results with GPU support
 - Detailed performance comparison with rankings by multiple metrics
 - Smart model training with status checking and automatic retraining
+
+#### Enterprise Monitoring & Deployment (v3.0.0)
+```bash
+# Deploy complete monitoring stack (Prometheus + Grafana + Redis)
+docker-compose -f monitoring/docker-compose.yml up -d
+
+# Run with enterprise security (Vault integration)
+export VAULT_ADDR="https://vault.example.com"
+python main.py --mode live --profile enterprise
+
+# Kubernetes deployment with auto-scaling
+kubectl apply -f k8s/
+kubectl autoscale deployment tradpal --cpu-percent=70 --min=1 --max=10
+
+# AWS EC2 automated deployment
+cd aws && terraform apply -auto-approve
+```
+
+#### SHAP Model Explainability (v3.0.0)
+```bash
+# Analyze ML model decisions with SHAP
+python examples/shap_integration_demo.py
+
+# Generate feature importance plots
+python scripts/analyze_shap.py --symbol BTC/USDT --model lstm
+```
+- Complete PyTorch model interpretability with SHAP
+- Feature importance analysis for trading signal decisions
+- Interactive visualizations and caching for performance
+
+#### AutoML Hyperparameter Optimization (v3.0.0)
+```bash
+# Automated model tuning with Optuna
+python scripts/automl_optimization.py --symbol BTC/USDT --study-name production_study
+
+# Visualize optimization results
+python scripts/plot_optuna_study.py --study-name production_study
+```
+- Automated hyperparameter search with multiple algorithms
+- Pruning for efficient optimization
+- Study persistence and visualization
 
 #### Sentiment Analysis Mode
 ```bash

@@ -1,0 +1,124 @@
+name: Deploy to Kubernetes
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      tag:
+        description: 'Docker image tag to deploy'
+        required: false
+        default: 'latest'
+
+env:
+  KUBECONFIG: ${{ secrets.KUBECONFIG }}
+  NAMESPACE: trading
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+
+    - name: Verify cluster connection
+      run: kubectl cluster-info
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Update Kubernetes manifests
+      run: |
+        # Update image tag in deployment
+        IMAGE_TAG=${{ github.event.inputs.tag || github.event.release.tag_name || 'latest' }}
+        sed -i "s|tradpal-indicator:latest|tradpal-indicator:${IMAGE_TAG}|g" k8s/deployment.yaml
+
+        # Update config for environment
+        if [ "${{ github.event.inputs.environment || 'staging' }}" = "production" ]; then
+          sed -i 's/DEPLOYMENT_ENV: "kubernetes"/DEPLOYMENT_ENV: "kubernetes-prod"/g' k8s/deployment.yaml
+        fi
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/deployment.yaml -n ${{ env.NAMESPACE }}
+
+    - name: Wait for rollout
+      run: |
+        kubectl rollout status deployment/tradpal-indicator -n ${{ env.NAMESPACE }} --timeout=300s
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n ${{ env.NAMESPACE }}
+        kubectl get services -n ${{ env.NAMESPACE }}
+        kubectl logs -l app=tradpal-indicator -n ${{ env.NAMESPACE }} --tail=50
+
+    - name: Run health checks
+      run: |
+        # Wait for service to be ready
+        sleep 30
+
+        # Check if the application is responding
+        POD_NAME=$(kubectl get pods -l app=tradpal-indicator -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].metadata.name}')
+        kubectl exec $POD_NAME -n ${{ env.NAMESPACE }} -- python -c "
+        import requests
+        try:
+            response = requests.get('http://localhost:8000/health', timeout=10)
+            print(f'Health check status: {response.status_code}')
+            if response.status_code == 200:
+                print('✅ Deployment successful')
+            else:
+                print('❌ Health check failed')
+                exit(1)
+        except Exception as e:
+            print(f'❌ Health check error: {e}')
+            exit(1)
+        "
+
+  rollback:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: failure() && github.event_name == 'release'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+
+    - name: Rollback deployment
+      run: |
+        kubectl rollout undo deployment/tradpal-indicator -n ${{ env.NAMESPACE }}
+
+    - name: Notify failure
+      run: |
+        echo "❌ Deployment failed, rollback initiated"
+        echo "Please check the deployment logs and fix any issues before retrying."

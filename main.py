@@ -699,74 +699,56 @@ def run_single_analysis(performance_monitor=None):
         print(f"Analysis failed: {e}")
         log_error(f"Single analysis error: {e}")
 
-def initialize_rate_limiting():
-    """Initialize adaptive rate limiting for data fetching."""
+def calculate_buy_hold_performance(symbol, exchange, timeframe, start_date=None, end_date=None):
+    """
+    Calculate Buy & Hold performance for the given symbol and timeframe.
+
+    Args:
+        symbol: Trading symbol (e.g., 'BTC/USDT')
+        exchange: Exchange name
+        timeframe: Timeframe string
+        start_date: Start date for calculation
+        end_date: End date for calculation
+
+    Returns:
+        Float: Buy & Hold return percentage
+    """
     try:
-        from config.settings import ADAPTIVE_RATE_LIMITING_ENABLED
-        if not ADAPTIVE_RATE_LIMITING_ENABLED:
-            print("ℹ️  Adaptive rate limiting disabled in configuration.")
-            return False
+        from src.data_fetcher import fetch_historical_data
+        from datetime import datetime, timedelta
 
-        print("Initializing adaptive rate limiting...")
-        # The rate limiting is initialized automatically in data_fetcher.py
-        # when ADAPTIVE_RATE_LIMITING_ENABLED is True
-        print("✅ Adaptive rate limiting initialized.")
-        return True
+        # Set default dates if not provided
+        if not start_date:
+            end_date_dt = datetime.now()
+            start_date_dt = end_date_dt - timedelta(days=365)  # Default 1 year
+            start_date = start_date_dt.strftime('%Y-%m-%d')
+            end_date = end_date_dt.strftime('%Y-%m-%d')
 
-    except Exception as e:
-        print(f"⚠️  Rate limiting initialization failed: {e}")
-        return False
-
-def run_discovery_mode(args):
-    """Run discovery optimization mode using genetic algorithms."""
-    print("🧬 Starting Discovery Mode - Genetic Algorithm Optimization")
-    print(f"Optimizing indicators for {args.symbol} on {args.timeframe} timeframe")
-    print(f"Population: {args.population}, Generations: {args.generations}")
-    log_system_status(f"Discovery mode started for {args.symbol} {args.timeframe}")
-
-    try:
-        results = run_discovery(
-            symbol=args.symbol,
-            exchange='kraken',  # Default exchange
-            timeframe=args.timeframe,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            population_size=args.population,
-            generations=args.generations
+        # Fetch historical data
+        data = fetch_historical_data(
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            limit=5000
         )
 
-        print("\n🏆 Discovery Results - Top 10 Configurations:")
-        print("=" * 80)
+        if data.empty or len(data) < 2:
+            print(f"⚠️  Insufficient data for Buy & Hold calculation: {len(data)} points")
+            return 0.0
 
-        for i, result in enumerate(results, 1):
-            print(f"\n#{i} - Fitness: {result.fitness:.2f}")
-            print(f"   P&L: {result.pnl:.2f}%, Win Rate: {result.win_rate:.1%}")
-            print(f"   Sharpe: {result.sharpe_ratio:.2f}, Trades: {result.total_trades}")
-            print(f"   Daily Perf: {result.pnl / max(result.backtest_duration_days, 1):.3f}%")
+        # Calculate Buy & Hold return: (final_price - initial_price) / initial_price * 100
+        initial_price = data['close'].iloc[0]
+        final_price = data['close'].iloc[-1]
 
-            # Show enabled indicators
-            enabled = []
-            config = result.config
-            if config['ema']['enabled']:
-                enabled.append(f"EMA{config['ema']['periods']}")
-            if config['rsi']['enabled']:
-                enabled.append(f"RSI({config['rsi']['period']})")
-            if config['bb']['enabled']:
-                enabled.append(f"BB({config['bb']['period']})")
-            if config['atr']['enabled']:
-                enabled.append(f"ATR({config['atr']['period']})")
-            if config['adx']['enabled']:
-                enabled.append("ADX")
+        buy_hold_return = ((final_price - initial_price) / initial_price) * 100
 
-            print(f"   Indicators: {', '.join(enabled) if enabled else 'None'}")
-
-        print(f"\n📁 Results saved to output/discovery_results.json")
-        log_system_status(f"Discovery completed: {len(results)} configurations optimized")
+        return round(buy_hold_return, 2)
 
     except Exception as e:
-        print(f"❌ Discovery failed: {e}")
-        log_error(f"Discovery error: {e}")
+        print(f"⚠️  Error calculating Buy & Hold performance: {e}")
+        return 0.0
 
+# Optional: Initialize monitoring stack (Prometheus, Grafana, Redis)
 def initialize_monitoring_stack():
     """Initialize optional monitoring stack (Prometheus, Grafana, Redis)."""
     try:
@@ -872,6 +854,72 @@ def validate_profile_config(profile_name):
     except Exception as e:
         print(f"⚠️  Profile validation failed: {e}")
         return False
+
+def run_discovery_mode(args):
+    """Run discovery optimization mode using genetic algorithms."""
+    print("🧬 Starting Discovery Mode - Genetic Algorithm Optimization")
+    print(f"Optimizing indicators for {args.symbol} on {args.timeframe} timeframe")
+    print(f"Population: {args.population}, Generations: {args.generations}")
+
+    try:
+        from src.discovery import run_discovery
+
+        results = run_discovery(
+            symbol=args.symbol,
+            exchange='kraken',  # Default exchange
+            timeframe=args.timeframe,
+            start_date=args.start_date,
+            end_date=args.end_date,
+            population_size=args.population,
+            generations=args.generations
+        )
+
+        # Calculate Buy & Hold performance for comparison
+        buy_hold_performance = calculate_buy_hold_performance(
+            symbol=args.symbol,
+            exchange='kraken',
+            timeframe=args.timeframe,
+            start_date=args.start_date,
+            end_date=args.end_date
+        )
+
+        print("\n🏆 Discovery Results - Top 10 Configurations:")
+        print("=" * 80)
+        print(f"📊 Buy & Hold Performance (Benchmark): {buy_hold_performance:.2f}%")
+        print("=" * 80)
+
+        for i, result in enumerate(results, 1):
+            print(f"\n#{i} - Fitness: {result.fitness:.2f}")
+            print(f"   P&L: {result.pnl:.2f}%, Win Rate: {result.win_rate:.1%}")
+            print(f"   Sharpe: {result.sharpe_ratio:.2f}, Trades: {result.total_trades}")
+            print(f"   Daily Perf: {result.pnl / max(result.backtest_duration_days, 1):.3f}%")
+
+            # Show performance vs benchmark
+            vs_benchmark = result.pnl - buy_hold_performance
+            print(f"   vs Benchmark: {vs_benchmark:+.2f}% ({'better' if vs_benchmark > 0 else 'worse'})")
+
+            # Show enabled indicators
+            enabled = []
+            config = result.config
+            if config['ema']['enabled']:
+                enabled.append(f"EMA{config['ema']['periods']}")
+            if config['rsi']['enabled']:
+                enabled.append(f"RSI({config['rsi']['period']})")
+            if config['bb']['enabled']:
+                enabled.append(f"BB({config['bb']['period']})")
+            if config['atr']['enabled']:
+                enabled.append(f"ATR({config['atr']['period']})")
+            if config['adx']['enabled']:
+                enabled.append("ADX")
+
+            print(f"   Indicators: {', '.join(enabled) if enabled else 'None'}")
+
+        print(f"\n📁 Results saved to output/discovery_results.json")
+
+    except Exception as e:
+        print(f"❌ Discovery failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 def main():
     # Validate configuration at startup
@@ -1447,6 +1495,3 @@ def main():
         }
     )
     audit_logger.log_performance_metrics()
-
-if __name__ == "__main__":
-    main()

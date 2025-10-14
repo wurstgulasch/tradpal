@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import asyncio
 from typing import Dict, Any
-from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIMEFRAME, MTA_DATA_LIMIT, VOLATILITY_WINDOW, TREND_LOOKBACK
+from config.settings import CAPITAL, RISK_PER_TRADE, MTA_ENABLED, MTA_HIGHER_TIMEFRAME, MTA_DATA_LIMIT, VOLATILITY_WINDOW, TREND_LOOKBACK, ML_ENABLED
 from src.data_fetcher import fetch_data
 from src.indicators import calculate_indicators
 from src.audit_logger import audit_logger, log_signal_buy, log_signal_sell, SignalDecision, RiskAssessment
@@ -51,7 +51,7 @@ except ImportError:
     def update_paper_portfolio(*args, **kwargs):
         pass
 
-def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
+def generate_signals(df: pd.DataFrame, config=None) -> pd.DataFrame:
     """
     Generates Buy/Sell signals based on EMA crossover, RSI and BB.
     Includes optional Multi-Timeframe Analysis (MTA) for signal confirmation.
@@ -61,8 +61,9 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     # df.dropna(inplace=True)  # Remove this line
     df.reset_index(drop=True, inplace=True)  # Reset Index
 
-    # Get current indicator configuration
-    config = get_current_indicator_config()
+    # Get current indicator configuration - use provided config or get from settings
+    if config is None:
+        config = get_current_indicator_config()
 
     # Get timeframe-specific parameters
     params = get_timeframe_params(TIMEFRAME)
@@ -77,60 +78,169 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
         ema_short_col = 'EMA9'
         ema_long_col = 'EMA21'
 
+    # Check which indicators are enabled in config
+    ema_enabled = config.get('ema', {}).get('enabled', False)
+    rsi_enabled = config.get('rsi', {}).get('enabled', False)
+    bb_enabled = config.get('bb', {}).get('enabled', False)
+
     # Basic signal generation - use dynamic EMA column names
-    if ema_short_col in df.columns and ema_long_col in df.columns:
+    if ema_enabled and ema_short_col in df.columns and ema_long_col in df.columns:
         df['EMA_crossover'] = np.where(df[ema_short_col].values > df[ema_long_col].values, 1, -1)
-    else:
+    elif ema_enabled:
         # Fallback if columns don't exist
         df['EMA_crossover'] = np.where(df['EMA9'].values > df['EMA21'].values, 1, -1)
-    
+
     if STRICT_SIGNALS_ENABLED:
-        # Enhanced logic for crash scenarios - generate buy signals on extreme oversold conditions
-        # even without bullish EMA crossover (for crash buying opportunities)
         
         # Only generate signals where all required indicators are available (not NaN)
-        valid_indicators = (
-            df['EMA9'].notna() & 
-            df['EMA21'].notna() & 
-            df['RSI'].notna() & 
-            df['BB_lower'].notna() & 
-            df['BB_upper'].notna()
-        )
+        # Use configured EMA column names for validation
+        ema_short_valid = df[ema_short_col].notna() if ema_short_col in df.columns else df['EMA9'].notna()
+        ema_long_valid = df[ema_long_col].notna() if ema_long_col in df.columns else df['EMA21'].notna()
         
-        ema_buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
-        crash_buy_condition = ((df['RSI'].values < 35) & (df['close'].values < df['BB_lower'].values)) | \
-                             ((df['RSI'].values < 40) & (df['close'].values < df['BB_lower'].values * 1.02))  # More lenient crash condition
+        # Build validation mask based on enabled indicators
+        valid_indicators = pd.Series(True, index=df.index)
         
-        buy_condition = (ema_buy_condition | crash_buy_condition) & valid_indicators
-        df['Buy_Signal'] = buy_condition.astype(int)
+        if ema_enabled:
+            valid_indicators &= ema_short_valid & ema_long_valid
         
-        sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values) & valid_indicators
-        df['Sell_Signal'] = sell_condition.astype(int)
+        if rsi_enabled:
+            valid_indicators &= df['RSI'].notna()
+            
+        if bb_enabled:
+            valid_indicators &= df['BB_lower'].notna() & df['BB_upper'].notna()
+        
+        # Generate signals based on enabled indicators
+        if ema_enabled and rsi_enabled and bb_enabled:
+            # Full strategy: EMA crossover + RSI + BB
+            ema_buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
+            crash_buy_condition = ((df['RSI'].values < 35) & (df['close'].values < df['BB_lower'].values)) | \
+                                 ((df['RSI'].values < 40) & (df['close'].values < df['BB_lower'].values * 1.02))
+            
+            buy_condition = (ema_buy_condition | crash_buy_condition) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and rsi_enabled:
+            # EMA + RSI strategy
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and bb_enabled:
+            # EMA + BB strategy
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['close'].values > df['BB_lower'].values) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['close'].values < df['BB_upper'].values) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif rsi_enabled and bb_enabled:
+            # RSI + BB strategy
+            buy_condition = (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled:
+            # EMA only strategy - only validate EMA indicators
+            ema_valid = ema_short_valid & ema_long_valid
+            buy_condition = (df['EMA_crossover'].values == 1) & ema_valid
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & ema_valid
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif rsi_enabled:
+            # RSI only strategy
+            buy_condition = (df['RSI'].values < params['rsi_oversold']) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['RSI'].values > params['rsi_overbought']) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif bb_enabled:
+            # BB only strategy
+            buy_condition = (df['close'].values > df['BB_lower'].values) & valid_indicators
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['close'].values < df['BB_upper'].values) & valid_indicators
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        else:
+            # No indicators enabled - no signals
+            df['Buy_Signal'] = 0
+            df['Sell_Signal'] = 0
     else:
-        # Simplified signals: only EMA crossover where indicators are valid
-        valid_ema = df['EMA9'].notna() & df['EMA21'].notna()
-        df['Buy_Signal'] = ((df['EMA_crossover'].values == 1) & valid_ema).astype(int)
-        df['Sell_Signal'] = ((df['EMA_crossover'].values == -1) & valid_ema).astype(int)
-
-    # Multi-Timeframe Analysis (MTA) for signal confirmation
-    if MTA_ENABLED:
-        df = apply_multi_timeframe_analysis(df)
-
-    # ML Signal Enhancement
-    df = apply_ml_signal_enhancement(df)
-
-    # Sentiment Analysis Enhancement
-    df = apply_sentiment_signal_enhancement(df)
-
-    # Funding Rate Enhancement for perpetual futures
-    df = apply_funding_rate_signal_enhancement(df)
-
-    # Execute Paper Trades if enabled
-    if PAPER_TRADING_ENABLED and PAPER_TRADING_AVAILABLE:
-        df = execute_paper_trades(df)
-
-    # Audit logging for signal decisions
-    _log_signal_decisions(df, config, params)
+        # Simplified signals for non-strict mode - generate signals even with missing indicators
+        if ema_enabled and rsi_enabled and bb_enabled:
+            # Full strategy: EMA crossover + RSI + BB
+            ema_buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
+            crash_buy_condition = ((df['RSI'].values < 35) & (df['close'].values < df['BB_lower'].values)) | \
+                                 ((df['RSI'].values < 40) & (df['close'].values < df['BB_lower'].values * 1.02))
+            
+            buy_condition = ema_buy_condition | crash_buy_condition
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values)
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and rsi_enabled:
+            # EMA + RSI strategy
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['RSI'].values < params['rsi_oversold'])
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['RSI'].values > params['rsi_overbought'])
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled and bb_enabled:
+            # EMA + BB strategy
+            buy_condition = (df['EMA_crossover'].values == 1) & (df['close'].values > df['BB_lower'].values)
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1) & (df['close'].values < df['BB_upper'].values)
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif rsi_enabled and bb_enabled:
+            # RSI + BB strategy
+            buy_condition = (df['RSI'].values < params['rsi_oversold']) & (df['close'].values > df['BB_lower'].values)
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['RSI'].values > params['rsi_overbought']) & (df['close'].values < df['BB_upper'].values)
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif ema_enabled:
+            # EMA only strategy
+            buy_condition = (df['EMA_crossover'].values == 1)
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['EMA_crossover'].values == -1)
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif rsi_enabled:
+            # RSI only strategy
+            buy_condition = (df['RSI'].values < params['rsi_oversold'])
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['RSI'].values > params['rsi_overbought'])
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        elif bb_enabled:
+            # BB only strategy
+            buy_condition = (df['close'].values > df['BB_lower'].values)
+            df['Buy_Signal'] = buy_condition.astype(int)
+            
+            sell_condition = (df['close'].values < df['BB_upper'].values)
+            df['Sell_Signal'] = sell_condition.astype(int)
+            
+        else:
+            # No indicators enabled - no signals
+            df['Buy_Signal'] = 0
+            df['Sell_Signal'] = 0
 
     return df
 
@@ -168,6 +278,69 @@ def apply_multi_timeframe_analysis(df: pd.DataFrame) -> pd.DataFrame:
     except Exception as e:
         print(f"MTA analysis failed: {e}")
         # Continue without MTA if it fails
+
+    return df
+
+def calculate_risk_management(df: pd.DataFrame, config=None) -> pd.DataFrame:
+    """
+    Calculates position size, stop-loss, take-profit based on ATR with multipliers.
+    Position size is calculated as both absolute amount and percentage of total capital.
+    Optionally uses Kelly Criterion for optimal position sizing.
+    Requires Buy_Signal and Sell_Signal columns.
+    """
+    from config.settings import get_timeframe_params, TIMEFRAME, get_current_indicator_config, KELLY_ENABLED
+
+    # Check for required signal columns
+    if 'Buy_Signal' not in df.columns or 'Sell_Signal' not in df.columns:
+        raise KeyError("DataFrame must contain 'Buy_Signal' and 'Sell_Signal' columns")
+
+    # Get current indicator configuration - use provided config or get from settings
+    if config is None:
+        config = get_current_indicator_config()
+
+    # Get timeframe-specific parameters
+    params = get_timeframe_params(TIMEFRAME)
+
+    # Calculate position size using Kelly Criterion if enabled
+    if KELLY_ENABLED:
+        print("🎯 Using Kelly Criterion for position sizing")
+        df['Kelly_Fraction'] = calculate_kelly_position_size(df, CAPITAL, RISK_PER_TRADE)
+        risk_fraction = df['Kelly_Fraction']
+    else:
+        risk_fraction = RISK_PER_TRADE
+
+    # Calculate absolute position size with ATR multiplier
+    atr_multiplier = params.get('atr_sl_multiplier', 1.0)
+
+    # Check if ATR is available, otherwise use a default volatility measure
+    if 'ATR' in df.columns and not df['ATR'].isna().all():
+        df['Position_Size_Absolute'] = (CAPITAL * risk_fraction) / (df['ATR'] * atr_multiplier)
+        atr_for_risk = df['ATR']
+    else:
+        # Fallback: use a simple volatility measure based on price changes
+        price_volatility = df['close'].pct_change().rolling(window=VOLATILITY_WINDOW).std() * df['close']
+        df['Position_Size_Absolute'] = (CAPITAL * risk_fraction) / (price_volatility * atr_multiplier)
+        atr_for_risk = price_volatility
+        print("Warning: ATR not available, using price volatility fallback")
+
+    # Calculate the actual percentage of capital that would be at risk
+    # Risk amount = Position_Size_Absolute * ATR * SL_Multiplier
+    risk_amount = df['Position_Size_Absolute'] * atr_for_risk * params['atr_sl_multiplier']
+    df['Position_Size_Percent'] = (risk_amount / CAPITAL) * 100
+
+    # Calculate stop-loss and take-profit with multipliers
+    df['Stop_Loss_Buy'] = df['close'] - (atr_for_risk * params['atr_sl_multiplier'])
+    df['Take_Profit_Buy'] = df['close'] + (atr_for_risk * params['atr_tp_multiplier'])
+
+    # Dynamic leverage based on ATR vs expanding mean
+    if 'ATR' in df.columns and not df['ATR'].isna().all():
+        atr_avg = df['ATR'].expanding().mean()
+    else:
+        atr_avg = atr_for_risk.expanding().mean()
+    df['Leverage'] = np.where(atr_for_risk < atr_avg, params['leverage_max'], params['leverage_max'] // 2)
+
+    # Audit logging for risk assessments
+    _log_risk_assessments(df, params)
 
     return df
 
@@ -280,105 +453,42 @@ def calculate_kelly_position_size(df: pd.DataFrame, capital: float, risk_per_tra
         return pd.Series([risk_per_trade] * len(df), index=df.index)
 
 
-def calculate_risk_management(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Calculates position size, stop-loss, take-profit based on ATR with multipliers.
-    Position size is calculated as both absolute amount and percentage of total capital.
-    Optionally uses Kelly Criterion for optimal position sizing.
-    Requires Buy_Signal and Sell_Signal columns.
-    """
-    from config.settings import get_timeframe_params, TIMEFRAME, get_current_indicator_config, KELLY_ENABLED
-
-    # Check for required signal columns
-    if 'Buy_Signal' not in df.columns or 'Sell_Signal' not in df.columns:
-        raise KeyError("DataFrame must contain 'Buy_Signal' and 'Sell_Signal' columns")
-
-    # Get current indicator configuration
-    config = get_current_indicator_config()
-
-    # Get timeframe-specific parameters
-    params = get_timeframe_params(TIMEFRAME)
-
-    # Calculate position size using Kelly Criterion if enabled
-    if KELLY_ENABLED:
-        print("🎯 Using Kelly Criterion for position sizing")
-        df['Kelly_Fraction'] = calculate_kelly_position_size(df, CAPITAL, RISK_PER_TRADE)
-        risk_fraction = df['Kelly_Fraction']
-    else:
-        risk_fraction = RISK_PER_TRADE
-
-    # Calculate absolute position size with ATR multiplier
-    atr_multiplier = params.get('atr_sl_multiplier', 1.0)
-
-    # Check if ATR is available, otherwise use a default volatility measure
-    if 'ATR' in df.columns and not df['ATR'].isna().all():
-        df['Position_Size_Absolute'] = (CAPITAL * risk_fraction) / (df['ATR'] * atr_multiplier)
-        atr_for_risk = df['ATR']
-    else:
-        # Fallback: use a simple volatility measure based on price changes
-        price_volatility = df['close'].pct_change().rolling(window=VOLATILITY_WINDOW).std() * df['close']
-        df['Position_Size_Absolute'] = (CAPITAL * risk_fraction) / (price_volatility * atr_multiplier)
-        atr_for_risk = price_volatility
-        print("Warning: ATR not available, using price volatility fallback")
-
-    # Calculate the actual percentage of capital that would be at risk
-    # Risk amount = Position_Size_Absolute * ATR * SL_Multiplier
-    risk_amount = df['Position_Size_Absolute'] * atr_for_risk * params['atr_sl_multiplier']
-    df['Position_Size_Percent'] = (risk_amount / CAPITAL) * 100
-
-    # Calculate stop-loss and take-profit with multipliers
-    df['Stop_Loss_Buy'] = df['close'] - (atr_for_risk * params['atr_sl_multiplier'])
-    df['Take_Profit_Buy'] = df['close'] + (atr_for_risk * params['atr_tp_multiplier'])
-
-    # Dynamic leverage based on ATR vs expanding mean
-    if 'ATR' in df.columns and not df['ATR'].isna().all():
-        atr_avg = df['ATR'].expanding().mean()
-    else:
-        atr_avg = atr_for_risk.expanding().mean()
-    df['Leverage'] = np.where(atr_for_risk < atr_avg, params['leverage_max'], params['leverage_max'] // 2)
-
-    # Audit logging for risk assessments
-    _log_risk_assessments(df, params)
-
-    return df
-
-
 # Async versions for improved performance
-async def generate_signals_async(df: pd.DataFrame) -> pd.DataFrame:
+async def generate_signals_async(df: pd.DataFrame, config=None) -> pd.DataFrame:
     """
     Async version of generate_signals for improved performance.
     """
     # Signal generation is CPU-bound, so run in thread pool
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, generate_signals, df)
+    return await loop.run_in_executor(None, generate_signals, df, config)
 
 
-async def calculate_risk_management_async(df: pd.DataFrame) -> pd.DataFrame:
+async def calculate_risk_management_async(df: pd.DataFrame, config=None) -> pd.DataFrame:
     """
     Async version of calculate_risk_management for improved performance.
     """
     # Risk calculation is CPU-bound, so run in thread pool
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, calculate_risk_management, df)
+    return await loop.run_in_executor(None, calculate_risk_management, df, config)
 
 
-async def process_signals_pipeline_async(df: pd.DataFrame) -> pd.DataFrame:
+async def process_signals_pipeline_async(df: pd.DataFrame, config=None) -> pd.DataFrame:
     """
     Complete async signal processing pipeline.
     """
     # Calculate indicators (cached, so fast)
-    df = calculate_indicators(df)
+    df = calculate_indicators(df, config=config)
 
     # Generate signals
-    df = await generate_signals_async(df)
+    df = await generate_signals_async(df, config=config)
 
     # Calculate risk management
-    df = await calculate_risk_management_async(df)
+    df = await calculate_risk_management_async(df, config=config)
 
     return df
 
 
-async def process_multiple_timeframes_async(symbol: str, timeframes: list) -> Dict[str, pd.DataFrame]:
+async def process_multiple_timeframes_async(symbol: str, timeframes: list, config=None) -> Dict[str, pd.DataFrame]:
     """
     Process signals for multiple timeframes concurrently.
     """
@@ -392,7 +502,7 @@ async def process_multiple_timeframes_async(symbol: str, timeframes: list) -> Di
                 return timeframe, None
 
             # Process signals
-            df_processed = await process_signals_pipeline_async(df)
+            df_processed = await process_signals_pipeline_async(df, config=config)
             return timeframe, df_processed
         except Exception as e:
             print(f"Error processing {timeframe}: {e}")

@@ -21,7 +21,7 @@ class Backtester:
     """
 
     def __init__(self, symbol=SYMBOL, exchange=EXCHANGE, timeframe=TIMEFRAME,
-                 start_date=None, end_date=None, initial_capital=10000, commission=0.001):
+                 start_date=None, end_date=None, initial_capital=10000, commission=0.001, config=None):
         self.symbol = symbol
         self.exchange = exchange
         self.timeframe = timeframe
@@ -46,9 +46,10 @@ class Backtester:
         self.trades = []
         self.portfolio_values = []
         self.commission = commission
+        self.config = config  # Store config for use in signal generation
 
     def run_backtest(self, df=None, strategy='traditional', symbol=None, timeframe=None,
-                     initial_capital=None, commission=0.001):
+                     initial_capital=None, commission=0.001, config=None):
         """
         Run historical backtest with specified strategy.
 
@@ -59,6 +60,7 @@ class Backtester:
             timeframe: Timeframe
             initial_capital: Initial capital
             commission: Commission per trade
+            config: Optional indicator configuration override
 
         Returns:
             Dictionary with backtest results and metrics
@@ -89,14 +91,17 @@ class Backtester:
                 data = df.copy()
 
             # Calculate indicators and signals based on strategy
+            # Use provided config if given, otherwise use instance config
+            backtest_config = config if config is not None else self.config
+            
             if strategy == 'traditional':
-                data = self._prepare_traditional_signals(data)
+                data = self._prepare_traditional_signals(data, backtest_config)
             elif strategy == 'ml_enhanced':
-                data = self._prepare_ml_enhanced_signals(data)
+                data = self._prepare_ml_enhanced_signals(data, backtest_config)
             elif strategy == 'lstm_enhanced':
-                data = self._prepare_lstm_enhanced_signals(data)
+                data = self._prepare_lstm_enhanced_signals(data, backtest_config)
             elif strategy == 'transformer_enhanced':
-                data = self._prepare_transformer_enhanced_signals(data)
+                data = self._prepare_transformer_enhanced_signals(data, backtest_config)
             else:
                 return {"success": False, "error": f"Unknown strategy: {strategy}"}
 
@@ -147,7 +152,6 @@ class Backtester:
 
         return fetch_historical_data(
             symbol=self.symbol,
-            exchange_name=self.exchange,
             timeframe=self.timeframe,
             limit=limit,
             start_date=self.start_date
@@ -481,22 +485,22 @@ class Backtester:
 
         print(f"Backtest results saved to {output_file}")
 
-    def _prepare_traditional_signals(self, data):
+    def _prepare_traditional_signals(self, data, config=None):
         """Prepare data with traditional indicators and signals."""
-        # Calculate indicators and signals (skip if already processed)
-        required_cols = ['EMA9', 'EMA21', 'RSI', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Buy_Signal', 'Sell_Signal', 'Position_Size_Absolute']
-        if not all(col in data.columns for col in required_cols):
-            data = calculate_indicators(data)
-            data = generate_signals(data)
-            data = calculate_risk_management(data)
+        # Always calculate indicators and signals, regardless of existing columns
+        # This ensures that discovery configurations are properly applied
+        backtest_config = config if config is not None else self.config
+        data = calculate_indicators(data, config=backtest_config)
+        data = generate_signals(data, config=backtest_config)
+        data = calculate_risk_management(data, config=backtest_config)
         return data
 
-    def _prepare_ml_enhanced_signals(self, data):
+    def _prepare_ml_enhanced_signals(self, data, config=None):
         """Prepare data with ML-enhanced signals."""
         from src.ml_predictor import get_ml_predictor, is_ml_available
 
         # First prepare traditional signals
-        data = self._prepare_traditional_signals(data)
+        data = self._prepare_traditional_signals(data, config)
 
         # Add ML enhancement if available
         if is_ml_available():
@@ -509,12 +513,12 @@ class Backtester:
 
         return data
 
-    def _prepare_lstm_enhanced_signals(self, data):
+    def _prepare_lstm_enhanced_signals(self, data, config=None):
         """Prepare data with LSTM-enhanced signals."""
         from src.ml_predictor import get_lstm_predictor, is_lstm_available
 
         # First prepare traditional signals
-        data = self._prepare_traditional_signals(data)
+        data = self._prepare_traditional_signals(data, config)
 
         # Add LSTM enhancement if available
         if is_lstm_available():
@@ -527,12 +531,12 @@ class Backtester:
 
         return data
 
-    def _prepare_transformer_enhanced_signals(self, data):
+    def _prepare_transformer_enhanced_signals(self, data, config=None):
         """Prepare data with Transformer-enhanced signals."""
         from src.ml_predictor import get_transformer_predictor, is_transformer_available
 
         # First prepare traditional signals
-        data = self._prepare_traditional_signals(data)
+        data = self._prepare_traditional_signals(data, config)
 
         # Add Transformer enhancement if available
         if is_transformer_available():
@@ -660,11 +664,11 @@ class Backtester:
 
         return data
 
-def run_backtest(symbol=SYMBOL, timeframe=TIMEFRAME, start_date=None, end_date=None):
+def run_backtest(symbol=SYMBOL, timeframe=TIMEFRAME, start_date=None, end_date=None, config=None):
     """
     Convenience function to run a backtest.
     """
-    backtester = Backtester(symbol, 'kraken', timeframe, start_date, end_date)
+    backtester = Backtester(symbol, 'kraken', timeframe, start_date, end_date, config=config)
     metrics = backtester.run_backtest()
     return {
         'backtest_results': metrics,
@@ -1546,7 +1550,7 @@ def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=No
         }
 
 
-def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=None):
+def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=None, config=None):
     """
     Standalone function to run a backtest and return results.
 
@@ -1555,6 +1559,7 @@ def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=No
         timeframe: Timeframe string
         start_date: Start date string
         end_date: End date string
+        config: Optional indicator configuration
 
     Returns:
         Dictionary with backtest results and trades DataFrame
@@ -1564,7 +1569,7 @@ def run_backtest(symbol='BTC/USDT', timeframe='1d', start_date=None, end_date=No
         
         # Create backtester instance
         backtester = Backtester(symbol=symbol, timeframe=timeframe,
-                              start_date=start_date, end_date=end_date)
+                              start_date=start_date, end_date=end_date, config=config)
 
         # Choose strategy based on ML_ENABLED setting
         strategy = 'ml_enhanced' if ML_ENABLED else 'traditional'

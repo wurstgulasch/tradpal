@@ -186,7 +186,7 @@ class TestBacktester:
         mock_fetch_data.return_value = base_data
 
         # Mock indicators to add indicator columns
-        def mock_indicators_func(data):
+        def mock_indicators_func(data, config=None):
             return data.assign(
                 EMA9=np.random.randn(len(data)) + 100.5,
                 EMA21=np.random.randn(len(data)) + 100.3,
@@ -199,7 +199,7 @@ class TestBacktester:
         mock_indicators.side_effect = mock_indicators_func
 
         # Mock signals to add signal columns
-        def mock_signals_func(data):
+        def mock_signals_func(data, config=None):
             return data.assign(
                 Buy_Signal=[1] + [0]*98 + [0],  # Buy at start
                 Sell_Signal=[0]*99 + [1]        # Sell at end
@@ -207,7 +207,7 @@ class TestBacktester:
         mock_signals.side_effect = mock_signals_func
 
         # Mock risk management to add risk columns
-        def mock_risk_func(data):
+        def mock_risk_func(data, config=None):
             return data.assign(
                 Position_Size_Absolute=[1000] * len(data),
                 Stop_Loss_Buy=[98] * len(data),
@@ -334,7 +334,7 @@ class TestBacktesterIntegration:
         mock_fetch.return_value = base_data
 
         # Mock indicators to add indicator columns
-        def mock_indicators_func(data):
+        def mock_indicators_func(data, config=None):
             return data.assign(
                 EMA9=[100 + i*0.1 for i in range(len(data))],
                 EMA21=[100 + i*0.05 for i in range(len(data))],
@@ -347,7 +347,7 @@ class TestBacktesterIntegration:
         mock_indicators.side_effect = mock_indicators_func
 
         # Mock signals to add signal columns
-        def mock_signals_func(data):
+        def mock_signals_func(data, config=None):
             return data.assign(
                 Buy_Signal=[1] + [0]*(len(data)-1),  # Buy at start
                 Sell_Signal=[0]*(len(data)-1) + [1]  # Sell at end
@@ -355,7 +355,7 @@ class TestBacktesterIntegration:
         mock_signals.side_effect = mock_signals_func
 
         # Mock risk management to add risk columns
-        def mock_risk_func(data):
+        def mock_risk_func(data, config=None):
             return data.assign(
                 Position_Size_Absolute=[1000] * len(data),
                 Stop_Loss_Buy=[98] * len(data),

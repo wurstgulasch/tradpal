@@ -172,7 +172,7 @@ VOLATILITY_FILTER_ENABLED = False
 STRICT_SIGNALS_ENABLED = True  # If False, use only EMA crossover for signals (for backtesting)
 
 # Configuration Mode
-CONFIG_MODE = 'conservative'  # 'conservative' or 'discovery'
+CONFIG_MODE = 'optimized'  # 'conservative', 'discovery', or 'optimized'
 
 # Conservative Configuration (fixed parameters)
 CONSERVATIVE_CONFIG = {
@@ -200,6 +200,20 @@ DISCOVERY_CONFIG = {
     'obv': {'enabled': True},
     'stochastic': {'enabled': True, 'k_period': 14, 'd_period': 3},
     'cmf': {'enabled': False, 'period': 21}
+}
+
+# Optimized Configuration (from Discovery Mode - best performing parameters)
+OPTIMIZED_CONFIG = {
+    'ema': {'enabled': True, 'periods': [7, 107]},
+    'rsi': {'enabled': True, 'period': 10, 'oversold': 34, 'overbought': 74},
+    'bb': {'enabled': True, 'period': 15, 'std_dev': 2.87},
+    'atr': {'enabled': True, 'period': 8},
+    'adx': {'enabled': False, 'period': 21},
+    'fibonacci': {'enabled': False},
+    'macd': {'enabled': False, 'fast_period': 16, 'slow_period': 23, 'signal_period': 5},
+    'obv': {'enabled': False, 'ma_period': 36},
+    'stochastic': {'enabled': False, 'k_period': 16, 'd_period': 5},
+    'cmf': {'enabled': False}
 }
 
 # Discovery Mode Parameters
@@ -396,6 +410,8 @@ def get_current_indicator_config() -> Dict[str, Any]:
     """
     if CONFIG_MODE == 'conservative':
         return CONSERVATIVE_CONFIG.copy()
+    elif CONFIG_MODE == 'optimized':
+        return OPTIMIZED_CONFIG.copy()
     elif CONFIG_MODE == 'discovery':
         # Try to load optimized config first
         try:
