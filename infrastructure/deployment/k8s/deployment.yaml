@@ -1,0 +1,295 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tradpal-config
+  namespace: trading
+data:
+  PYTHONPATH: "/app"
+  PYTHONUNBUFFERED: "1"
+  TEST_ENVIRONMENT: "false"
+  SECRETS_BACKEND: "vault"
+  PROMETHEUS_ENABLED: "true"
+  PROMETHEUS_PORT: "8000"
+  DEPLOYMENT_ENV: "kubernetes"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tradpal-secrets
+  namespace: trading
+type: Opaque
+data:
+  # Base64 encoded secrets - populated by external secrets operator
+  tradpal-api-key: ""
+  tradpal-api-secret: ""
+  telegram-bot-token: ""
+  telegram-chat-id: ""
+  vault-token: ""
+  influxdb-token: ""
+  minio-access-key: ""
+  minio-secret-key: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tradpal-indicator
+  namespace: trading
+  labels:
+    app: tradpal-indicator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tradpal-indicator
+  template:
+    metadata:
+      labels:
+        app: tradpal-indicator
+    spec:
+      containers:
+      - name: tradpal
+        image: tradpal-indicator:latest
+        ports:
+        - containerPort: 8000
+          name: prometheus
+        env:
+        - name: PYTHONPATH
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: PYTHONPATH
+        - name: PYTHONUNBUFFERED
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: PYTHONUNBUFFERED
+        - name: TEST_ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: TEST_ENVIRONMENT
+        - name: SECRETS_BACKEND
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: SECRETS_BACKEND
+        - name: PROMETHEUS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: PROMETHEUS_ENABLED
+        - name: PROMETHEUS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: PROMETHEUS_PORT
+        - name: DEPLOYMENT_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: tradpal-config
+              key: DEPLOYMENT_ENV
+        - name: TRADPAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: tradpal-api-key
+        - name: TRADPAL_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: tradpal-api-secret
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: telegram-bot-token
+        - name: TELEGRAM_CHAT_ID
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: telegram-chat-id
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: vault-token
+        volumeMounts:
+        - name: output-storage
+          mountPath: /app/output
+        - name: config-storage
+          mountPath: /app/config
+        - name: logs-storage
+          mountPath: /app/logs
+        - name: cache-storage
+          mountPath: /app/cache
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: output-storage
+        persistentVolumeClaim:
+          claimName: tradpal-output-pvc
+      - name: config-storage
+        configMap:
+          name: tradpal-config
+      - name: logs-storage
+        emptyDir: {}
+      - name: cache-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tradpal-service
+  namespace: trading
+spec:
+  selector:
+    app: tradpal-indicator
+  ports:
+  - name: prometheus
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tradpal-output-pvc
+  namespace: trading
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-service
+  namespace: trading
+  labels:
+    app: data-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-service
+  template:
+    metadata:
+      labels:
+        app: data-service
+    spec:
+      containers:
+      - name: data-service
+        image: tradpal-indicator:latest
+        command: ["python", "-m", "services.data_service.service"]
+        ports:
+        - containerPort: 8001
+          name: api
+        - containerPort: 8002
+          name: prometheus
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: SERVICE_NAME
+          value: "data_service"
+        - name: REDIS_URL
+          value: "redis://redis-service:6379"
+        - name: INFLUXDB_URL
+          value: "http://influxdb-service:8086"
+        - name: INFLUXDB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: influxdb-token
+        - name: MINIO_ENDPOINT
+          value: "minio-service:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: minio-access-key
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tradpal-secrets
+              key: minio-secret-key
+        - name: SECRETS_BACKEND
+          value: "vault"
+        - name: PROMETHEUS_ENABLED
+          value: "true"
+        - name: PROMETHEUS_PORT
+          value: "8002"
+        volumeMounts:
+        - name: output-storage
+          mountPath: /app/output
+        - name: config-storage
+          mountPath: /app/config
+        - name: logs-storage
+          mountPath: /app/logs
+        - name: cache-storage
+          mountPath: /app/cache
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: output-storage
+        persistentVolumeClaim:
+          claimName: tradpal-output-pvc
+      - name: config-storage
+        configMap:
+          name: tradpal-config
+      - name: logs-storage
+        emptyDir: {}
+      - name: cache-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-service
+  namespace: trading
+spec:
+  selector:
+    app: data-service
+  ports:
+  - name: api
+    port: 8001
+    targetPort: 8001
+  - name: prometheus
+    port: 8002
+    targetPort: 8002
+  type: ClusterIP

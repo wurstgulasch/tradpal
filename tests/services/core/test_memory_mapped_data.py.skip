@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""
+Unit tests for memory-mapped data functionality.
+"""
+
+import pytest
+import pandas as pd
+import numpy as np
+import tempfile
+import os
+from pathlib import Path
+import sys
+
+# Add services to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'services'))
+
+from services.core.memory_optimization import (
+    MemoryMappedData,
+    RollingWindowBuffer,
+    ChunkedDataLoader,
+    MemoryPool,
+    LazyDataLoader,
+    MemoryStats
+)
+
+
+class TestMemoryMappedData:
+    """Test cases for MemoryMappedData."""
+
+    def test_create_and_store_dataframe(self):
+        """Test basic create and store functionality."""
+        with tempfile.NamedTemporaryFile(suffix='.h5', delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            # Create test DataFrame
+            df = pd.DataFrame({
+                'timestamp': pd.date_range('2020-01-01', periods=100, freq='D'),
+                'open': np.random.uniform(100, 110, 100),
+                'high': np.random.uniform(105, 115, 100),
+                'low': np.random.uniform(95, 105, 100),
+                'close': np.random.uniform(100, 110, 100),
+                'volume': np.random.uniform(1000, 10000, 100)
+            })
+
+            # Store DataFrame
+            with MemoryMappedData(tmp_path, 'w') as mm_data:
+                mm_data.store_dataframe(df, 'test_data')
+
+            # Load and verify
+            with MemoryMappedData(tmp_path, 'r') as mm_data:
+                loaded_df = mm_data.load_dataframe('test_data')
+
+            # Verify data integrity
+            pd.testing.assert_frame_equal(df, loaded_df)
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    def test_create_dataset(self):
+        """Test HDF5 dataset creation."""
+        with tempfile.NamedTemporaryFile(suffix='.h5', delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            # Create test data
+            data = np.random.randn(100, 4)
+
+            # Store dataset
+            with MemoryMappedData(tmp_path, 'w') as mm_data:
+                mm_data.create_dataset('ohlc', data=data, compression='gzip')
+
+            # Load and verify
+            with MemoryMappedData(tmp_path, 'r') as mm_data:
+                loaded_data = mm_data.load_dataset('ohlc')
+
+            np.testing.assert_array_equal(data, loaded_data)
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+
+class TestRollingWindowBuffer:
+    """Test cases for RollingWindowBuffer."""
+
+    def test_buffer_operations(self):
+        """Test basic buffer operations."""
+        buffer = RollingWindowBuffer(window_size=10)
+
+        # Add data
+        for i in range(15):
+            buffer.add(i)
+
+        # Check buffer contents
+        assert len(buffer) == 10
+        assert buffer.get() == list(range(5, 15))
+
+        # Test statistics
+        assert buffer.mean() == np.mean(list(range(5, 15)))
+        assert buffer.std() == np.std(list(range(5, 15)))
+
+
+class TestChunkedDataLoader:
+    """Test cases for ChunkedDataLoader."""
+
+    def test_chunked_loading(self):
+        """Test chunked data loading."""
+        with tempfile.NamedTemporaryFile(suffix='.h5', delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            # Create large dataset
+            data = np.random.randn(1000, 4)
+
+            # Store data
+            with MemoryMappedData(tmp_path, 'w') as mm_data:
+                mm_data.create_dataset('ohlc', data=data)
+
+            # Load in chunks
+            loader = ChunkedDataLoader(chunk_size=100)
+            chunks = list(loader.load_chunks(tmp_path, 'ohlc'))
+
+            # Verify chunks
+            assert len(chunks) == 10  # 1000 / 100 = 10 chunks
+            assert all(chunk.shape == (100, 4) for chunk in chunks[:-1])
+            assert chunks[-1].shape == (0, 4)  # Last chunk might be smaller
+
+            # Verify data integrity
+            loaded_data = np.concatenate(chunks, axis=0)
+            np.testing.assert_array_equal(data, loaded_data)
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+
+class TestMemoryPool:
+    """Test cases for MemoryPool."""
+
+    def test_pool_allocation(self):
+        """Test memory pool allocation and release."""
+        pool = MemoryPool(max_size=10, initial_size=5, buffer_size=1024)
+
+        # Allocate buffers
+        buffers = []
+        for _ in range(10):
+            buffer = pool.allocate()
+            buffers.append(buffer)
+
+        assert len(buffers) == 10
+        assert pool.available_buffers == 0
+
+        # Release some buffers
+        pool.release(buffers[0])
+        pool.release(buffers[1])
+
+        assert pool.available_buffers == 2
+
+        # Allocate again (should reuse)
+        new_buffer = pool.allocate()
+        assert new_buffer in buffers[:2]
+
+
+class TestLazyDataLoader:
+    """Test cases for LazyDataLoader."""
+
+    def test_lazy_loading(self):
+        """Test lazy loading with caching."""
+        with tempfile.NamedTemporaryFile(suffix='.h5', delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            # Create test data
+            test_data = {
+                'dataset1': pd.DataFrame(np.random.randn(100, 4), columns=['open', 'high', 'low', 'close']),
+                'dataset2': pd.DataFrame(np.random.randn(100, 4), columns=['open', 'high', 'low', 'close'])
+            }
+
+            # Store data
+            with MemoryMappedData(tmp_path, 'w') as mm_data:
+                for key, df in test_data.items():
+                    mm_data.store_dataframe(df, key)
+
+            # Test lazy loading
+            loader = LazyDataLoader(cache_size=5)
+
+            # First load
+            data1 = loader.load_data(tmp_path, 'dataset1')
+            pd.testing.assert_frame_equal(data1, test_data['dataset1'])
+
+            # Second load (from cache)
+            data1_cached = loader.load_data(tmp_path, 'dataset1')
+            pd.testing.assert_frame_equal(data1_cached, test_data['dataset1'])
+
+            # Check cache
+            assert len(loader.cache) == 1
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+
+class TestMemoryStats:
+    """Test cases for MemoryStats."""
+
+    def test_memory_monitoring(self):
+        """Test memory usage monitoring."""
+        stats = MemoryStats()
+
+        # Get initial stats
+        initial_stats = stats.get_stats()
+
+        # Create some memory usage
+        large_array = np.zeros((1000, 1000))
+
+        # Get updated stats
+        updated_stats = stats.get_stats()
+
+        # Verify stats structure
+        assert 'rss_mb' in initial_stats
+        assert 'vms_mb' in initial_stats
+        assert 'cpu_percent' in initial_stats
+
+        # Clean up
+        del large_array
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

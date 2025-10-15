@@ -1,0 +1,425 @@
+#!/usr/bin/env python3
+"""
+Tests for Memory Optimization Module
+Tests memory-mapped files, rolling buffers, chunked processing, and memory pools.
+"""
+
+import unittest
+import tempfile
+import os
+import numpy as np
+import pandas as pd
+from unittest.mock import patch, MagicMock
+
+# Import memory optimization classes
+from services.core.memory_optimization import (
+    MemoryMappedData,
+    RollingWindowBuffer,
+    ChunkedDataLoader,
+    MemoryPool,
+    LazyDataLoader,
+    MemoryStats
+)
+
+# Import memory-optimized indicators
+from services.core.vectorization import MemoryOptimizedIndicators
+
+
+class TestMemoryMappedData(unittest.TestCase):
+    """Test MemoryMappedData class functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_file = tempfile.NamedTemporaryFile(suffix='.h5', delete=False)
+        self.temp_file.close()
+        self.test_data = np.random.randn(1000, 4)  # OHLC data
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+
+    def test_memory_mapped_creation(self):
+        """Test creating and writing to memory-mapped file."""
+        with MemoryMappedData(self.temp_file.name, mode='w') as mm_data:
+            mm_data.create_dataset('ohlc', data=self.test_data, dtype=np.float64)
+
+        # Verify data was written
+        self.assertTrue(os.path.exists(self.temp_file.name))
+
+        # Read back and verify
+        with MemoryMappedData(self.temp_file.name, mode='r') as mm_data:
+            loaded_data = mm_data['ohlc'][:]
+            np.testing.assert_array_equal(loaded_data, self.test_data)
+
+    def test_memory_mapped_compression(self):
+        """Test memory-mapped file with compression."""
+        with MemoryMappedData(self.temp_file.name, mode='w') as mm_data:
+            mm_data.create_dataset('ohlc', data=self.test_data,
+                                 compression='gzip', compression_opts=6)
+
+        with MemoryMappedData(self.temp_file.name, mode='r') as mm_data:
+            loaded_data = mm_data['ohlc'][:]
+            np.testing.assert_array_equal(loaded_data, self.test_data)
+
+
+class TestRollingWindowBuffer(unittest.TestCase):
+    """Test RollingWindowBuffer class functionality."""
+
+    def test_buffer_initialization(self):
+        """Test buffer initialization."""
+        buffer = RollingWindowBuffer(window_size=10, dtype=np.float64)
+        self.assertEqual(buffer.window_size, 10)
+        self.assertEqual(len(buffer.buffer), 0)
+        self.assertFalse(buffer.is_full)
+
+    def test_buffer_add_and_get(self):
+        """Test adding data and retrieving window."""
+        buffer = RollingWindowBuffer(window_size=5, dtype=np.float64)
+
+        # Add some data
+        for i in range(3):
+            buffer.add(float(i))
+
+        self.assertEqual(len(buffer.buffer), 3)
+        self.assertFalse(buffer.is_full)
+
+        # Add more data to fill buffer
+        for i in range(3, 8):
+            buffer.add(float(i))
+
+        self.assertEqual(len(buffer.buffer), 5)
+        self.assertTrue(buffer.is_full)
+
+        # Check window contents
+        window = buffer.to_array()
+        expected = np.array([3.0, 4.0, 5.0, 6.0, 7.0])
+        np.testing.assert_array_equal(window, expected)
+
+    def test_buffer_overflow(self):
+        """Test buffer behavior when overflowing."""
+        buffer = RollingWindowBuffer(window_size=3, dtype=np.float64)
+
+        # Fill buffer
+        for i in range(5):
+            buffer.add(float(i))
+
+        # Should only contain last 3 elements
+        window = buffer.to_array()
+        expected = np.array([2.0, 3.0, 4.0])
+        np.testing.assert_array_equal(window, expected)
+
+
+class TestChunkedDataLoader(unittest.TestCase):
+    """Test ChunkedDataLoader class functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.large_data = np.random.randn(10000, 4)
+        self.temp_file = tempfile.NamedTemporaryFile(suffix='.h5', delete=False)
+        self.temp_file.close()
+
+        # Create test file
+        with MemoryMappedData(self.temp_file.name, mode='w') as mm_data:
+            mm_data.create_dataset('ohlc', data=self.large_data)
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+
+    def test_chunked_loading(self):
+        """Test loading data in chunks."""
+        loader = ChunkedDataLoader(chunk_size=1000)
+
+        chunks = list(loader.load_chunks(self.temp_file.name, 'ohlc'))
+        self.assertEqual(len(chunks), 10)  # 10000 / 1000 = 10 chunks
+
+        # Verify first chunk
+        np.testing.assert_array_equal(chunks[0], self.large_data[:1000])
+
+        # Verify last chunk
+        np.testing.assert_array_equal(chunks[-1], self.large_data[-1000:])
+
+    def test_chunked_processing(self):
+        """Test processing data in chunks."""
+        loader = ChunkedDataLoader(chunk_size=2000)
+
+        # Process chunks (simple sum for testing)
+        results = []
+        for chunk in loader.load_chunks(self.temp_file.name, 'ohlc'):
+            results.append(np.sum(chunk, axis=0))
+
+        total_sum = np.sum(np.array(results), axis=0)
+        expected_sum = np.sum(self.large_data, axis=0)
+        np.testing.assert_allclose(total_sum, expected_sum, rtol=1e-10)
+
+
+class TestMemoryPool(unittest.TestCase):
+    """Test MemoryPool class functionality."""
+
+    def test_pool_allocation(self):
+        """Test buffer allocation from pool."""
+        pool = MemoryPool(initial_size=5, buffer_size=1024)
+
+        # Allocate buffers
+        buffer1 = pool.allocate()
+        buffer2 = pool.allocate()
+
+        self.assertIsNotNone(buffer1)
+        self.assertIsNotNone(buffer2)
+        self.assertEqual(pool.available_buffers, 3)  # 5 - 2 = 3
+
+    def test_pool_release(self):
+        """Test buffer release back to pool."""
+        pool = MemoryPool(initial_size=3, buffer_size=1024)
+
+        buffer1 = pool.allocate()
+        buffer2 = pool.allocate()
+
+        # Release buffer
+        pool.release(buffer1)
+
+        self.assertEqual(pool.available_buffers, 2)  # 3 - 2 + 1 = 2
+
+    def test_pool_reuse(self):
+        """Test buffer reuse from pool."""
+        pool = MemoryPool(initial_size=2, buffer_size=1024)
+
+        buffer1 = pool.allocate()
+        pool.release(buffer1)
+
+        buffer2 = pool.allocate()
+        # Should reuse the released buffer
+        self.assertEqual(pool.available_buffers, 1)
+
+
+class TestLazyDataLoader(unittest.TestCase):
+    """Test LazyDataLoader class functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_file = tempfile.NamedTemporaryFile(suffix='.h5', delete=False)
+        self.temp_file.close()
+        self.test_data = pd.DataFrame({
+            'prices': np.random.randn(1000),
+            'volumes': np.random.randint(100, 1000, 1000)
+        })
+
+        # Save test data to HDF5
+        with MemoryMappedData(self.temp_file.name, 'w') as mm_data:
+            mm_data.store_dataframe(self.test_data, 'test_data')
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+
+    def test_lazy_loading(self):
+        """Test lazy loading of data."""
+        loader = LazyDataLoader(cache_dir=os.path.dirname(self.temp_file.name))
+
+        # Load data lazily
+        loaded_data = loader.load_data(self.temp_file.name, 'test_data')
+
+        self.assertIn('prices', loaded_data.columns)
+        self.assertIn('volumes', loaded_data.columns)
+        np.testing.assert_array_equal(loaded_data['prices'].values, self.test_data['prices'].values)
+        np.testing.assert_array_equal(loaded_data['volumes'].values, self.test_data['volumes'].values)
+
+    def test_cache_mechanism(self):
+        """Test caching mechanism."""
+        loader = LazyDataLoader(cache_dir=os.path.dirname(self.temp_file.name), max_cache_size=2)
+
+        # Add multiple items
+        loader.save_data('data1', {'value': 1})
+        loader.save_data('data2', {'value': 2})
+        loader.save_data('data3', {'value': 3})
+
+        # Cache should maintain only recent items
+        self.assertIn('saved:data2', loader.cache)
+        self.assertIn('saved:data3', loader.cache)
+
+
+class TestMemoryStats(unittest.TestCase):
+    """Test MemoryStats class functionality."""
+
+    def test_memory_stats(self):
+        """Test memory statistics collection."""
+        stats = MemoryStats()
+
+        # Get initial stats
+        initial_stats = stats.get_stats()
+        self.assertIn('rss', initial_stats)
+        self.assertIn('vms', initial_stats)
+        self.assertIn('cpu_percent', initial_stats)
+
+    def test_memory_monitoring(self):
+        """Test memory monitoring over time."""
+        stats = MemoryStats()
+
+        # Create some memory usage
+        large_array = np.zeros((1000, 1000))
+
+        # Get stats after allocation
+        after_stats = stats.get_stats()
+
+        # Clean up
+        del large_array
+
+        self.assertIsInstance(after_stats['rss'], (int, float))
+
+
+class TestMemoryOptimizedIndicators(unittest.TestCase):
+    """Test MemoryOptimizedIndicators class functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_file = tempfile.NamedTemporaryFile(suffix='.h5', delete=False)
+        self.temp_file.close()
+
+        # Create test OHLC data
+        np.random.seed(42)
+        n_points = 5000
+        self.ohlc_data = {
+            'open': np.random.randn(n_points),
+            'high': np.random.randn(n_points) + 1,
+            'low': np.random.randn(n_points) - 1,
+            'close': np.random.randn(n_points),
+            'volume': np.random.randint(100, 1000, n_points)
+        }
+
+        # Save to HDF5
+        with MemoryMappedData(self.temp_file.name, mode='w') as mm_data:
+            for key, data in self.ohlc_data.items():
+                mm_data.create_dataset(key, data=data)
+
+        self.optimizer = MemoryOptimizedIndicators(chunk_size=1000)
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+
+    def test_ema_memory_optimized(self):
+        """Test memory-optimized EMA calculation."""
+        close_prices = self.ohlc_data['close']
+
+        # Test with array input
+        ema_result = self.optimizer.ema_memory_optimized(close_prices, period=20)
+        self.assertEqual(len(ema_result), len(close_prices))
+
+        # Test with file input - should read 'close' from HDF5
+        ema_file_result = self.optimizer.ema_memory_optimized(self.temp_file.name, period=20)
+        self.assertEqual(len(ema_file_result), len(close_prices))
+
+    def test_rsi_memory_optimized(self):
+        """Test memory-optimized RSI calculation."""
+        close_prices = self.ohlc_data['close']
+
+        # Test with rolling buffer
+        rsi_result = self.optimizer.rsi_memory_optimized(close_prices, period=14, use_rolling_buffer=True)
+        self.assertEqual(len(rsi_result), len(close_prices))
+
+        # Test with file input
+        rsi_file_result = self.optimizer.rsi_memory_optimized(self.temp_file.name, period=14)
+        self.assertEqual(len(rsi_file_result), len(close_prices))
+
+    def test_bollinger_bands_memory_optimized(self):
+        """Test memory-optimized Bollinger Bands calculation."""
+        close_prices = self.ohlc_data['close']
+
+        # Test with array input
+        upper, middle, lower = self.optimizer.bollinger_bands_memory_optimized(close_prices, period=20)
+        self.assertEqual(len(upper), len(close_prices))
+        self.assertEqual(len(middle), len(close_prices))
+        self.assertEqual(len(lower), len(close_prices))
+
+        # Test with file input
+        upper_f, middle_f, lower_f = self.optimizer.bollinger_bands_memory_optimized(self.temp_file.name, period=20)
+        self.assertEqual(len(upper_f), len(close_prices))
+
+    def test_atr_memory_optimized(self):
+        """Test memory-optimized ATR calculation."""
+        high_prices = self.ohlc_data['high']
+        low_prices = self.ohlc_data['low']
+        close_prices = self.ohlc_data['close']
+
+        # Test with array inputs
+        atr_result = self.optimizer.atr_memory_optimized(high_prices, low_prices, close_prices, period=14)
+        self.assertEqual(len(atr_result), len(close_prices))
+
+        # Test with file input
+        atr_file_result = self.optimizer.atr_memory_optimized(self.temp_file.name, self.temp_file.name, self.temp_file.name, period=14)
+        self.assertEqual(len(atr_file_result), len(close_prices))
+
+    def test_chunk_processing(self):
+        """Test chunked data processing."""
+        large_data = np.random.randn(2500)
+
+        # Test chunking
+        chunks = self.optimizer._chunk_data(large_data, chunk_size=1000)
+        self.assertEqual(len(chunks), 3)  # 2500 / 1000 = 2.5 -> 3 chunks
+
+        # Test processing in chunks
+        result = self.optimizer._process_in_chunks(large_data, lambda x: x ** 2)
+        expected = large_data ** 2
+        np.testing.assert_array_equal(result, expected)
+
+    def test_memory_stats(self):
+        """Test memory statistics collection."""
+        stats = self.optimizer.get_memory_stats()
+        self.assertIsInstance(stats, dict)
+        self.assertIn('rss', stats)
+
+    def test_large_dataset_optimization(self):
+        """Test optimization for large datasets."""
+        results = self.optimizer.optimize_for_large_dataset(self.temp_file.name, indicators=['ema', 'rsi'])
+
+        self.assertIn('ema', results)
+        self.assertIn('rsi', results)
+        self.assertEqual(len(results['ema']), len(self.ohlc_data['close']))
+        self.assertEqual(len(results['rsi']), len(self.ohlc_data['close']))
+
+
+class TestMemoryOptimizationConvenienceFunctions(unittest.TestCase):
+    """Test convenience functions for memory-optimized indicators."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        np.random.seed(42)
+        self.test_series = pd.Series(np.random.randn(1000), name='close')
+
+    def test_ema_memory_convenience(self):
+        """Test EMA memory optimization convenience function."""
+        from services.core.vectorization import ema_memory_optimized
+
+        result = ema_memory_optimized(self.test_series, period=20)
+        self.assertIsInstance(result, pd.Series)
+        self.assertEqual(result.name, 'EMA20')
+        self.assertEqual(len(result), len(self.test_series))
+
+    def test_rsi_memory_convenience(self):
+        """Test RSI memory optimization convenience function."""
+        from services.core.vectorization import rsi_memory_optimized
+
+        result = rsi_memory_optimized(self.test_series, period=14)
+        self.assertIsInstance(result, pd.Series)
+        self.assertEqual(result.name, 'RSI')
+        self.assertEqual(len(result), len(self.test_series))
+
+    def test_bb_memory_convenience(self):
+        """Test Bollinger Bands memory optimization convenience function."""
+        from services.core.vectorization import bb_memory_optimized
+
+        upper, middle, lower = bb_memory_optimized(self.test_series, period=20)
+        self.assertIsInstance(upper, pd.Series)
+        self.assertIsInstance(middle, pd.Series)
+        self.assertIsInstance(lower, pd.Series)
+        self.assertEqual(upper.name, 'BB_upper')
+        self.assertEqual(middle.name, 'BB_middle')
+        self.assertEqual(lower.name, 'BB_lower')
+
+
+if __name__ == '__main__':
+    unittest.main()

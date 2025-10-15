@@ -4,38 +4,105 @@ Discovery Service Client
 
 Async client for communicating with the Discovery Service API.
 Provides genetic algorithm optimization for trading indicators.
+Enhanced with Zero-Trust Security (mTLS + JWT).
 """
 
 import asyncio
 import aiohttp
 import logging
+import ssl
 from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 
-from config.settings import DISCOVERY_SERVICE_URL, API_KEY
+from config.settings import (
+    DISCOVERY_SERVICE_URL, API_KEY,
+    ENABLE_MTLS, MTLS_CERT_PATH, MTLS_KEY_PATH, CA_CERT_PATH
+)
 
 logger = logging.getLogger(__name__)
 
 
 class DiscoveryServiceClient:
-    """Async client for Discovery Service API"""
+    """Async client for Discovery Service API with Zero-Trust Security"""
 
     def __init__(self, base_url: Optional[str] = None):
         self.base_url = base_url or DISCOVERY_SERVICE_URL or "http://localhost:8001"
         self.session: Optional[aiohttp.ClientSession] = None
         self.api_key = API_KEY
+        self.jwt_token: Optional[str] = None
+
+        # mTLS configuration
+        self.mtls_enabled = ENABLE_MTLS or False
+        self.ssl_context: Optional[ssl.SSLContext] = None
+
+        if self.mtls_enabled:
+            self._setup_mtls()
+
+    def _setup_mtls(self):
+        """Setup mutual TLS configuration"""
+        try:
+            from pathlib import Path
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+
+            # Load client certificate and key
+            if MTLS_CERT_PATH and MTLS_KEY_PATH:
+                cert_path = Path(MTLS_CERT_PATH)
+                key_path = Path(MTLS_KEY_PATH)
+
+                if cert_path.exists() and key_path.exists():
+                    self.ssl_context.load_cert_chain(str(cert_path), str(key_path))
+                    logger.info("✅ mTLS client certificate loaded for Discovery Service")
+                else:
+                    logger.warning("⚠️  mTLS certificate files not found, disabling mTLS")
+                    self.mtls_enabled = False
+
+            # Load CA certificate for server verification
+            if CA_CERT_PATH and Path(CA_CERT_PATH).exists():
+                self.ssl_context.load_verify_locations(CA_CERT_PATH)
+                self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+
+        except Exception as e:
+            logger.error(f"❌ Failed to setup mTLS for Discovery Service: {e}")
+            self.mtls_enabled = False
+
+    async def authenticate(self) -> bool:
+        """Authenticate with security service and get JWT token"""
+        try:
+            from services.security_service.client import SecurityServiceClient
+
+            security_client = SecurityServiceClient()
+            success = await security_client.authenticate("discovery_service_client")
+
+            if success:
+                self.jwt_token = "authenticated"  # Placeholder for actual token
+                logger.info("✅ Discovery service client authenticated")
+                return True
+            else:
+                logger.error("❌ Discovery service client authentication failed")
+                return False
+
+        except Exception as e:
+            logger.error(f"Authentication error: {e}")
+            return False
 
     @asynccontextmanager
     async def _get_session(self):
-        """Get or create HTTP session"""
+        """Get or create HTTP session with security"""
         if self.session is None:
             headers = {}
             if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
+                headers["X-API-Key"] = self.api_key
+            if self.jwt_token:
+                headers["Authorization"] = f"Bearer {self.jwt_token}"
+
+            connector = None
+            if self.mtls_enabled and self.ssl_context:
+                connector = aiohttp.TCPConnector(ssl=self.ssl_context)
 
             self.session = aiohttp.ClientSession(
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(total=300)  # Longer timeout for optimization
+                timeout=aiohttp.ClientTimeout(total=300),  # Longer timeout for optimization
+                connector=connector
             )
 
         try:

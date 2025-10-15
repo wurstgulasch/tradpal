@@ -39,37 +39,69 @@ from config.settings import (
     ENABLE_LIVE_TRADING, ENABLE_NOTIFICATIONS
 )
 
-# Legacy imports (fallback)
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-try:
-    from src.data_fetcher import fetch_data, fetch_historical_data
-    from src.indicators import calculate_indicators
-    from src.signal_generator import generate_signals, calculate_risk_management
-    from src.output import save_signals_to_json, get_latest_signals
-    from src.logging_config import logger as legacy_logger, log_signal, log_error, log_system_status
-    from src.backtester import run_backtest
-    from src.cache import clear_all_caches, get_cache_stats
-    from src.config_validation import validate_configuration_at_startup
-    from src.audit_logger import audit_logger
-    from src.performance import PerformanceMonitor
-    from src.discovery import run_discovery, load_adaptive_config, save_adaptive_config, apply_adaptive_config
-    LEGACY_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Legacy modules not available: {e}")
-    LEGACY_AVAILABLE = False
+# Legacy imports (REMOVED - migration complete)
+# sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# try:
+#     from src.data_fetcher import fetch_data, fetch_historical_data
+#     from src.indicators import calculate_indicators
+#     from src.signal_generator import generate_signals, calculate_risk_management
+#     from src.output import save_signals_to_json, get_latest_signals
+#     from src.logging_config import logger as legacy_logger, log_signal, log_error, log_system_status
+#     from src.backtester import run_backtest
+#     from src.cache import clear_all_caches, get_cache_stats
+#     from src.config_validation import validate_configuration_at_startup
+#     from src.audit_logger import audit_logger
+#     from src.performance import PerformanceMonitor
+#     from src.discovery import run_discovery, load_adaptive_config, save_adaptive_config, apply_adaptive_config
+#     LEGACY_AVAILABLE = True
+# except ImportError as e:
+#     logger.warning(f"Legacy modules not available: {e}")
+#     LEGACY_AVAILABLE = False
 
-# Service imports (where available)
+LEGACY_AVAILABLE = False  # Migration complete - legacy modules removed
+
+# Service imports (primary architecture)
 try:
-    from services.data_service import DataServiceClient
-    DATA_SERVICE_AVAILABLE = True
+    from services.core.client import CoreServiceClient
+    CORE_SERVICE_AVAILABLE = True
 except ImportError:
-    DATA_SERVICE_AVAILABLE = False
+    CORE_SERVICE_AVAILABLE = False
+
+try:
+    from services.ml_trainer.client import MLTrainerServiceClient
+    ML_TRAINER_SERVICE_AVAILABLE = True
+except ImportError:
+    ML_TRAINER_SERVICE_AVAILABLE = False
+
+try:
+    from services.trading_bot_live.client import TradingBotLiveServiceClient
+    TRADING_BOT_LIVE_SERVICE_AVAILABLE = True
+except ImportError:
+    TRADING_BOT_LIVE_SERVICE_AVAILABLE = False
+
+try:
+    from services.web_ui.client import WebUIServiceClient
+    WEB_UI_SERVICE_AVAILABLE = True
+except ImportError:
+    WEB_UI_SERVICE_AVAILABLE = False
 
 try:
     from services.backtesting_service.client import BacktestingServiceClient
     BACKTESTING_SERVICE_AVAILABLE = True
 except ImportError:
     BACKTESTING_SERVICE_AVAILABLE = False
+
+try:
+    from services.data_service.client import DataServiceClient
+    DATA_SERVICE_AVAILABLE = True
+except ImportError:
+    DATA_SERVICE_AVAILABLE = False
+
+try:
+    from services.discovery_service.client import DiscoveryServiceClient
+    DISCOVERY_SERVICE_AVAILABLE = True
+except ImportError:
+    DISCOVERY_SERVICE_AVAILABLE = False
 
 try:
     from services.notification_service.client import NotificationServiceClient
@@ -83,18 +115,6 @@ try:
 except ImportError:
     RISK_SERVICE_AVAILABLE = False
 
-try:
-    from services.mlops_service.client import MLOpsServiceClient
-    MLOPS_SERVICE_AVAILABLE = True
-except ImportError:
-    MLOPS_SERVICE_AVAILABLE = False
-
-try:
-    from services.security_service.client import SecurityServiceClient
-    SECURITY_SERVICE_AVAILABLE = True
-except ImportError:
-    SECURITY_SERVICE_AVAILABLE = False
-
 
 class TradPalOrchestrator:
     """Main orchestrator with hybrid architecture"""
@@ -102,11 +122,10 @@ class TradPalOrchestrator:
     def __init__(self):
         self.services = {}
         self.legacy_mode = not any([
-            DATA_SERVICE_AVAILABLE,
-            BACKTESTING_SERVICE_AVAILABLE,
-            NOTIFICATION_SERVICE_AVAILABLE,
-            RISK_SERVICE_AVAILABLE,
-            DISCOVERY_SERVICE_AVAILABLE
+            CORE_SERVICE_AVAILABLE,
+            ML_TRAINER_SERVICE_AVAILABLE,
+            TRADING_BOT_LIVE_SERVICE_AVAILABLE,
+            WEB_UI_SERVICE_AVAILABLE
         ])
         self.running = False
 
@@ -120,34 +139,49 @@ class TradPalOrchestrator:
         try:
             logger.info("🚀 Initializing TradPal Services...")
 
-            # Initialize microservices where available
-            if DATA_SERVICE_AVAILABLE:
-                self.services['data'] = DataServiceClient()
-                if not await self.services['data'].health_check():
-                    logger.warning("Data service health check failed, using legacy")
+            # Initialize available microservices
+            if CORE_SERVICE_AVAILABLE:
+                self.services['core'] = CoreServiceClient()
+                await self.services['core'].authenticate()
+                logger.info("✅ Core service initialized with Zero Trust")
+
+            if ML_TRAINER_SERVICE_AVAILABLE:
+                self.services['ml_trainer'] = MLTrainerServiceClient()
+                logger.info("✅ ML Trainer service initialized")
+
+            if TRADING_BOT_LIVE_SERVICE_AVAILABLE:
+                self.services['trading_bot_live'] = TradingBotLiveServiceClient()
+                logger.info("✅ Trading Bot Live service initialized")
+
+            if WEB_UI_SERVICE_AVAILABLE:
+                self.services['web_ui'] = WebUIServiceClient()
+                logger.info("✅ Web UI service initialized")
 
             if BACKTESTING_SERVICE_AVAILABLE:
                 self.services['backtesting'] = BacktestingServiceClient()
-                # Add health check if available
+                # Authenticate with security service
+                await self.services['backtesting'].initialize()
+                await self.services['backtesting'].authenticate()
+                logger.info("✅ Backtesting service initialized with Zero Trust")
 
-            if NOTIFICATION_SERVICE_AVAILABLE:
-                self.services['notification'] = NotificationServiceClient()
-
-            if RISK_SERVICE_AVAILABLE:
-                self.services['risk'] = RiskServiceClient()
+            if DATA_SERVICE_AVAILABLE:
+                self.services['data'] = DataServiceClient()
+                await self.services['data'].initialize()
+                await self.services['data'].authenticate()
+                logger.info("✅ Data service initialized with Zero Trust")
 
             if DISCOVERY_SERVICE_AVAILABLE:
                 self.services['discovery'] = DiscoveryServiceClient()
+                await self.services['discovery'].authenticate()
+                logger.info("✅ Discovery service initialized with Zero Trust")
 
-            if MLOPS_SERVICE_AVAILABLE:
-                self.services['mlops'] = MLOpsServiceClient()
+            if NOTIFICATION_SERVICE_AVAILABLE:
+                self.services['notification'] = NotificationServiceClient()
+                logger.info("✅ Notification service initialized")
 
-            if SECURITY_SERVICE_AVAILABLE:
-                self.services['security'] = SecurityServiceClient()
-
-            # Legacy validation
-            if LEGACY_AVAILABLE:
-                validate_configuration_at_startup()
+            if RISK_SERVICE_AVAILABLE:
+                self.services['risk'] = RiskServiceClient()
+                logger.info("✅ Risk service initialized")
 
             logger.info("✅ Services initialized successfully")
             return True
@@ -163,33 +197,59 @@ class TradPalOrchestrator:
         try:
             while self.running:
                 try:
-                    # Use microservice or legacy
+                    # Fetch data using data service
                     if DATA_SERVICE_AVAILABLE and 'data' in self.services:
-                        data = await self.services['data'].fetch_realtime_data(
-                            symbol=SYMBOL, timeframe=TIMEFRAME, exchange=EXCHANGE
+                        data_response = await self.services['data'].fetch_realtime_data(
+                            symbol=SYMBOL,
+                            timeframe=TIMEFRAME,
+                            exchange=EXCHANGE
                         )
-                    elif LEGACY_AVAILABLE:
-                        data = fetch_data(SYMBOL, TIMEFRAME, EXCHANGE)
+                        data = data_response.get('data', [])
                     else:
-                        raise RuntimeError("No data source available")
+                        logger.error("No data service available for live trading")
+                        await asyncio.sleep(60)
+                        continue
 
-                    # Calculate indicators and signals
-                    if LEGACY_AVAILABLE:
-                        indicators = calculate_indicators(data)
-                        signals = generate_signals(data, indicators)
-                        risk_management = calculate_risk_management(data, indicators, signals)
+                    # Calculate indicators and signals using core service
+                    if CORE_SERVICE_AVAILABLE and 'core' in self.services:
+                        # Calculate indicators
+                        indicators_response = await self.services['core'].calculate_indicators(
+                            symbol=SYMBOL,
+                            timeframe=TIMEFRAME,
+                            data=data,
+                            indicators=['ema', 'rsi', 'bb', 'atr']
+                        )
+                        indicators = indicators_response
 
-                        # Log signals
-                        if signals:
-                            log_signal(signals, risk_management)
-                            save_signals_to_json(signals, risk_management)
+                        # Generate signals
+                        signals_response = await self.services['core'].generate_signals(
+                            symbol=SYMBOL,
+                            timeframe=TIMEFRAME,
+                            data=data
+                        )
+                        signals = signals_response
+
+                        # Execute strategy if signals found
+                        if signals and signals.get('signals'):
+                            for signal in signals['signals']:
+                                if signal.get('action') in ['BUY', 'SELL']:
+                                    strategy_result = await self.services['core'].execute_strategy(
+                                        symbol=SYMBOL,
+                                        timeframe=TIMEFRAME,
+                                        signal=signal,
+                                        capital=10000.0,  # Default capital
+                                        risk_config={'risk_per_trade': 0.01}
+                                    )
+                                    logger.info(f"Strategy executed: {strategy_result}")
+
+                        # Log via notification service if available
+                        if NOTIFICATION_SERVICE_AVAILABLE and 'notification' in self.services:
+                            await self.services['notification'].log_signals(signals)
 
                     await asyncio.sleep(60)  # 1-minute intervals
 
                 except Exception as e:
                     logger.error(f"Live trading error: {e}")
-                    if LEGACY_AVAILABLE:
-                        log_error(f"Live trading error: {e}")
                     await asyncio.sleep(10)
 
         except Exception as e:
@@ -200,21 +260,16 @@ class TradPalOrchestrator:
         logger.info("📊 Starting Backtesting Mode...")
 
         try:
-            # Use microservice if available
+            # Use backtesting service
             if BACKTESTING_SERVICE_AVAILABLE and 'backtesting' in self.services:
                 results = await self.services['backtesting'].run_backtest(
                     symbol=kwargs.get('symbol', SYMBOL),
                     timeframe=kwargs.get('timeframe', TIMEFRAME),
                     start_date=kwargs.get('start_date'),
-                    end_date=kwargs.get('end_date')
-                )
-            elif LEGACY_AVAILABLE:
-                # Legacy backtesting
-                results = run_backtest(
-                    symbol=kwargs.get('symbol', SYMBOL),
-                    timeframe=kwargs.get('timeframe', TIMEFRAME),
-                    start_date=kwargs.get('start_date'),
-                    end_date=kwargs.get('end_date')
+                    end_date=kwargs.get('end_date'),
+                    initial_capital=10000.0,
+                    strategy_config={'indicators': ['ema', 'rsi', 'bb']},
+                    risk_config={'risk_per_trade': 0.01}
                 )
             else:
                 raise RuntimeError("No backtesting service available")
@@ -231,7 +286,7 @@ class TradPalOrchestrator:
         logger.info("🔍 Starting Discovery Mode...")
 
         try:
-            # Try microservice first
+            # Use discovery service
             if DISCOVERY_SERVICE_AVAILABLE and 'discovery' in self.services:
                 results = await self.services['discovery'].run_parameter_discovery(
                     symbol=kwargs.get('symbol', SYMBOL),
@@ -242,14 +297,8 @@ class TradPalOrchestrator:
                     generations=kwargs.get('generations', 20),
                     use_walk_forward=kwargs.get('use_walk_forward', True)
                 )
-            elif LEGACY_AVAILABLE:
-                results = run_discovery(
-                    symbol=kwargs.get('symbol', SYMBOL),
-                    timeframe=kwargs.get('timeframe', TIMEFRAME),
-                    **kwargs
-                )
             else:
-                raise RuntimeError("Discovery requires legacy modules")
+                raise RuntimeError("Discovery service not available")
 
             logger.info(f"✅ Discovery completed: {results.get('best_fitness', 'N/A')}")
             return results
@@ -270,24 +319,44 @@ class TradPalOrchestrator:
 
                 # Analyze each timeframe
                 for tf in timeframes:
+                    # Fetch data using data service
                     if DATA_SERVICE_AVAILABLE and 'data' in self.services:
-                        data = await self.services['data'].fetch_realtime_data(
-                            symbol=SYMBOL, timeframe=tf, exchange=EXCHANGE
+                        data_response = await self.services['data'].fetch_historical_data(
+                            symbol=SYMBOL,
+                            timeframe=tf,
+                            start_date='2024-01-01',  # Default start date
+                            exchange=EXCHANGE
                         )
-                    elif LEGACY_AVAILABLE:
-                        data = fetch_data(SYMBOL, tf, EXCHANGE)
+                        data = data_response.get('data', [])
                     else:
                         continue
 
-                    # Calculate indicators and signals
-                    if LEGACY_AVAILABLE:
-                        indicators = calculate_indicators(data)
-                        signals = generate_signals(data, indicators)
-                        analyses[tf] = {'data': data, 'indicators': indicators, 'signals': signals}
+                    # Calculate indicators and signals using core service
+                    if CORE_SERVICE_AVAILABLE and 'core' in self.services:
+                        indicators_response = await self.services['core'].calculate_indicators(
+                            symbol=SYMBOL,
+                            timeframe=tf,
+                            data=data,
+                            indicators=['ema', 'rsi', 'bb']
+                        )
+                        indicators = indicators_response
+
+                        signals_response = await self.services['core'].generate_signals(
+                            symbol=SYMBOL,
+                            timeframe=tf,
+                            data=data
+                        )
+                        signals = signals_response
+
+                        analyses[tf] = {
+                            'data': data,
+                            'indicators': indicators,
+                            'signals': signals.get('signals', [])
+                        }
 
                 # Log multi-timeframe analysis
-                if LEGACY_AVAILABLE and analyses:
-                    log_system_status(f"Multi-timeframe analysis completed for {len(analyses)} timeframes")
+                if analyses:
+                    logger.info(f"Multi-timeframe analysis completed for {len(analyses)} timeframes")
 
                 await asyncio.sleep(300)  # 5-minute intervals for MTA
 
@@ -303,26 +372,41 @@ class TradPalOrchestrator:
             logger.info(f"Initial capital: ${capital}")
 
             while self.running:
-                # Fetch data and analyze
+                # Fetch data using data service
                 if DATA_SERVICE_AVAILABLE and 'data' in self.services:
-                    data = await self.services['data'].fetch_realtime_data(
-                        symbol=SYMBOL, timeframe=TIMEFRAME, exchange=EXCHANGE
+                    data_response = await self.services['data'].fetch_realtime_data(
+                        symbol=SYMBOL,
+                        timeframe=TIMEFRAME,
+                        exchange=EXCHANGE
                     )
-                elif LEGACY_AVAILABLE:
-                    data = fetch_data(SYMBOL, TIMEFRAME, EXCHANGE)
+                    data = data_response.get('data', [])
                 else:
                     await asyncio.sleep(60)
                     continue
 
-                # Calculate indicators and signals
-                if LEGACY_AVAILABLE:
-                    indicators = calculate_indicators(data)
-                    signals = generate_signals(data, indicators)
-                    risk_management = calculate_risk_management(data, indicators, signals)
+                # Calculate indicators and signals using core service
+                if CORE_SERVICE_AVAILABLE and 'core' in self.services:
+                    indicators_response = await self.services['core'].calculate_indicators(
+                        symbol=SYMBOL,
+                        timeframe=TIMEFRAME,
+                        data=data,
+                        indicators=['ema', 'rsi', 'bb', 'atr']
+                    )
+                    indicators = indicators_response
 
-                    # Simulate paper trades
-                    if signals and risk_management:
-                        logger.info(f"Paper trade signal detected: {signals}")
+                    signals_response = await self.services['core'].generate_signals(
+                        symbol=SYMBOL,
+                        timeframe=TIMEFRAME,
+                        data=data
+                    )
+                    signals = signals_response
+
+                    # Simulate paper trades using trading bot live service
+                    if TRADING_BOT_LIVE_SERVICE_AVAILABLE and 'trading_bot_live' in self.services and signals.get('signals'):
+                        for signal in signals['signals']:
+                            if signal.get('action') in ['BUY', 'SELL']:
+                                trade_result = await self.services['trading_bot_live'].execute_paper_trade(signal)
+                                logger.info(f"Paper trade executed: {trade_result}")
 
                 await asyncio.sleep(60)
 
@@ -334,12 +418,24 @@ class TradPalOrchestrator:
         logger.info("🤖 Starting ML Training Mode...")
 
         try:
-            # Try microservice first
-            if MLOPS_SERVICE_AVAILABLE and 'mlops' in self.services:
-                # For now, use placeholder training
-                # In a real implementation, this would trigger actual ML training
-                logger.info("ML training via MLOps service not yet fully implemented")
-                return {"status": "placeholder", "message": "ML training service available"}
+            # Use ML trainer service
+            if ML_TRAINER_SERVICE_AVAILABLE and 'ml_trainer' in self.services:
+                from services.ml_trainer.client import TrainingRequest
+
+                request = TrainingRequest(
+                    symbol=kwargs.get('symbol', SYMBOL),
+                    timeframe=kwargs.get('timeframe', TIMEFRAME),
+                    start_date=kwargs.get('start_date'),
+                    end_date=kwargs.get('end_date'),
+                    model_type=kwargs.get('model_type', 'random_forest'),
+                    target_horizon=5,
+                    use_optuna=True
+                )
+
+                training_result = await self.services['ml_trainer'].train_model(request)
+
+                logger.info(f"ML training completed: {training_result}")
+                return training_result
 
             elif LEGACY_AVAILABLE:
                 # Legacy ML training would go here

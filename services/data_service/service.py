@@ -47,6 +47,10 @@ except ImportError:
     YAHOO_AVAILABLE = False
     yf = None
 
+import logging
+from .data_mesh import DataMeshManager, DataDomain, DataProduct, FeatureSet
+from .data_governance import DataGovernanceManager, AccessLevel, AuditEventType
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -216,6 +220,19 @@ class DataService:
             except Exception as e:
                 logger.warning(f"Redis initialization failed: {e}")
 
+        # Initialize Data Mesh components
+        self.data_mesh = DataMeshManager(
+            redis_url=redis_url,
+            event_system=self.event_system
+        )
+
+        # Initialize Data Governance components
+        self.data_governance = DataGovernanceManager({
+            "redis_url": redis_url,
+            "max_recent_events": 1000,
+            "max_results": 1000
+        })
+
         # Data source priorities for fallbacks
         self.source_priorities = {
             DataSource.CCXT: [DataProvider.BINANCE, DataProvider.COINBASE, DataProvider.KRAKEN],
@@ -230,7 +247,7 @@ class DataService:
             DataQuality.POOR: 0.50,
         }
 
-        logger.info("Data Service initialized")
+        logger.info("Data Service initialized with Data Mesh support")
 
     def _generate_cache_key(self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime) -> str:
         """Generate a unique cache key for data requests."""
@@ -642,6 +659,300 @@ class DataService:
             logger.error(f"Cache clear failed: {e}")
             return 0
 
+    # Data Mesh Operations
+
+    async def register_data_product(self, name: str, domain: str, description: str,
+                                  schema: Dict[str, Any], owners: List[str]) -> Dict[str, Any]:
+        """
+        Register a new data product in the Data Mesh.
+
+        Args:
+            name: Data product name
+            domain: Data domain (e.g., 'market_data', 'trading_signals')
+            description: Product description
+            schema: Data schema definition
+            owners: List of data product owners
+
+        Returns:
+            Registration result
+        """
+        try:
+            data_domain = DataDomain(domain)
+            data_product = DataProduct(
+                name=name,
+                domain=data_domain,
+                description=description,
+                schema=schema,
+                owners=owners,
+                created_at=datetime.now(),
+                version="1.0.0"
+            )
+
+            result = await self.data_mesh.register_data_product(data_product)
+
+            await self.event_system.publish("data_mesh.product_registered", {
+                "product_name": name,
+                "domain": domain,
+                "owners": owners
+            })
+
+            return {
+                "success": True,
+                "product_id": result,
+                "message": f"Data product '{name}' registered successfully"
+            }
+
+        except Exception as e:
+            error_msg = f"Data product registration failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def store_market_data(self, symbol: str, timeframe: str, df: pd.DataFrame,
+                               metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Store market data in the Data Mesh (TimeSeriesDatabase).
+
+        Args:
+            symbol: Trading symbol (e.g., 'BTC/USDT')
+            timeframe: Timeframe (e.g., '1m', '1h', '1d')
+            df: OHLCV DataFrame
+            metadata: Additional metadata
+
+        Returns:
+            Storage result
+        """
+        try:
+            result = await self.data_mesh.store_market_data(symbol, timeframe, df, metadata or {})
+
+            await self.event_system.publish("data_mesh.market_data_stored", {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "record_count": len(df),
+                "start_date": df.index.min().isoformat() if not df.empty else None,
+                "end_date": df.index.max().isoformat() if not df.empty else None
+            })
+
+            return {
+                "success": True,
+                "message": f"Stored {len(df)} records for {symbol} {timeframe}",
+                "details": result
+            }
+
+        except Exception as e:
+            error_msg = f"Market data storage failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def retrieve_market_data(self, symbol: str, timeframe: str,
+                                  start_date: Optional[datetime] = None,
+                                  end_date: Optional[datetime] = None) -> Dict[str, Any]:
+        """
+        Retrieve market data from the Data Mesh.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe
+            start_date: Start date filter
+            end_date: End date filter
+
+        Returns:
+            Retrieved data
+        """
+        try:
+            df, metadata = await self.data_mesh.retrieve_market_data(
+                symbol, timeframe, start_date, end_date
+            )
+
+            if df is None or df.empty:
+                return {
+                    "success": False,
+                    "error": f"No data found for {symbol} {timeframe}"
+                }
+
+            return {
+                "success": True,
+                "data": {"ohlcv": df.to_dict('index')},
+                "metadata": metadata,
+                "record_count": len(df)
+            }
+
+        except Exception as e:
+            error_msg = f"Market data retrieval failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def store_ml_features(self, feature_set_name: str, features_df: pd.DataFrame,
+                               metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Store ML features in the Feature Store.
+
+        Args:
+            feature_set_name: Name of the feature set
+            features_df: DataFrame with features
+            metadata: Feature set metadata
+
+        Returns:
+            Storage result
+        """
+        try:
+            feature_set = FeatureSet(
+                name=feature_set_name,
+                features=list(features_df.columns),
+                metadata=metadata,
+                created_at=datetime.now(),
+                version="1.0.0"
+            )
+
+            result = await self.data_mesh.store_ml_features(feature_set, features_df)
+
+            await self.event_system.publish("data_mesh.features_stored", {
+                "feature_set": feature_set_name,
+                "feature_count": len(features_df.columns),
+                "record_count": len(features_df)
+            })
+
+            return {
+                "success": True,
+                "message": f"Stored feature set '{feature_set_name}' with {len(features_df)} records",
+                "details": result
+            }
+
+        except Exception as e:
+            error_msg = f"ML features storage failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def retrieve_ml_features(self, feature_set_name: str,
+                                  feature_names: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Retrieve ML features from the Feature Store.
+
+        Args:
+            feature_set_name: Name of the feature set
+            feature_names: Specific features to retrieve (optional)
+
+        Returns:
+            Retrieved features
+        """
+        try:
+            features_df, feature_set = await self.data_mesh.retrieve_ml_features(
+                feature_set_name, feature_names
+            )
+
+            if features_df is None or features_df.empty:
+                return {
+                    "success": False,
+                    "error": f"No features found for set '{feature_set_name}'"
+                }
+
+            return {
+                "success": True,
+                "data": {"features": features_df.to_dict('index')},
+                "feature_set": feature_set.to_dict() if feature_set else None,
+                "record_count": len(features_df)
+            }
+
+        except Exception as e:
+            error_msg = f"ML features retrieval failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def archive_historical_data(self, symbol: str, timeframe: str,
+                                     start_date: datetime, end_date: datetime) -> Dict[str, Any]:
+        """
+        Archive historical data to Data Lake.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe
+            start_date: Start date for archival
+            end_date: End date for archival
+
+        Returns:
+            Archival result
+        """
+        try:
+            # First retrieve data from TimeSeriesDatabase
+            df, _ = await self.data_mesh.retrieve_market_data(symbol, timeframe, start_date, end_date)
+
+            if df is None or df.empty:
+                return {
+                    "success": False,
+                    "error": f"No data available for archival: {symbol} {timeframe}"
+                }
+
+            # Archive to Data Lake
+            result = await self.data_mesh.archive_to_data_lake(
+                symbol, timeframe, df, start_date, end_date
+            )
+
+            await self.event_system.publish("data_mesh.data_archived", {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "record_count": len(df),
+                "date_range": f"{start_date.isoformat()} to {end_date.isoformat()}"
+            })
+
+            return {
+                "success": True,
+                "message": f"Archived {len(df)} records for {symbol} {timeframe}",
+                "details": result
+            }
+
+        except Exception as e:
+            error_msg = f"Data archival failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_data_mesh_status(self) -> Dict[str, Any]:
+        """
+        Get comprehensive Data Mesh status.
+
+        Returns:
+            Data Mesh health and statistics
+        """
+        try:
+            status = await self.data_mesh.get_status()
+
+            # Add service-specific information
+            status.update({
+                "service": "data_service",
+                "data_mesh_enabled": True,
+                "cache_enabled": self.redis_client is not None,
+                "supported_domains": [d.value for d in DataDomain],
+                "quality_thresholds": {q.value: t for q, t in self.quality_thresholds.items()}
+            })
+
+            return status
+
+        except Exception as e:
+            error_msg = f"Data Mesh status check failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "service": "data_service",
+                "status": "error",
+                "error": error_msg,
+                "data_mesh_enabled": False
+            }
+
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check."""
         health = {
@@ -666,7 +977,447 @@ class DataService:
         health["components"]["ccxt"] = "available" if CCXT_AVAILABLE else "not_available"
         health["components"]["yahoo_finance"] = "available" if YAHOO_AVAILABLE else "not_available"
 
+        # Check Data Mesh components
+        try:
+            data_mesh_status = await self.get_data_mesh_status()
+            health["components"]["data_mesh"] = data_mesh_status.get("status", "unknown")
+            if data_mesh_status.get("status") != "healthy":
+                health["status"] = "degraded"
+        except Exception as e:
+            health["components"]["data_mesh"] = f"error: {e}"
+            health["status"] = "degraded"
+
         if not CCXT_AVAILABLE and not YAHOO_AVAILABLE:
             health["status"] = "unhealthy"
 
         return health
+
+    # Governance Methods
+
+    async def check_data_access(self, user: str, resource_type: str, resource_name: str,
+                               access_level: str, purpose: str = "",
+                               ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Check if user has access to a data resource with governance logging.
+
+        Args:
+            user: User identifier
+            resource_type: Type of resource (data_product, domain, feature_set)
+            resource_name: Name of the resource
+            access_level: Required access level (read, write, admin)
+            purpose: Purpose of access
+            ip_address: Client IP address
+
+        Returns:
+            Access check result
+        """
+        try:
+            access_level_enum = AccessLevel(access_level.lower())
+            has_access, reason = await self.data_governance.check_access_and_log(
+                user, resource_type, resource_name, access_level_enum, purpose, ip_address
+            )
+
+            return {
+                "success": True,
+                "has_access": has_access,
+                "reason": reason,
+                "user": user,
+                "resource": f"{resource_type}:{resource_name}",
+                "access_level": access_level
+            }
+
+        except Exception as e:
+            error_msg = f"Access check failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+                "has_access": False
+            }
+
+    async def validate_and_store_data(self, user: str, resource_name: str, df: pd.DataFrame,
+                                     resource_type: str = "data_product",
+                                     ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Validate data quality and store with governance logging.
+
+        Args:
+            user: User performing the operation
+            resource_name: Name of the data resource
+            df: DataFrame to validate and store
+            resource_type: Type of resource
+            ip_address: Client IP address
+
+        Returns:
+            Validation and storage result
+        """
+        try:
+            # Check access first
+            has_access, reason = await self.data_governance.check_access_and_log(
+                user, resource_type, resource_name, AccessLevel.WRITE,
+                "data_validation_and_storage", ip_address
+            )
+
+            if not has_access:
+                return {
+                    "success": False,
+                    "error": f"Access denied: {reason}",
+                    "has_access": False
+                }
+
+            # Validate data quality
+            quality_result = await self.data_governance.validate_data_and_log(
+                user, resource_name, df, resource_type
+            )
+
+            # Store data in Data Mesh if quality is acceptable
+            if quality_result.quality_level.value in ["excellent", "good", "fair"]:
+                # Determine storage method based on resource type
+                if resource_type == "data_product" and "market_data" in resource_name:
+                    # Parse symbol and timeframe from resource name
+                    parts = resource_name.split("_")
+                    if len(parts) >= 3:
+                        symbol = f"{parts[1]}/{parts[2]}"
+                        timeframe = parts[3] if len(parts) > 3 else "1d"
+                        storage_result = await self.store_market_data(symbol, timeframe, df)
+                    else:
+                        storage_result = {"success": False, "error": "Invalid market data resource name format"}
+                elif resource_type == "feature_set":
+                    storage_result = await self.store_ml_features(resource_name, df, {"validated_by": user})
+                else:
+                    storage_result = {"success": False, "error": f"Unsupported resource type for storage: {resource_type}"}
+            else:
+                storage_result = {
+                    "success": False,
+                    "error": f"Data quality too low: {quality_result.quality_level.value}"
+                }
+
+            return {
+                "success": storage_result.get("success", False),
+                "quality_check": {
+                    "score": quality_result.quality_score,
+                    "level": quality_result.quality_level.value,
+                    "issues": quality_result.issues_found
+                },
+                "storage": storage_result if storage_result.get("success") else {"error": storage_result.get("error")},
+                "user": user,
+                "resource": f"{resource_type}:{resource_name}"
+            }
+
+        except Exception as e:
+            error_msg = f"Data validation and storage failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def assign_user_role(self, admin_user: str, target_user: str, role: str,
+                              ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Assign a role to a user (admin operation).
+
+        Args:
+            admin_user: User performing the assignment
+            target_user: User to assign role to
+            role: Role to assign
+            ip_address: Client IP address
+
+        Returns:
+            Role assignment result
+        """
+        try:
+            # Check if admin_user has admin privileges
+            has_admin_access, _ = await self.data_governance.check_access_and_log(
+                admin_user, "system", "user_management", AccessLevel.ADMIN,
+                "role_assignment", ip_address
+            )
+
+            if not has_admin_access:
+                return {
+                    "success": False,
+                    "error": "Insufficient privileges for role assignment"
+                }
+
+            success = await self.data_governance.assign_user_role(admin_user, target_user, role)
+
+            return {
+                "success": success,
+                "message": f"Role '{role}' assigned to user '{target_user}'" if success else "Role assignment failed",
+                "admin_user": admin_user,
+                "target_user": target_user,
+                "role": role
+            }
+
+        except Exception as e:
+            error_msg = f"Role assignment failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def create_governance_policy(self, user: str, policy_data: Dict[str, Any],
+                                      ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new governance policy.
+
+        Args:
+            user: User creating the policy
+            policy_data: Policy definition
+            ip_address: Client IP address
+
+        Returns:
+            Policy creation result
+        """
+        try:
+            from .data_governance import GovernancePolicy
+
+            # Check admin access
+            has_admin_access, _ = await self.data_governance.check_access_and_log(
+                user, "system", "policy_management", AccessLevel.ADMIN,
+                "policy_creation", ip_address
+            )
+
+            if not has_admin_access:
+                return {
+                    "success": False,
+                    "error": "Insufficient privileges for policy creation"
+                }
+
+            policy = GovernancePolicy(**policy_data)
+            success = await self.data_governance.create_governance_policy(policy)
+
+            return {
+                "success": success,
+                "message": f"Governance policy '{policy.name}' created" if success else "Policy creation failed",
+                "policy_name": policy.name,
+                "user": user
+            }
+
+        except Exception as e:
+            error_msg = f"Policy creation failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_audit_events(self, user: str, filters: Dict[str, Any] = None,
+                              ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Retrieve audit events with access control.
+
+        Args:
+            user: User requesting audit events
+            filters: Event filters
+            ip_address: Client IP address
+
+        Returns:
+            Audit events result
+        """
+        try:
+            # Check access to audit logs
+            has_access, _ = await self.data_governance.check_access_and_log(
+                user, "system", "audit_logs", AccessLevel.READ,
+                "audit_review", ip_address
+            )
+
+            if not has_access:
+                return {
+                    "success": False,
+                    "error": "Insufficient privileges to access audit logs"
+                }
+
+            filters = filters or {}
+            events = await self.data_governance.audit_logger.get_events(
+                user=filters.get("user"),
+                resource_type=filters.get("resource_type"),
+                event_type=AuditEventType(filters.get("event_type")) if filters.get("event_type") else None,
+                start_date=datetime.fromisoformat(filters["start_date"]) if filters.get("start_date") else None,
+                end_date=datetime.fromisoformat(filters["end_date"]) if filters.get("end_date") else None,
+                limit=filters.get("limit", 100)
+            )
+
+            return {
+                "success": True,
+                "events": [event.dict() for event in events],
+                "count": len(events),
+                "user": user
+            }
+
+        except Exception as e:
+            error_msg = f"Audit events retrieval failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_user_permissions(self, requesting_user: str, target_user: str,
+                                  ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get user permissions (admin or self only).
+
+        Args:
+            requesting_user: User making the request
+            target_user: User whose permissions to retrieve
+            ip_address: Client IP address
+
+        Returns:
+            User permissions result
+        """
+        try:
+            # Check if user can view permissions (admin or self)
+            is_admin, _ = await self.data_governance.check_access_and_log(
+                requesting_user, "system", "user_management", AccessLevel.READ,
+                "permission_review", ip_address
+            )
+
+            if requesting_user != target_user and not is_admin:
+                return {
+                    "success": False,
+                    "error": "Insufficient privileges to view other users' permissions"
+                }
+
+            permissions = await self.data_governance.access_control.get_user_permissions(target_user)
+
+            return {
+                "success": True,
+                "permissions": permissions,
+                "requesting_user": requesting_user,
+                "target_user": target_user
+            }
+
+        except Exception as e:
+            error_msg = f"Permissions retrieval failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_quality_report(self, user: str, resource_name: Optional[str] = None,
+                                days: int = 7, ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get data quality report.
+
+        Args:
+            user: User requesting the report
+            resource_name: Specific resource to report on
+            days: Number of days to include
+            ip_address: Client IP address
+
+        Returns:
+            Quality report result
+        """
+        try:
+            # Check access to quality reports
+            has_access, _ = await self.data_governance.check_access_and_log(
+                user, "system", "quality_reports", AccessLevel.READ,
+                "quality_review", ip_address
+            )
+
+            if not has_access:
+                return {
+                    "success": False,
+                    "error": "Insufficient privileges to access quality reports"
+                }
+
+            report = await self.data_governance.quality_monitor.get_quality_summary(
+                resource_name, days
+            )
+
+            return {
+                "success": True,
+                "report": report,
+                "user": user,
+                "resource_filter": resource_name,
+                "days": days
+            }
+
+        except Exception as e:
+            error_msg = f"Quality report generation failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def generate_compliance_report(self, user: str, start_date: str, end_date: str,
+                                        ip_address: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Generate compliance report for a date range.
+
+        Args:
+            user: User requesting the report
+            start_date: Start date (ISO format)
+            end_date: End date (ISO format)
+            ip_address: Client IP address
+
+        Returns:
+            Compliance report result
+        """
+        try:
+            # Check admin access for compliance reports
+            has_access, _ = await self.data_governance.check_access_and_log(
+                user, "system", "compliance_reports", AccessLevel.ADMIN,
+                "compliance_review", ip_address
+            )
+
+            if not has_access:
+                return {
+                    "success": False,
+                    "error": "Insufficient privileges to generate compliance reports"
+                }
+
+            start = datetime.fromisoformat(start_date)
+            end = datetime.fromisoformat(end_date)
+
+            report = await self.data_governance.generate_compliance_report(start, end)
+
+            return {
+                "success": True,
+                "report": report,
+                "user": user,
+                "date_range": f"{start_date} to {end_date}"
+            }
+
+        except Exception as e:
+            error_msg = f"Compliance report generation failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_governance_status(self) -> Dict[str, Any]:
+        """
+        Get comprehensive governance status.
+
+        Returns:
+            Governance system health and statistics
+        """
+        try:
+            status = await self.data_governance.get_governance_status()
+
+            # Add service-specific information
+            status.update({
+                "service": "data_service",
+                "data_mesh_enabled": True,
+                "governance_enabled": True,
+                "supported_access_levels": [level.value for level in AccessLevel],
+                "supported_audit_events": [event.value for event in AuditEventType]
+            })
+
+            return status
+
+        except Exception as e:
+            error_msg = f"Governance status check failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "service": "data_service",
+                "status": "error",
+                "error": error_msg,
+                "governance_enabled": False
+            }

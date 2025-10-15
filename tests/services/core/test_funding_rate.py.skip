@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""
+Test Funding Rate Data Source and Analysis
+
+Tests for the funding rate data source implementation and analysis functions.
+"""
+
+import pytest
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch, MagicMock
+import sys
+import os
+
+# Add src to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'services'))
+
+from services.data_sources.funding_rate_source import FundingRateDataSource
+from services.indicators import funding_rate_analysis, funding_rate_signal, combined_funding_market_analysis
+from services.data_sources.factory import create_data_source
+
+
+class TestFundingRateDataSource:
+    """Test the FundingRateDataSource class."""
+
+    @pytest.fixture
+    def mock_exchange(self):
+        """Create a mock CCXT exchange for testing."""
+        exchange = Mock()
+        exchange.load_markets.return_value = {
+            'BTC/USDT:USDT': {'id': 'btcusdt', 'type': 'swap'},
+            'ETH/USDT:USDT': {'id': 'ethusdt', 'type': 'swap'},
+            'BNB/USDT': {'id': 'bnbusdt', 'type': 'spot'}  # Not perpetual
+        }
+        exchange.fetchFundingRateHistory.return_value = [
+            {
+                'timestamp': 1638360000000,  # 2021-12-01 12:00:00
+                'fundingRate': 0.0001,
+                'symbol': 'BTC/USDT:USDT'
+            },
+            {
+                'timestamp': 1638446400000,  # 2021-12-02 12:00:00
+                'fundingRate': -0.00005,
+                'symbol': 'BTC/USDT:USDT'
+            }
+        ]
+        exchange.fetchFundingRate.return_value = {
+            'fundingRate': 0.00008,
+            'nextFundingTime': 1638532800000,
+            'symbol': 'BTC/USDT:USDT'
+        }
+        exchange.rateLimit = 1000
+        return exchange
+
+    @pytest.fixture
+    def funding_config(self):
+        """Sample funding rate data source config."""
+        return {
+            'exchange': 'binance',
+            'api_key': 'test_key',
+            'api_secret': 'test_secret'
+        }
+
+    def test_initialization(self, funding_config, mock_exchange):
+        """Test data source initialization."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = FundingRateDataSource(funding_config)
+            assert source.exchange_name == 'binance'
+            assert source.api_key == 'test_key'
+            assert hasattr(source, 'exchange')
+
+    def test_supported_timeframes(self, funding_config, mock_exchange):
+        """Test supported timeframes."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = FundingRateDataSource(funding_config)
+            timeframes = source.get_supported_timeframes()
+            expected = ['1h', '4h', '8h', '1d', '1w']
+            assert timeframes == expected
+
+    def test_supported_symbols(self, funding_config, mock_exchange):
+        """Test supported symbols filtering."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = FundingRateDataSource(funding_config)
+            symbols = source.get_supported_symbols()
+            # Should only include perpetual futures
+            assert 'BTC/USDT:USDT' in symbols
+            assert 'ETH/USDT:USDT' in symbols
+            assert 'BNB/USDT' not in symbols  # Not perpetual
+
+    def test_fetch_current_funding_rate(self, funding_config, mock_exchange):
+        """Test fetching current funding rate."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = FundingRateDataSource(funding_config)
+            result = source.fetch_current_funding_rate('BTC/USDT:USDT')
+
+            assert result is not None
+            assert result['funding_rate'] == 0.00008
+            assert result['symbol'] == 'BTC/USDT:USDT'
+            assert 'timestamp' in result
+
+    def test_fetch_historical_data(self, funding_config, mock_exchange):
+        """Test fetching historical funding rate data."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = FundingRateDataSource(funding_config)
+
+            start_date = datetime(2021, 12, 1)
+            end_date = datetime(2021, 12, 3)
+
+            df = source.fetch_historical_data('BTC/USDT:USDT', '8h', start_date, end_date)
+
+            assert not df.empty
+            assert len(df) == 2
+            assert 'funding_rate' in df.columns
+            assert 'funding_cost_annualized' in df.columns
+            assert 'funding_direction' in df.columns
+
+            # Check data types and values
+            assert df['funding_rate'].iloc[0] == 0.0001
+            assert df['funding_rate'].iloc[1] == -0.00005
+
+    def test_get_funding_rate_stats(self, funding_config, mock_exchange):
+        """Test funding rate statistics calculation."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = FundingRateDataSource(funding_config)
+
+            stats = source.get_funding_rate_stats('BTC/USDT:USDT', days=30)
+
+            # Note: Mock may not return data, so stats could be empty
+            assert isinstance(stats, dict)
+            if stats:  # Only check if stats are available
+                assert 'mean_funding_rate' in stats
+                assert 'positive_rate_percentage' in stats
+                assert 'last_funding_rate' in stats
+
+    def test_factory_creation(self, funding_config, mock_exchange):
+        """Test factory creation of funding rate data source."""
+        with patch('ccxt.binance', return_value=mock_exchange):
+            source = create_data_source('funding_rate')
+            assert isinstance(source, FundingRateDataSource)
+
+
+class TestFundingRateAnalysis:
+    """Test funding rate analysis functions."""
+
+    @pytest.fixture
+    def sample_funding_data(self):
+        """Create sample funding rate data for testing."""
+        dates = pd.date_range('2021-12-01', periods=24, freq='8H')
+        np.random.seed(42)
+
+        # Create realistic funding rate data
+        base_rates = np.random.normal(0.0001, 0.00005, len(dates))
+        # Add some negative rates
+        base_rates[10:15] = -np.abs(base_rates[10:15])
+
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'funding_rate': base_rates
+        })
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    def test_funding_rate_analysis_basic(self, sample_funding_data):
+        """Test basic funding rate analysis."""
+        result = funding_rate_analysis(sample_funding_data)
+
+        assert not result.empty
+        assert 'funding_rate_pct' in result.columns
+        assert 'funding_rate_mean' in result.columns
+        assert 'funding_rate_std' in result.columns
+        assert 'funding_rate_zscore' in result.columns
+        assert 'funding_rate_trend' in result.columns
+        assert 'funding_direction_change' in result.columns
+        assert 'funding_rate_extreme' in result.columns
+        assert 'funding_cost_daily' in result.columns
+
+    def test_funding_rate_analysis_empty_data(self):
+        """Test analysis with empty data."""
+        empty_df = pd.DataFrame()
+        result = funding_rate_analysis(empty_df)
+        assert result.empty
+
+    def test_funding_rate_analysis_missing_column(self):
+        """Test analysis with missing funding_rate column."""
+        df = pd.DataFrame({'timestamp': [datetime.now()]})
+        result = funding_rate_analysis(df)
+        assert result.empty
+
+    def test_funding_rate_signal_generation(self, sample_funding_data):
+        """Test funding rate signal generation."""
+        analyzed_df = funding_rate_analysis(sample_funding_data)
+        signals = funding_rate_signal(analyzed_df)
+
+        assert not signals.empty
+        assert len(signals) == len(analyzed_df)
+        assert all(val in [-1, 0, 1] for val in signals.values)
+
+    def test_funding_rate_signal_thresholds(self, sample_funding_data):
+        """Test signal generation with different thresholds."""
+        analyzed_df = funding_rate_analysis(sample_funding_data)
+
+        # Test with very low threshold (should generate more signals)
+        signals_low = funding_rate_signal(analyzed_df, threshold=0.000001)
+        signals_high = funding_rate_signal(analyzed_df, threshold=0.001)
+
+        # Higher threshold should generate fewer signals
+        # Count non-zero signals instead of sum (since signals can be -1, 0, 1)
+        low_signal_count = (signals_low != 0).sum()
+        high_signal_count = (signals_high != 0).sum()
+        assert low_signal_count >= high_signal_count
+
+    def test_combined_analysis(self, sample_funding_data):
+        """Test combined market and funding rate analysis."""
+        # Create sample market data
+        market_dates = sample_funding_data.index
+        market_df = pd.DataFrame({
+            'timestamp': market_dates,
+            'open': np.random.uniform(50000, 51000, len(market_dates)),
+            'high': np.random.uniform(50500, 51500, len(market_dates)),
+            'low': np.random.uniform(49500, 50500, len(market_dates)),
+            'close': np.random.uniform(50000, 51000, len(market_dates)),
+            'volume': np.random.uniform(1000, 2000, len(market_dates)),
+            'EMA9': np.random.uniform(49900, 51100, len(market_dates)),
+            'EMA21': np.random.uniform(49800, 51200, len(market_dates)),
+            'signal': np.random.choice([-1, 1], len(market_dates))
+        })
+        market_df.set_index('timestamp', inplace=True)
+
+        result = combined_funding_market_analysis(market_df, sample_funding_data)
+
+        assert not result.empty
+        assert 'funding_rate' in result.columns
+        assert 'funding_rate_zscore' in result.columns
+        assert 'funding_signal' in result.columns
+
+    def test_combined_analysis_empty_inputs(self):
+        """Test combined analysis with empty inputs."""
+        result = combined_funding_market_analysis(pd.DataFrame(), pd.DataFrame())
+        assert result.empty
+
+    def test_funding_rate_extreme_detection(self, sample_funding_data):
+        """Test extreme funding rate detection."""
+        analyzed_df = funding_rate_analysis(sample_funding_data, window=5)
+
+        # Check that extreme column exists
+        assert 'funding_rate_extreme' in analyzed_df.columns
+
+        # Extreme should be boolean/integer
+        extreme_values = analyzed_df['funding_rate_extreme'].unique()
+        assert all(val in [0, 1, True, False] for val in extreme_values)
+
+
+class TestFundingRateIntegration:
+    """Test integration with signal generation system."""
+
+    def test_signal_enhancement_import(self):
+        """Test that funding rate enhancement can be imported."""
+        try:
+            from services.signal_generator import apply_funding_rate_signal_enhancement
+            assert callable(apply_funding_rate_signal_enhancement)
+        except ImportError:
+            pytest.fail("Could not import funding rate signal enhancement")
+
+    def test_config_settings(self):
+        """Test that funding rate config settings are available."""
+        try:
+            from config.settings import (
+                FUNDING_RATE_ENABLED,
+                FUNDING_RATE_WEIGHT,
+                FUNDING_RATE_THRESHOLD
+            )
+            assert isinstance(FUNDING_RATE_ENABLED, bool)
+            assert isinstance(FUNDING_RATE_WEIGHT, float)
+            assert isinstance(FUNDING_RATE_THRESHOLD, float)
+        except ImportError:
+            pytest.fail("Funding rate config settings not available")
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

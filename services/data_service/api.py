@@ -75,13 +75,92 @@ class FetchDataRequest(BaseModel):
     validate_quality: bool = Field(True, description="Whether to validate data quality")
 
 
-class DataInfoResponse(BaseModel):
-    """Response model for data info."""
-    symbol: str
-    timeframe: str
-    available_sources: list
-    cache_enabled: bool
-    quality_thresholds: Dict[str, float]
+class DataProductRegistration(BaseModel):
+    """Request model for data product registration."""
+    name: str = Field(..., description="Data product name")
+    domain: str = Field(..., description="Data domain (market_data, trading_signals, etc.)")
+    description: str = Field(..., description="Product description")
+    schema: Dict[str, Any] = Field(..., description="Data schema definition")
+    owners: list = Field(..., description="List of data product owners")
+
+
+class MarketDataStorage(BaseModel):
+    """Request model for market data storage."""
+    symbol: str = Field(..., description="Trading symbol")
+    timeframe: str = Field(..., description="Timeframe")
+    data: Dict[str, Any] = Field(..., description="OHLCV data as dict")
+    metadata: Optional[Dict[str, Any]] = Field({}, description="Additional metadata")
+
+
+class FeatureStorage(BaseModel):
+    """Request model for ML feature storage."""
+    feature_set_name: str = Field(..., description="Name of the feature set")
+    features: Dict[str, Any] = Field(..., description="Features data as dict")
+    metadata: Dict[str, Any] = Field(..., description="Feature set metadata")
+
+
+class ArchivalRequest(BaseModel):
+    """Request model for data archival."""
+    symbol: str = Field(..., description="Trading symbol")
+    timeframe: str = Field(..., description="Timeframe")
+    start_date: str = Field(..., description="Start date in ISO format")
+    end_date: str = Field(..., description="End date in ISO format")
+
+
+class AccessCheckRequest(BaseModel):
+    """Request model for access checking."""
+    user: str = Field(..., description="User identifier")
+    resource_type: str = Field(..., description="Type of resource (data_product, domain, feature_set)")
+    resource_name: str = Field(..., description="Name of the resource")
+    access_level: str = Field(..., description="Required access level (read, write, admin)")
+    purpose: Optional[str] = Field("", description="Purpose of access")
+
+
+class DataValidationRequest(BaseModel):
+    """Request model for data validation and storage."""
+    user: str = Field(..., description="User performing the operation")
+    resource_name: str = Field(..., description="Name of the data resource")
+    data: Dict[str, Any] = Field(..., description="Data to validate as dict")
+    resource_type: Optional[str] = Field("data_product", description="Type of resource")
+
+
+class RoleAssignmentRequest(BaseModel):
+    """Request model for role assignment."""
+    admin_user: str = Field(..., description="User performing the assignment")
+    target_user: str = Field(..., description="User to assign role to")
+    role: str = Field(..., description="Role to assign")
+
+
+class PolicyCreationRequest(BaseModel):
+    """Request model for policy creation."""
+    user: str = Field(..., description="User creating the policy")
+    policy: Dict[str, Any] = Field(..., description="Policy definition")
+
+
+class AuditQueryRequest(BaseModel):
+    """Request model for audit queries."""
+    user: str = Field(..., description="User requesting audit events")
+    filters: Optional[Dict[str, Any]] = Field({}, description="Event filters")
+
+
+class PermissionsQueryRequest(BaseModel):
+    """Request model for permissions queries."""
+    requesting_user: str = Field(..., description="User making the request")
+    target_user: str = Field(..., description="User whose permissions to retrieve")
+
+
+class QualityReportRequest(BaseModel):
+    """Request model for quality reports."""
+    user: str = Field(..., description="User requesting the report")
+    resource_name: Optional[str] = Field(None, description="Specific resource to report on")
+    days: Optional[int] = Field(7, description="Number of days to include")
+
+
+class ComplianceReportRequest(BaseModel):
+    """Request model for compliance reports."""
+    user: str = Field(..., description="User requesting the report")
+    start_date: str = Field(..., description="Start date in ISO format")
+    end_date: str = Field(..., description="End date in ISO format")
 
 
 @app.get("/")
@@ -262,6 +341,387 @@ async def handle_data_events(event_data: Dict[str, Any]):
 event_system.subscribe("data.fetch_success", handle_data_events)
 event_system.subscribe("data.fetch_failed", handle_data_events)
 event_system.subscribe("data.cache_hit", handle_data_events)
+
+
+# Data Mesh Endpoints
+
+@app.post("/data-mesh/products/register")
+async def register_data_product(request: DataProductRegistration):
+    """Register a new data product in the Data Mesh."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.register_data_product(
+            name=request.name,
+            domain=request.domain,
+            description=request.description,
+            schema=request.data_schema,
+            owners=request.owners
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Data product registration failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/data-mesh/market-data/store")
+async def store_market_data(request: MarketDataStorage):
+    """Store market data in the Data Mesh."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        # Convert dict data back to DataFrame
+        import pandas as pd
+        df = pd.DataFrame.from_dict(request.data, orient='index')
+        df.index = pd.to_datetime(df.index)
+
+        result = await data_service.store_market_data(
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            df=df,
+            metadata=request.metadata
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Market data storage failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/data-mesh/market-data/retrieve")
+async def retrieve_market_data(
+    symbol: str = Query(..., description="Trading symbol"),
+    timeframe: str = Query(..., description="Timeframe"),
+    start_date: Optional[str] = Query(None, description="Start date in ISO format"),
+    end_date: Optional[str] = Query(None, description="End date in ISO format")
+):
+    """Retrieve market data from the Data Mesh."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        from datetime import datetime
+        start = datetime.fromisoformat(start_date) if start_date else None
+        end = datetime.fromisoformat(end_date) if end_date else None
+
+        result = await data_service.retrieve_market_data(symbol, timeframe, start, end)
+
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Market data retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/data-mesh/features/store")
+async def store_ml_features(request: FeatureStorage):
+    """Store ML features in the Feature Store."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        # Convert dict data back to DataFrame
+        import pandas as pd
+        features_df = pd.DataFrame.from_dict(request.features, orient='index')
+        features_df.index = pd.to_datetime(features_df.index)
+
+        result = await data_service.store_ml_features(
+            feature_set_name=request.feature_set_name,
+            features_df=features_df,
+            metadata=request.metadata
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"ML features storage failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/data-mesh/features/retrieve")
+async def retrieve_ml_features(
+    feature_set_name: str = Query(..., description="Name of the feature set"),
+    feature_names: Optional[str] = Query(None, description="Comma-separated feature names")
+):
+    """Retrieve ML features from the Feature Store."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        features_list = feature_names.split(',') if feature_names else None
+
+        result = await data_service.retrieve_ml_features(feature_set_name, features_list)
+
+        if not result["success"]:
+            raise HTTPException(status_code=404, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"ML features retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/data-mesh/archive")
+async def archive_historical_data(request: ArchivalRequest):
+    """Archive historical data to Data Lake."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        from datetime import datetime
+        start = datetime.fromisoformat(request.start_date)
+        end = datetime.fromisoformat(request.end_date)
+
+        result = await data_service.archive_historical_data(
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            start_date=start,
+            end_date=end
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Data archival failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/data-mesh/status")
+async def get_data_mesh_status():
+    """Get comprehensive Data Mesh status."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        status = await data_service.get_data_mesh_status()
+        return status
+    except Exception as e:
+        logger.error(f"Data Mesh status check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Governance API Endpoints
+
+@app.post("/governance/access/check")
+async def check_data_access(request: AccessCheckRequest):
+    """Check if user has access to a data resource."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.check_data_access(
+            user=request.user,
+            resource_type=request.resource_type,
+            resource_name=request.resource_name,
+            access_level=request.access_level,
+            purpose=request.purpose
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Access check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/data/validate")
+async def validate_and_store_data(request: DataValidationRequest):
+    """Validate data quality and store with governance."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        import pandas as pd
+        df = pd.DataFrame.from_dict(request.data, orient='index')
+
+        result = await data_service.validate_and_store_data(
+            user=request.user,
+            resource_name=request.resource_name,
+            df=df,
+            resource_type=request.resource_type
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result.get("error", "Validation failed"))
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Data validation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/users/assign-role")
+async def assign_user_role(request: RoleAssignmentRequest):
+    """Assign a role to a user."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.assign_user_role(
+            admin_user=request.admin_user,
+            target_user=request.target_user,
+            role=request.role
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Role assignment failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/policies/create")
+async def create_governance_policy(request: PolicyCreationRequest):
+    """Create a new governance policy."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.create_governance_policy(
+            user=request.user,
+            policy_data=request.policy
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Policy creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/audit/events")
+async def get_audit_events(request: AuditQueryRequest):
+    """Retrieve audit events."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.get_audit_events(
+            user=request.user,
+            filters=request.filters
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Audit events retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/users/permissions")
+async def get_user_permissions(request: PermissionsQueryRequest):
+    """Get user permissions."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.get_user_permissions(
+            requesting_user=request.requesting_user,
+            target_user=request.target_user
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Permissions retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/quality/report")
+async def get_quality_report(request: QualityReportRequest):
+    """Get data quality report."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.get_quality_report(
+            user=request.user,
+            resource_name=request.resource_name,
+            days=request.days
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Quality report generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/governance/compliance/report")
+async def generate_compliance_report(request: ComplianceReportRequest):
+    """Generate compliance report."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        result = await data_service.generate_compliance_report(
+            user=request.user,
+            start_date=request.start_date,
+            end_date=request.end_date
+        )
+
+        if not result["success"]:
+            raise HTTPException(status_code=403, detail=result["error"])
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Compliance report generation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/governance/status")
+async def get_governance_status():
+    """Get comprehensive governance status."""
+    if not data_service:
+        raise HTTPException(status_code=503, detail="Service not initialized")
+
+    try:
+        status = await data_service.get_governance_status()
+        return status
+    except Exception as e:
+        logger.error(f"Governance status check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
