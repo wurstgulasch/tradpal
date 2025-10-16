@@ -651,7 +651,7 @@ def fetch_historical_data_with_fallback(symbol: str = SYMBOL, timeframe: str = T
     Returns:
         DataFrame with OHLCV data
     """
-    fallback_sources = ['yahoo_finance', 'ccxt']  # Priority order
+    fallback_sources = ['kaggle', 'yahoo_finance', 'ccxt']  # Priority order
 
     for source_name in fallback_sources:
         try:
