@@ -22,6 +22,8 @@ env:
   KUBECONFIG: ${{ secrets.KUBECONFIG }}
   NAMESPACE: trading
 
+permissions:
+  contents: read
 jobs:
   deploy:
     runs-on: ubuntu-latest
