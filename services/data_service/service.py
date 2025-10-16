@@ -47,6 +47,13 @@ except ImportError:
     YAHOO_AVAILABLE = False
     yf = None
 
+try:
+    import kaggle
+    KAGGLE_AVAILABLE = True
+except ImportError:
+    KAGGLE_AVAILABLE = False
+    kaggle = None
+
 import logging
 from .data_mesh import DataMeshManager, DataDomain, DataProduct, FeatureSet
 from .data_governance import DataGovernanceManager, AccessLevel, AuditEventType
@@ -60,6 +67,7 @@ class DataSource(Enum):
     """Available data sources."""
     CCXT = "ccxt"
     YAHOO_FINANCE = "yahoo"
+    KAGGLE = "kaggle"
     CSV = "csv"
     JSON = "json"
 
@@ -79,6 +87,7 @@ class DataProvider(Enum):
     COINBASE = "coinbase"
     KRAKEN = "kraken"
     YAHOO = "yahoo"
+    KAGGLE = "kaggle"
     LOCAL = "local"
 
 
@@ -237,6 +246,7 @@ class DataService:
         self.source_priorities = {
             DataSource.CCXT: [DataProvider.BINANCE, DataProvider.COINBASE, DataProvider.KRAKEN],
             DataSource.YAHOO_FINANCE: [DataProvider.YAHOO],
+            DataSource.KAGGLE: [DataProvider.KAGGLE],
         }
 
         # Quality thresholds
@@ -410,6 +420,35 @@ class DataService:
             logger.error(f"Yahoo Finance fetch failed: {e}")
             return None
 
+    async def _fetch_from_kaggle(self, symbol: str, timeframe: str, start_date: datetime,
+                                end_date: datetime) -> Optional[pd.DataFrame]:
+        """Fetch data from Kaggle datasets."""
+        try:
+            # Import here to avoid circular imports
+            from .data_sources.factory import create_data_source
+
+            # Create Kaggle data source
+            kaggle_source = create_data_source('kaggle')
+
+            # Fetch data using the Kaggle source
+            df = kaggle_source.fetch_historical_data(
+                symbol=symbol,
+                timeframe=timeframe,
+                start_date=start_date,
+                end_date=end_date
+            )
+
+            if df is not None and not df.empty:
+                logger.info(f"Fetched {len(df)} records from Kaggle")
+                return df
+            else:
+                logger.warning("No data returned from Kaggle")
+                return None
+
+        except Exception as e:
+            logger.error(f"Kaggle fetch failed: {e}")
+            return None
+
     async def _fetch_from_cache(self, cache_key: str) -> Optional[Tuple[pd.DataFrame, DataMetadata]]:
         """Fetch data from cache."""
         if not self.redis_client:
@@ -518,6 +557,9 @@ class DataService:
             if DataSource.YAHOO_FINANCE not in [s[0] for s in sources_to_try]:
                 sources_to_try.append((DataSource.YAHOO_FINANCE, DataProvider.YAHOO))
 
+            if DataSource.KAGGLE not in [s[0] for s in sources_to_try]:
+                sources_to_try.append((DataSource.KAGGLE, DataProvider.KAGGLE))
+
             # Try each source
             df = None
             source_used = None
@@ -533,6 +575,10 @@ class DataService:
                     )
                 elif source == DataSource.YAHOO_FINANCE:
                     df = await self._fetch_from_yahoo(
+                        request.symbol, request.timeframe, start_date, end_date
+                    )
+                elif source == DataSource.KAGGLE:
+                    df = await self._fetch_from_kaggle(
                         request.symbol, request.timeframe, start_date, end_date
                     )
 
@@ -976,6 +1022,7 @@ class DataService:
         # Check data sources
         health["components"]["ccxt"] = "available" if CCXT_AVAILABLE else "not_available"
         health["components"]["yahoo_finance"] = "available" if YAHOO_AVAILABLE else "not_available"
+        health["components"]["kaggle"] = "available" if KAGGLE_AVAILABLE else "not_available"
 
         # Check Data Mesh components
         try:
@@ -987,7 +1034,7 @@ class DataService:
             health["components"]["data_mesh"] = f"error: {e}"
             health["status"] = "degraded"
 
-        if not CCXT_AVAILABLE and not YAHOO_AVAILABLE:
+        if not CCXT_AVAILABLE and not YAHOO_AVAILABLE and not KAGGLE_AVAILABLE:
             health["status"] = "unhealthy"
 
         return health

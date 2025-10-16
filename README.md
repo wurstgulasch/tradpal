@@ -8,7 +8,8 @@ TradPal ist ein vollautonomes AI Trading System basierend auf einer vollständig
 tradpal_indicator/
 ├── services/                    # Microservices-Architektur
 │   ├── core/                    # Kernberechnungen & Memory-Optimierung
-│   ├── data_service/            # Daten-Management (CCXT, Caching, HDF5)
+│   ├── data_service/            # Daten-Management (CCXT, Kaggle, Yahoo Finance, Caching, HDF5)
+│   │   └── data_sources/        # Modulare Datenquellen (Kaggle Bitcoin Datasets, Exchanges)
 │   ├── trading_bot_live/        # Live-Trading-Engine mit AI-Modellen
 │   ├── backtesting_service/     # Historische Simulation
 │   ├── discovery_service/       # ML-Parameter-Optimierung
@@ -113,8 +114,33 @@ Aktuelle Benchmarks zeigen signifikante Verbesserungen:
 - **Memory-Optimierung**: 10.25x schneller als traditionelle Methoden
 - **Memory-Verbrauch**: Konstant niedrig (~85 MB) unabhängig von Datengröße
 - **Test-Coverage**: >90% für alle Services
+- **Datenquellen**: Modulare Architektur mit Kaggle Bitcoin Datasets für verbessertes Backtesting
 
 Detaillierte Benchmarks: [PERFORMANCE_PROFILES.md](PERFORMANCE_PROFILES.md)
+
+## 🔌 Datenquellen-Features
+
+TradPal bietet eine modulare Datenquellen-Architektur für optimale Backtesting-Ergebnisse:
+
+### Verfügbare Datenquellen
+- **Kaggle Bitcoin Datasets**: Hochwertige historische Bitcoin-Daten mit Minuten-Auflösung
+- **Yahoo Finance**: Aktien, ETFs und Kryptowährungen
+- **CCXT Integration**: 100+ Krypto-Börsen für Live-Daten
+
+### Automatische Datenquellen-Auswahl
+```python
+from services.data_service.data_sources.factory import DataSourceFactory
+
+# Automatische Auswahl der besten verfügbaren Quelle (Kaggle als Priorität)
+source = DataSourceFactory.create_data_source()
+data = source.fetch_historical_data('BTC/USDT', '1d', start_date, end_date)
+```
+
+### Datenqualität & Validierung
+- Automatische OHLC-Validierung
+- NaN-Wert-Behandlung
+- Konsistente Datenformate
+- Chunked Processing für große Datasets
 
 ## 🏛️ Architektur-Prinzipien
 
@@ -142,8 +168,9 @@ Detaillierte Benchmarks: [PERFORMANCE_PROFILES.md](PERFORMANCE_PROFILES.md)
 
 1. **AI-Outperformance**: ML-Modelle die konsistent Benchmarks übertreffen
 2. **Service-Optimierung**: Performance, Skalierbarkeit, Reliability
-3. **Advanced Features**: Reinforcement Learning, Market Regime Detection
-4. **Enterprise-Readiness**: Security, Monitoring, Deployment-Automatisierung
+3. **Advanced Features**: Reinforcement Learning, Market Regime Detection, Alternative Data
+4. **Datenquellen-Erweiterung**: Zusätzliche Datasets und Echtzeit-Feeds für verbessertes Backtesting
+5. **Enterprise-Readiness**: Security, Monitoring, Deployment-Automatisierung
 
 ## 🤝 Beitragen
 
