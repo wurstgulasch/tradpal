@@ -25,7 +25,7 @@
 - `docs/`: Dokumentation
 - `main.py`: Hybrid-Orchestrator mit Service-Clients
 
-**WICHTIG:** Keine Dateien im Root-Verzeichnis ablegen! Neue Features immer in entsprechenden Services implementieren (Microservice-Architektur beibehalten). Terminals immer in der conda Umgeung `tradpal-env` ausführen. Dokumentation und Commit Messages immer auf Englisch und immer aktuell halten. Dokumentation und copilot-instructions.md immer mit dem Code synchron halten. 
+**WICHTIG:** Keine Dateien im Root-Verzeichnis ablegen! Neue Features immer in entsprechenden Services implementieren (Microservice-Architektur beibehalten). Terminals immer in der conda Umgeung `tradpal-env` ausführen. Dokumentation und Commit Messages immer auf Englisch und immer aktuell halten. Dokumentation und copilot-instructions.md immer mit dem Code synchron halten.
 
 ## Architektur-Prinzipien
 - **Microservices-First:** Jede neue Funktionalität als separater Service
@@ -63,6 +63,38 @@
 - **Security-by-Design:** Zero-Trust-Prinzipien in allen Services
 - **Dokumentation:** README und docs/ aktuell halten und auf Englisch schreiben
 
+## Kritische Entwicklungs-Workflows
+- **Environment Setup:** `conda env create -f environment.yml && conda activate tradpal-env`
+- **Profile-basierte Ausführung:** `python main.py --profile light --mode live` (light für minimal, heavy für voll)
+- **Testing:** `pytest tests/` (Unit-Tests in `tests/unit/`, Integration in `tests/integration/`)
+- **Performance Benchmarking:** `python scripts/performance_benchmark.py`
+- **ML Training:** `python scripts/train_ml_model.py`
+- **Backtesting:** `python main.py --mode backtest --start-date 2024-01-01`
+
+## Projekt-spezifische Patterns
+- **Service-Client Pattern:** Jeder Service hat einen async Client mit `authenticate()` für Zero-Trust
+- **mTLS Setup:** Services verwenden mutual TLS mit Zertifikaten aus `cache/security/certs/`
+- **Async Context Managers:** HTTP Sessions mit `@asynccontextmanager` für sichere Verbindungen
+- **Configuration Hierarchy:** `config/settings.py` lädt `.env` basierend auf Profile (light/heavy)
+- **Memory Optimization:** `MemoryMappedData`, `RollingWindowBuffer` für große Datasets
+- **Data Mesh:** Domains wie `market_data`, `trading_signals` mit Governance und Quality Rules
+- **Fitness Functions:** Gewichtete Metriken (Sharpe 30%, Calmar 25%, P&L 30%) für Backtesting
+
+## Integration Points
+- **Broker APIs:** CCXT für Exchanges, mit Testnet-Support
+- **Notifications:** Telegram/Discord/Email via `notification_service`
+- **Data Sources:** CCXT, Yahoo Finance, Funding Rate spezialisiert
+- **ML Frameworks:** scikit-learn, PyTorch (optional), Optuna für Hyperparameter
+- **Monitoring:** Prometheus/Grafana, InfluxDB für TimeSeries
+- **Security:** Vault für Secrets, JWT für Auth
+
+## Debugging und Troubleshooting
+- **Logs:** Alle Logs in `logs/tradpal.log`, rotierend mit 10MB Limit
+- **Cache:** ML-Modelle in `cache/ml_models/`, Daten in `cache/`
+- **Output:** Backtest-Results in `output/`, Performance in `output/paper_performance.json`
+- **Error Handling:** Circuit Breaker Pattern für Service-Ausfälle
+- **Rate Limiting:** Adaptive Rate Limiting für API-Calls
+
 ## Empfehlungen für die Zukunft
 1. **CI/CD-Verbesserungen:** GitHub Actions für automatisierte Tests
 2. **Docker-Organisation:** Multi-stage Builds für Services
@@ -70,4 +102,4 @@
 4. **Monitoring-Setup:** Prometheus/Grafana für alle Services
 5. **Security-Scanning:** Automatisierte Security-Tests
 
-*Letzte Aktualisierung: 15.10.2025*
+*Letzte Aktualisierung: 16.10.2025*
