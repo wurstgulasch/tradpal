@@ -539,13 +539,15 @@ async def check_data_access(request: AccessCheckRequest):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=403, detail=result["error"])
+            # Log internal error, show generic error to user
+            logger.error(f"Access check API error detail: {result.get('error')}")
+            raise HTTPException(status_code=403, detail="Access denied")
 
         return result
 
     except Exception as e:
         logger.error(f"Access check failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/governance/data/validate")
@@ -566,13 +568,16 @@ async def validate_and_store_data(request: DataValidationRequest):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result.get("error", "Validation failed"))
+            # Log the internal error for auditing, but expose only a generic error message
+            logger.error(f"Data validation API error detail: {result.get('error')}")
+            raise HTTPException(status_code=400, detail="Validation failed")
 
         return result
 
     except Exception as e:
         logger.error(f"Data validation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Respond with a generic error message
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/governance/users/assign-role")
@@ -589,13 +594,15 @@ async def assign_user_role(request: RoleAssignmentRequest):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=403, detail=result["error"])
+            # Log internal error, show generic error to user
+            logger.error(f"Role assignment API error detail: {result.get('error')}")
+            raise HTTPException(status_code=403, detail="Role assignment failed")
 
         return result
 
     except Exception as e:
         logger.error(f"Role assignment failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/governance/policies/create")
