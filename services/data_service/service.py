@@ -1154,7 +1154,7 @@ class DataService:
             logger.error(error_msg)
             return {
                 "success": False,
-                "error": error_msg
+                "error": "An internal error has occurred. Please contact support."
             }
 
     async def create_governance_policy(self, user: str, policy_data: Dict[str, Any],
