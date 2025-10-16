@@ -8,7 +8,7 @@
 ## Projektstruktur (STRENG EINHALTEN!)
 - `services/`: **Microservices-Architektur** - ALLE neuen Features/Service-Entwicklungen hier implementieren
   - `core/`: Kernberechnungen (Indikatoren, Vektorisierung, Memory-Optimierung)
-  - `data_service/`: Daten-Management (CCXT-Integration, Caching, HDF5-Speicher)
+  - `data_service/`: Daten-Management (CCXT, Kaggle Bitcoin Datasets, Yahoo Finance, Caching, HDF5)
   - `trading_bot_live/`: Live-Trading-Engine mit AI-Modellen
   - `backtesting_service/`: Historische Simulation und Performance-Analyse
   - `discovery_service/`: ML-Parameter-Optimierung und Genetische Algorithmen
@@ -38,7 +38,8 @@
 1. **AI-Outperformance:** ML-Modelle die konsistent Benchmarks übertreffen
 2. **Service-Optimierung:** Performance, Skalierbarkeit, Reliability
 3. **Advanced Features:** Reinforcement Learning, Market Regime Detection, Alternative Data
-4. **Enterprise-Readiness:** Security, Monitoring, Deployment-Automatisierung
+4. **Datenquellen-Erweiterung:** Modulare Datenquellen-Architektur mit Kaggle Bitcoin Datasets für verbessertes Backtesting
+5. **Enterprise-Readiness:** Security, Monitoring, Deployment-Automatisierung
 
 ## Code-Konventionen
 - **Microservice-Struktur:** Services sind unabhängig deploybar
@@ -50,7 +51,7 @@
 
 ## Wichtige Workflows
 - **Trading Bot:** AI-gestützte Signalgenerierung mit Risikomanagement
-- **Backtesting:** Walk-Forward-Analyse mit ML-Modellen
+- **Backtesting:** Walk-Forward-Analyse mit ML-Modellen und modularen Datenquellen (Kaggle, CCXT, Yahoo Finance)
 - **ML-Pipeline:** Optuna-Optimierung, Ensemble-Methoden, SHAP-Explainability
 - **Live-Trading:** Paper-Trading → Live-Trading mit Broker-Integration
 
@@ -60,6 +61,7 @@
 - **Async-Patterns:** asyncio für alle Netzwerk-I/O
 - **Testing-First:** Unit-Tests vor Implementierung
 - **Performance-Optimierung:** Memory-Mapped Files, Chunked Processing, GPU-Training
+- **Datenquellen-Architektur:** Verwende modulare Datenquellen (Kaggle, Yahoo Finance, CCXT) für optimale Backtesting-Ergebnisse
 - **Security-by-Design:** Zero-Trust-Prinzipien in allen Services
 - **Dokumentation:** README und docs/ aktuell halten und auf Englisch schreiben
 
@@ -70,4 +72,4 @@
 4. **Monitoring-Setup:** Prometheus/Grafana für alle Services
 5. **Security-Scanning:** Automatisierte Security-Tests
 
-*Letzte Aktualisierung: 15.10.2025*
+*Letzte Aktualisierung: 16.10.2025*
