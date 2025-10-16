@@ -1341,7 +1341,7 @@ class DataService:
             logger.error(error_msg)
             return {
                 "success": False,
-                "error": error_msg
+                "error": "An internal error has occurred. Please contact support."
             }
 
     async def generate_compliance_report(self, user: str, start_date: str, end_date: str,
@@ -1388,7 +1388,7 @@ class DataService:
             logger.error(error_msg)
             return {
                 "success": False,
-                "error": error_msg
+                "error": "An internal error has occurred. Please contact support."
             }
 
     async def get_governance_status(self) -> Dict[str, Any]:
@@ -1418,6 +1418,6 @@ class DataService:
             return {
                 "service": "data_service",
                 "status": "error",
-                "error": error_msg,
+                "error": "An internal error has occurred. Please contact support.",
                 "governance_enabled": False
             }
