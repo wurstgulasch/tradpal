@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  alert-forwarder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tradpal-alert-forwarder
+    restart: unless-stopped
+
+    # Umgebungsvariablen
+    environment:
+      - FALCO_LOG_PATH=/var/log/falco/falco.log
+      - FALCO_NAMESPACE=tradpal-security
+      - ALERT_MIN_PRIORITY=WARNING
+      - ALERT_BATCHING=true
+      - ALERT_BATCH_INTERVAL=300
+      - ALERT_MAX_BATCH_SIZE=10
+      - ALERT_RATE_LIMIT=10
+      - ALERT_COOLDOWN=60
+      - TELEGRAM_ENABLED=true
+      - DISCORD_ENABLED=true
+      - EMAIL_ENABLED=false
+
+    # Secrets (für Produktion durch externe Secrets ersetzen)
+    secrets:
+      - telegram_bot_token
+      - telegram_chat_id
+      - discord_webhook_url
+
+    # Volumes
+    volumes:
+      - falco_logs:/var/log/falco:ro
+      - ./config:/app/config:ro
+
+    # Netzwerk
+    networks:
+      - tradpal-network
+
+    # Ressourcen-Limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "python", "-c", "import asyncio; from forwarder import AlertForwarder; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Falco Simulator für Tests
+  falco-simulator:
+    image: alpine:latest
+    container_name: tradpal-falco-simulator
+    command: >
+      sh -c "
+      mkdir -p /var/log/falco &&
+      while true; do
+        echo '{\"output\": \"Test security alert - unauthorized file access\", \"priority\": \"WARNING\", \"rule\": \"Unauthorized File Access\", \"time\": \"'$(date -Iseconds)'\", \"hostname\": \"test-host\", \"tags\": [\"filesystem\", \"security\"]}' >> /var/log/falco/falco.log
+        sleep 60
+      done
+      "
+    volumes:
+      - falco_logs:/var/log/falco
+    networks:
+      - tradpal-network
+    profiles:
+      - test
+
+  # Test-Client für manuelle Tests
+  test-client:
+    image: python:3.10-slim
+    container_name: tradpal-alert-test-client
+    working_dir: /app
+    command: >
+      sh -c "
+      pip install requests &&
+      python -c '
+      import time
+      import json
+      import os
+
+      # Warte auf Service
+      time.sleep(10)
+
+      # Test-Alert in Log schreiben
+      test_alert = {
+          \"output\": \"Manual test alert - suspicious network connection\",
+          \"priority\": \"CRITICAL\",
+          \"rule\": \"Suspicious Network Connection\",
+          \"time\": \"'$(date -Iseconds)'\",
+          \"hostname\": \"test-client\",
+          \"tags\": [\"network\", \"security\"]
+      }
+
+      with open(\"/var/log/falco/falco.log\", \"a\") as f:
+          f.write(json.dumps(test_alert) + \"\\n\")
+
+      print(\"Test alert written to log\")
+      print(\"Check alert-forwarder logs for notification delivery\")
+      '
+      "
+    volumes:
+      - falco_logs:/var/log/falco
+    networks:
+      - tradpal-network
+    profiles:
+      - test
+    depends_on:
+      - alert-forwarder
+
+# Volumes
+volumes:
+  falco_logs:
+    driver: local
+
+# Networks
+networks:
+  tradpal-network:
+    driver: bridge
+    name: tradpal-alert-network
+
+# Secrets (für lokale Tests - in Produktion durch externe Secrets ersetzen)
+secrets:
+  telegram_bot_token:
+    environment: "TELEGRAM_BOT_TOKEN"
+  telegram_chat_id:
+    environment: "TELEGRAM_CHAT_ID"
+  discord_webhook_url:
+    environment: "DISCORD_WEBHOOK_URL"

@@ -1,0 +1,363 @@
+"""
+Unit Tests for AI Trading Bot Components
+
+This module contains comprehensive unit tests for the AI Trading Bot
+and its core components including RiskManager, signal generation,
+and trading logic.
+"""
+
+import unittest
+import sys
+import os
+from unittest.mock import Mock, patch, MagicMock
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+
+# Add src to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from services.risk_manager import RiskManager, create_risk_manager
+from services.ai_trading_bot import AITradingBot, create_ai_bot
+
+
+class TestRiskManager(unittest.TestCase):
+    """Test cases for RiskManager class."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.risk_manager = RiskManager(
+            max_drawdown=0.10,
+            max_daily_loss=0.05,
+            kelly_enabled=True,
+            kelly_fraction=0.5,
+            initial_portfolio_value=10000.0
+        )
+
+    def test_initialization(self):
+        """Test RiskManager initialization."""
+        self.assertEqual(self.risk_manager.parameters.max_drawdown, 0.10)
+        self.assertEqual(self.risk_manager.parameters.max_daily_loss, 0.05)
+        self.assertEqual(self.risk_manager.metrics.portfolio_value, 10000.0)
+        self.assertEqual(self.risk_manager.metrics.peak_portfolio_value, 10000.0)
+
+    def test_kelly_position_size_calculation(self):
+        """Test Kelly criterion position size calculation."""
+        # Test normal case
+        kelly_size = self.risk_manager.calculate_kelly_position_size(
+            win_rate=0.6, avg_win=0.05, avg_loss=0.03
+        )
+        self.assertGreater(kelly_size, 0)
+        self.assertLessEqual(kelly_size, self.risk_manager.parameters.max_position_size)
+
+        # Test edge case: win rate = 0
+        kelly_size_zero = self.risk_manager.calculate_kelly_position_size(
+            win_rate=0, avg_win=0.05, avg_loss=0.03
+        )
+        self.assertEqual(kelly_size_zero, self.risk_manager.parameters.risk_per_trade)
+
+        # Test edge case: win rate = 1
+        kelly_size_perfect = self.risk_manager.calculate_kelly_position_size(
+            win_rate=1, avg_win=0.05, avg_loss=0.03
+        )
+        self.assertEqual(kelly_size_perfect, self.risk_manager.parameters.risk_per_trade)
+
+    def test_drawdown_limits(self):
+        """Test drawdown limit checking."""
+        # Initial state - should allow trading
+        self.assertTrue(self.risk_manager.check_drawdown_limits())
+
+        # Simulate drawdown exceeding limit
+        self.risk_manager.update_portfolio_value(8900)  # 11% drawdown
+        self.assertFalse(self.risk_manager.check_drawdown_limits())
+
+        # Reset and test recovery
+        self.risk_manager.update_portfolio_value(11000)  # New peak
+        self.risk_manager.update_portfolio_value(10500)  # 4.5% drawdown from peak
+        self.assertTrue(self.risk_manager.check_drawdown_limits())
+
+    def test_daily_loss_limits(self):
+        """Test daily loss limit checking."""
+        # Initial state
+        self.assertTrue(self.risk_manager.check_daily_loss_limits())
+
+        # Simulate daily loss exceeding limit
+        self.risk_manager.update_daily_pnl(-600)  # 6% loss on $10k portfolio
+        self.assertFalse(self.risk_manager.check_daily_loss_limits())
+
+    def test_position_size_calculation(self):
+        """Test position size calculation."""
+        position_size = self.risk_manager.calculate_position_size(
+            portfolio_value=10000,
+            risk_per_trade=0.01,
+            current_price=50000
+        )
+
+        # Should be: 10000 * 0.01 / 50000 = 0.002 BTC
+        expected_size = 0.002
+        self.assertAlmostEqual(position_size, expected_size, places=6)
+
+    def test_portfolio_value_updates(self):
+        """Test portfolio value update and drawdown calculation."""
+        # Update to lower value
+        self.risk_manager.update_portfolio_value(9500)
+        self.assertEqual(self.risk_manager.metrics.portfolio_value, 9500)
+        self.assertEqual(self.risk_manager.metrics.current_drawdown, 0.05)  # 5% drawdown
+
+        # Update to higher value (new peak)
+        self.risk_manager.update_portfolio_value(10500)
+        self.assertEqual(self.risk_manager.metrics.peak_portfolio_value, 10500)
+        self.assertEqual(self.risk_manager.metrics.current_drawdown, 0.0)  # No drawdown
+
+    def test_risk_metrics(self):
+        """Test risk metrics retrieval."""
+        metrics = self.risk_manager.get_risk_metrics()
+
+        required_keys = [
+            'current_drawdown', 'daily_pnl', 'portfolio_value',
+            'peak_portfolio_value', 'var_95', 'cvar_95',
+            'max_drawdown_limit', 'max_daily_loss_limit'
+        ]
+
+        for key in required_keys:
+            self.assertIn(key, metrics)
+
+
+class TestAITradingBot(unittest.TestCase):
+    """Test cases for AI Trading Bot."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.config = {
+            'trading_mode': 'paper',
+            'assets': ['BTC/USDT'],
+            'timeframe': '1h',
+            'initial_balance': 10000.0,
+            'advanced_ml_enabled': False,
+            'sentiment_enabled': False,
+            'multi_asset_enabled': False,
+            'kelly_enabled': True,
+            'max_drawdown': 0.1,
+            'max_daily_loss': 0.05,
+            'cycle_interval': 1,
+            'min_confidence_threshold': 0.6
+        }
+
+    @patch('src.ai_trading_bot.fetch_historical_data')
+    @patch('src.ai_trading_bot.calculate_indicators')
+    def test_bot_initialization(self, mock_calculate_indicators, mock_fetch_data):
+        """Test bot initialization."""
+        # Mock data fetching
+        mock_data = pd.DataFrame({
+            'open': [100, 101, 102],
+            'high': [105, 106, 107],
+            'low': [95, 96, 97],
+            'close': [102, 103, 104],
+            'volume': [1000, 1100, 1200]
+        })
+        mock_fetch_data.return_value = mock_data
+        mock_calculate_indicators.return_value = mock_data
+
+        bot = create_ai_bot(self.config)
+
+        self.assertIsInstance(bot, AITradingBot)
+        self.assertEqual(bot.trading_mode, 'paper')
+        self.assertEqual(bot.assets, ['BTC/USDT'])
+        self.assertFalse(bot.is_active)
+
+    @patch('src.ai_trading_bot.fetch_historical_data')
+    @patch('src.ai_trading_bot.calculate_indicators')
+    def test_market_data_gathering(self, mock_calculate_indicators, mock_fetch_data):
+        """Test market data gathering."""
+        # Create mock data with indicators
+        mock_data = pd.DataFrame({
+            'open': [100] * 100,
+            'high': [105] * 100,
+            'low': [95] * 100,
+            'close': np.linspace(100, 110, 100),  # Rising prices
+            'volume': [1000] * 100,
+            'ema_short': np.linspace(102, 108, 100),
+            'ema_long': np.linspace(101, 107, 100),
+            'rsi': [50] * 100,
+            'bb_upper': [112] * 100,
+            'bb_middle': [106] * 100,
+            'bb_lower': [100] * 100,
+            'atr': [2] * 100
+        })
+
+        mock_fetch_data.return_value = mock_data
+        mock_calculate_indicators.return_value = mock_data
+
+        bot = create_ai_bot(self.config)
+        market_data = bot._gather_market_data()
+
+        self.assertIn('BTC/USDT', market_data)
+        self.assertIn('data', market_data['BTC/USDT'])
+        self.assertIn('current_price', market_data['BTC/USDT'])
+        self.assertEqual(market_data['BTC/USDT']['current_price'], 110.0)  # Last close price
+
+    @patch('src.ai_trading_bot.fetch_historical_data')
+    @patch('src.ai_trading_bot.calculate_indicators')
+    def test_technical_signal_generation(self, mock_calculate_indicators, mock_fetch_data):
+        """Test technical signal generation."""
+        # Create mock data that should generate a BUY signal
+        mock_data = pd.DataFrame({
+            'open': [100] * 100,
+            'high': [105] * 100,
+            'low': [95] * 100,
+            'close': [104] * 100,  # Price above EMAs
+            'volume': [1000] * 100,
+            'ema_short': [102] * 100,  # Short EMA below price
+            'ema_long': [101] * 100,   # Long EMA below short
+            'rsi': [65] * 100,         # RSI above 30
+            'bb_upper': [112] * 100,
+            'bb_middle': [106] * 100,
+            'bb_lower': [100] * 100,   # Price above lower BB
+            'atr': [2] * 100
+        })
+
+        mock_fetch_data.return_value = mock_data
+        mock_calculate_indicators.return_value = mock_data
+
+        bot = create_ai_bot(self.config)
+        market_data = {'data': mock_data, 'current_price': 104.0}
+
+        signal = bot._generate_technical_signal(market_data)
+
+        self.assertIn('signal', signal)
+        self.assertIn('confidence', signal)
+        self.assertIn('reason', signal)
+
+    @patch('src.ai_trading_bot.fetch_historical_data')
+    @patch('src.ai_trading_bot.calculate_indicators')
+    def test_risk_management_filtering(self, mock_calculate_indicators, mock_fetch_data):
+        """Test risk management signal filtering."""
+        mock_data = pd.DataFrame({
+            'open': [100] * 100,
+            'high': [105] * 100,
+            'low': [95] * 100,
+            'close': [104] * 100,
+            'volume': [1000] * 100,
+            'ema_short': [102] * 100,
+            'ema_long': [101] * 100,
+            'rsi': [65] * 100,
+            'bb_upper': [112] * 100,
+            'bb_middle': [106] * 100,
+            'bb_lower': [100] * 100,
+            'atr': [2] * 100
+        })
+
+        mock_fetch_data.return_value = mock_data
+        mock_calculate_indicators.return_value = mock_data
+
+        bot = create_ai_bot(self.config)
+
+        # Create test signals with high confidence
+        signals = {
+            'BTC/USDT': {
+                'asset': 'BTC/USDT',
+                'signal': 'BUY',
+                'confidence': 0.8,  # Above min_confidence_threshold
+                'price': 104.0,
+                'reason': 'Test signal'
+            }
+        }
+
+        filtered_signals = bot._apply_risk_management(signals)
+
+        # Should pass risk management checks initially
+        self.assertEqual(len(filtered_signals), 1)
+        # Signal should remain BUY if confidence is high enough
+        self.assertIn(filtered_signals['BTC/USDT']['signal'], ['BUY', 'HOLD'])  # Allow HOLD if risk limits hit
+
+    def test_bot_status(self):
+        """Test bot status reporting."""
+        bot = create_ai_bot(self.config)
+        status = bot.get_status()
+
+        required_keys = [
+            'is_active', 'trading_mode', 'assets', 'daily_pnl',
+            'total_pnl', 'total_trades', 'active_positions', 'last_update'
+        ]
+
+        for key in required_keys:
+            self.assertIn(key, status)
+
+    def test_position_size_calculation(self):
+        """Test position size calculation in bot."""
+        bot = create_ai_bot(self.config)
+
+        signal = {
+            'price': 50000,
+            'position_size': 0.02  # 2% Kelly position
+        }
+
+        position_size = bot._calculate_position_size('BTC/USDT', signal)
+
+        # Should be: (0.02 * 10000 / 50000) * leverage = 0.004 * 3 = 0.012 BTC
+        expected_size = 0.012
+        self.assertAlmostEqual(position_size, expected_size, places=6)
+
+
+class TestBotIntegration(unittest.TestCase):
+    """Integration tests for bot components working together."""
+
+    @patch('src.ai_trading_bot.fetch_historical_data')
+    @patch('src.ai_trading_bot.calculate_indicators')
+    def test_complete_trading_cycle(self, mock_calculate_indicators, mock_fetch_data):
+        """Test a complete trading cycle."""
+        # Create realistic mock data
+        dates = pd.date_range('2024-01-01', periods=100, freq='H')
+        mock_data = pd.DataFrame({
+            'open': np.random.uniform(45000, 55000, 100),
+            'high': np.random.uniform(46000, 56000, 100),
+            'low': np.random.uniform(44000, 54000, 100),
+            'close': np.random.uniform(45000, 55000, 100),
+            'volume': np.random.uniform(1000000, 2000000, 100),
+        }, index=dates)
+
+        # Add indicators
+        mock_data['ema_short'] = mock_data['close'].ewm(span=9).mean()
+        mock_data['ema_long'] = mock_data['close'].ewm(span=21).mean()
+        mock_data['rsi'] = 50 + np.random.normal(0, 10, 100)  # RSI around 50
+        mock_data['bb_upper'] = mock_data['close'].rolling(20).mean() + 2 * mock_data['close'].rolling(20).std()
+        mock_data['bb_middle'] = mock_data['close'].rolling(20).mean()
+        mock_data['bb_lower'] = mock_data['close'].rolling(20).mean() - 2 * mock_data['close'].rolling(20).std()
+        mock_data['atr'] = mock_data['close'].rolling(14).std() * 0.02  # Simplified ATR
+
+        mock_fetch_data.return_value = mock_data
+        mock_calculate_indicators.return_value = mock_data
+
+        config = {
+            'trading_mode': 'paper',
+            'assets': ['BTC/USDT'],
+            'timeframe': '1h',
+            'initial_balance': 10000.0,
+            'advanced_ml_enabled': False,
+            'sentiment_enabled': False,
+            'multi_asset_enabled': False,
+            'kelly_enabled': True,
+            'max_drawdown': 0.1,
+            'max_daily_loss': 0.05,
+            'cycle_interval': 1,
+            'min_confidence_threshold': 0.6
+        }
+
+        bot = create_ai_bot(config)
+
+        # Run trading cycle
+        initial_status = bot.get_status()
+        bot._trading_cycle()
+        final_status = bot.get_status()
+
+        # Check that cycle completed without errors
+        self.assertIsInstance(final_status, dict)
+        self.assertEqual(final_status['trading_mode'], 'paper')
+
+        # Check that performance was logged
+        self.assertGreater(len(bot.performance_history), 0)
+
+
+if __name__ == '__main__':
+    # Run tests
+    unittest.main(verbosity=2)

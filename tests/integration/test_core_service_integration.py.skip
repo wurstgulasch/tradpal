@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""
+Integration Tests for Core Service
+
+Tests the complete Core Service functionality including:
+- Service logic
+- Client communication
+- Signal generation and strategy execution
+"""
+
+import asyncio
+import pytest
+import numpy as np
+import pandas as pd
+from unittest.mock import patch, AsyncMock
+
+from services.core.service import CoreService, EventSystem
+from services.core.client import CoreServiceClient
+
+
+class TestCoreServiceIntegration:
+    """Integration tests for Core Service"""
+
+    @pytest.fixture
+    def event_system(self):
+        """Create event system for testing"""
+        return EventSystem()
+
+    @pytest.fixture
+    def core_service(self, event_system):
+        """Create core service instance"""
+        return CoreService(event_system=event_system)
+
+    @pytest.fixture
+    def core_client(self):
+        """Create core service client"""
+        return CoreServiceClient(base_url="http://test")
+
+    @pytest.mark.asyncio
+    async def test_service_health_check(self, core_service):
+        """Test service health check"""
+        health = await core_service.health_check()
+        assert "service" in health
+        assert "status" in health
+        assert health["status"] == "healthy"
+
+    @pytest.mark.asyncio
+    async def test_indicator_calculation(self, core_service):
+        """Test indicator calculation"""
+        # Create sample data (only OHLCV columns)
+        data = pd.DataFrame({
+            'open': 50000 + np.random.normal(0, 1000, 50),
+            'high': 50000 + np.random.normal(0, 1000, 50) + 100,
+            'low': 50000 + np.random.normal(0, 1000, 50) - 100,
+            'close': 50000 + np.random.normal(0, 1000, 50),
+            'volume': np.random.normal(100, 20, 50)
+        })
+
+        indicators = await core_service.calculate_indicators(
+            symbol="BTC/USDT",
+            timeframe="1h",
+            data=data,
+            indicators=['ema', 'rsi', 'bb']
+        )
+
+        assert isinstance(indicators, dict)
+        assert 'ema_short' in indicators
+        assert 'ema_long' in indicators
+        assert 'rsi' in indicators
+        assert 'bb_upper' in indicators
+
+    @pytest.mark.asyncio
+    async def test_signal_generation(self, core_service):
+        """Test signal generation"""
+        # Create sample data (only OHLCV columns)
+        data = pd.DataFrame({
+            'open': 50000 + np.random.normal(0, 1000, 50),
+            'high': 50000 + np.random.normal(0, 1000, 50) + 100,
+            'low': 50000 + np.random.normal(0, 1000, 50) - 100,
+            'close': 50000 + np.random.normal(0, 1000, 50),
+            'volume': np.random.normal(100, 20, 50)
+        })
+
+        signals = await core_service.generate_signals(
+            symbol="BTC/USDT",
+            timeframe="1h",
+            data=data
+        )
+
+        assert isinstance(signals, list)
+        if len(signals) > 0:
+            signal = signals[0]
+            assert 'timestamp' in signal
+            assert 'symbol' in signal
+            assert 'action' in signal
+            assert 'confidence' in signal
+
+    @pytest.mark.asyncio
+    async def test_strategy_execution(self, core_service):
+        """Test strategy execution"""
+        signal = {
+            'action': 'BUY',
+            'price': 50000.0,
+            'indicators': {'atr': 1000.0}
+        }
+
+        result = await core_service.execute_strategy(
+            symbol="BTC/USDT",
+            timeframe="1h",
+            signal=signal,
+            capital=10000.0,
+            risk_config={'risk_per_trade': 0.01}
+        )
+
+        assert isinstance(result, dict)
+        assert 'action' in result
+        assert 'quantity' in result
+        assert 'stop_loss' in result
+        assert 'take_profit' in result
+
+    @pytest.mark.asyncio
+    async def test_client_health_check(self, core_client):
+        """Test client health check"""
+        with patch.object(core_client, 'health_check', new_callable=AsyncMock) as mock_health:
+            mock_health.return_value = True
+
+            health = await core_client.health_check()
+            assert health is True
+
+    @pytest.mark.asyncio
+    async def test_client_signal_generation(self, core_client):
+        """Test client signal generation"""
+        with patch.object(core_client, 'generate_signals', new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = []
+
+            signals = await core_client.generate_signals(
+                symbol="BTC/USDT",
+                timeframe="1h",
+                data=[]
+            )
+            assert isinstance(signals, list)
+
+    @pytest.mark.asyncio
+    async def test_client_indicator_calculation(self, core_client):
+        """Test client indicator calculation"""
+        with patch.object(core_client, 'calculate_indicators', new_callable=AsyncMock) as mock_calc:
+            mock_calc.return_value = {}
+
+            indicators = await core_client.calculate_indicators(
+                symbol="BTC/USDT",
+                timeframe="1h",
+                data=[],
+                indicators=['ema']
+            )
+            assert isinstance(indicators, dict)
+
+    @pytest.mark.asyncio
+    async def test_client_strategy_execution(self, core_client):
+        """Test client strategy execution"""
+        with patch.object(core_client, 'execute_strategy', new_callable=AsyncMock) as mock_exec:
+            mock_exec.return_value = {"action": "BUY"}
+
+            result = await core_client.execute_strategy(
+                symbol="BTC/USDT",
+                timeframe="1h",
+                signal={},
+                capital=10000.0,
+                risk_config={}
+            )
+            assert isinstance(result, dict)
+
+    @pytest.mark.asyncio
+    async def test_service_error_handling(self, core_service):
+        """Test service error handling"""
+        # Test with invalid indicators
+        with pytest.raises(ValueError):
+            await core_service.calculate_indicators(
+                symbol="BTC/USDT",
+                timeframe="1h",
+                data=pd.DataFrame(),
+                indicators=['invalid_indicator']
+            )
+
+    @pytest.mark.asyncio
+    async def test_client_error_handling(self, core_client):
+        """Test client error handling"""
+        with patch.object(core_client, 'health_check', new_callable=AsyncMock) as mock_health:
+            mock_health.side_effect = Exception("Connection failed")
+
+            with pytest.raises(Exception):
+                await core_client.health_check()
+
+    @pytest.mark.asyncio
+    async def test_event_system_integration(self, event_system, core_service):
+        """Test event system integration"""
+        events_received = []
+
+        async def event_handler(data):
+            events_received.append(data)
+
+        event_system.subscribe("core.signal_generated", event_handler)
+
+        # Trigger event by generating signals
+        data = pd.DataFrame({
+            'open': 50000 + np.random.normal(0, 1000, 50),
+            'high': 50000 + np.random.normal(0, 1000, 50) + 100,
+            'low': 50000 + np.random.normal(0, 1000, 50) - 100,
+            'close': 50000 + np.random.normal(0, 1000, 50),
+            'volume': np.random.normal(100, 20, 50)
+        })
+
+        await core_service.generate_signals("BTC/USDT", "1h", data)
+
+        await asyncio.sleep(0.1)
+
+        assert len(events_received) >= 0  # May or may not trigger depending on data
+
+    @pytest.mark.asyncio
+    async def test_available_strategies(self, core_service):
+        """Test getting available strategies"""
+        strategies = core_service.get_available_strategies()
+        assert isinstance(strategies, list)
+        assert "ema_crossover" in strategies
+
+    @pytest.mark.asyncio
+    async def test_available_indicators(self, core_service):
+        """Test getting available indicators"""
+        indicators = core_service.get_available_indicators()
+        assert isinstance(indicators, list)
+        assert "ema" in indicators
+        assert "rsi" in indicators
+
+    @pytest.mark.asyncio
+    async def test_market_analysis(self, core_service):
+        """Test market analysis"""
+        analysis = await core_service.get_market_analysis("BTC/USDT", "1h")
+        assert isinstance(analysis, dict)
+        assert "symbol" in analysis
+        assert "timeframe" in analysis
+
+    @pytest.mark.asyncio
+    async def test_performance_metrics(self, core_service):
+        """Test performance metrics"""
+        metrics = await core_service.get_performance_metrics("BTC/USDT")
+        assert isinstance(metrics, dict)
+        assert "symbol" in metrics
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])

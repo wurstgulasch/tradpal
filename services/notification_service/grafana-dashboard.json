@@ -1,0 +1,235 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Notification Service Dashboard",
+    "tags": ["tradpal", "notification-service", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"notification-service\"}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "DOWN",
+                    "color": "red"
+                  },
+                  "1": {
+                    "text": "UP",
+                    "color": "green"
+                  }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Messages Sent (Total)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "notification_messages_sent_total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Messages Queued",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "notification_messages_queued",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Queue Size Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "notification_messages_queued",
+            "refId": "A",
+            "legendFormat": "Queued Messages"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 4
+        }
+      },
+      {
+        "id": 5,
+        "title": "Messages Sent by Channel",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "notification_messages_sent_total{channel=~\".+\"}",
+            "refId": "A",
+            "legendFormat": "{{channel}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 4
+        }
+      },
+      {
+        "id": 6,
+        "title": "Delivery Success Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "(notification_messages_delivered_total / notification_messages_sent_total) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 0,
+          "y": 12
+        }
+      },
+      {
+        "id": 7,
+        "title": "Average Processing Time",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(notification_message_processing_duration_seconds_sum[5m]) / rate(notification_message_processing_duration_seconds_count[5m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "seconds"
+          }
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 8,
+          "y": 12
+        }
+      },
+      {
+        "id": 8,
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(notification_errors_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 16,
+          "y": 12
+        }
+      },
+      {
+        "id": 9,
+        "title": "Rate Limiting Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(notification_rate_limit_hits_total[5m])",
+            "refId": "A",
+            "legendFormat": "Rate Limit Hits"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 18
+        }
+      },
+      {
+        "id": 10,
+        "title": "Worker Pool Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "notification_workers_active",
+            "refId": "A",
+            "legendFormat": "Active Workers"
+          },
+          {
+            "expr": "notification_workers_total",
+            "refId": "B",
+            "legendFormat": "Total Workers"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 18
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}

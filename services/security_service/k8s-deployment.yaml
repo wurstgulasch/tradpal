@@ -1,0 +1,161 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-service
+  labels:
+    app: security-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: security-service
+  template:
+    metadata:
+      labels:
+        app: security-service
+    spec:
+      containers:
+      - name: security-service
+        image: tradpal/security-service:latest
+        ports:
+        - containerPort: 8002
+        env:
+        - name: ENABLE_MTLS
+          value: "true"
+        - name: ENABLE_JWT
+          value: "true"
+        - name: ENABLE_VAULT
+          value: "false"
+        - name: JWT_EXPIRATION_HOURS
+          value: "24"
+        volumeMounts:
+        - name: security-storage
+          mountPath: /app/cache/security
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: security-storage
+        persistentVolumeClaim:
+          claimName: security-service-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-service
+  labels:
+    app: security-service
+spec:
+  selector:
+    app: security-service
+  ports:
+  - port: 8002
+    targetPort: 8002
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: security-service-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: security-service-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: security-service
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: security-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: security-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: security-service-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - security.tradpal.local
+    secretName: security-service-tls
+  rules:
+  - host: security.tradpal.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: security-service
+            port:
+              number: 8002
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-service-config
+data:
+  ENABLE_MTLS: "true"
+  ENABLE_JWT: "true"
+  JWT_EXPIRATION_HOURS: "24"
+  CERT_VALIDITY_DAYS: "365"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: security-service-secrets
+type: Opaque
+data:
+  jwt-secret-key: <base64-encoded-secret>
+  vault-token: <base64-encoded-token>

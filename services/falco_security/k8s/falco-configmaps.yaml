@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-config
+  namespace: tradpal-security
+  labels:
+    app: falco
+    component: runtime-security
+data:
+  falco.yaml: |
+    json_output: true
+    json_include_output_property: true
+    json_include_tags_property: true
+
+    log_stderr: true
+    log_syslog: false
+    log_level: info
+
+    buffered_outputs: false
+    rule_matching: first
+
+    output_timeout: 2000
+
+    webserver:
+      enabled: false
+      listen_port: 8765
+      k8s_healthz_endpoint: /healthz
+      ssl_enabled: false
+
+    prometheus_metrics:
+      enabled: true
+      interval: 60s
+
+    k8s_meta:
+      enabled: true
+
+    container_engine:
+      kind: docker
+
+    rules_files:
+      - /etc/falco/rules.d/tradpal_rules.yaml
+      - /etc/falco/rules.d/falco_rules.yaml
+
+    watch_config_files: true
+
+    syscall_event_drops:
+      actions:
+        - log
+        - alert
+      rate: 0.001
+      max_burst: 1
+      simulate_drops: false
+
+    priority: debug
+
+    time_format_iso_8601: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tradpal-falco-rules
+  namespace: tradpal-security
+  labels:
+    app: falco
+    component: runtime-security
+data:
+  tradpal_rules.yaml: |
+    - rule: Unauthorized API Key Access
+      desc: Detect unauthorized access to API keys or sensitive trading credentials
+      condition: >
+        (open_read or open_write) and
+        (fd.name contains "api_key" or fd.name contains "secret" or fd.name contains "credential") and
+        not (proc.name in (python, node, java) and proc.cmdline contains "tradpal")
+      output: >
+        Unauthorized access to sensitive file (file=%fd.name proc=%proc.name user=%user.name command=%proc.cmdline)
+      priority: WARNING
+      tags: [filesystem, trading, security]
+
+    - rule: Suspicious Network Connection to Trading APIs
+      desc: Detect suspicious outbound connections to known trading exchanges
+      condition: >
+        outbound and
+        (fd.sip contains "binance" or fd.sip contains "kraken" or fd.sip contains "coinbase" or
+         fd.sip contains "bybit" or fd.sip contains "okx") and
+        not proc.name in (python, curl, wget) and
+        not proc.cmdline contains "tradpal"
+      output: >
+        Suspicious network connection to trading exchange (connection=%fd.name proc=%proc.name user=%user.name)
+      priority: WARNING
+      tags: [network, trading, anomaly]
+
+    - rule: Unauthorized Process Execution in Trading Container
+      desc: Detect unauthorized process execution in trading service containers
+      condition: >
+        spawned_process and
+        container and
+        (container.name contains "tradpal" or container.name contains "trading") and
+        not proc.name in (python, python3, node, java, sh, bash) and
+        not proc.cmdline contains "tradpal"
+      output: >
+        Unauthorized process execution in trading container (proc=%proc.name user=%user.name container=%container.name)
+      priority: CRITICAL
+      tags: [process, container, trading, security]
+
+    - rule: Sensitive Data Exfiltration Attempt
+      desc: Detect attempts to exfiltrate sensitive trading data
+      condition: >
+        (write or sendto) and
+        (fd.name contains ".csv" or fd.name contains ".json" or fd.name contains "trade" or fd.name contains "position") and
+        evt.dir = < and
+        not proc.name in (python, python3) and
+        not proc.cmdline contains "tradpal"
+      output: >
+        Potential data exfiltration attempt (file=%fd.name proc=%proc.name user=%user.name)
+      priority: CRITICAL
+      tags: [filesystem, data, exfiltration, trading]
+
+    - rule: High Priority Security Alert
+      desc: Alert on high-priority security events
+      condition: evt.priority >= CRITICAL
+      output: >
+        HIGH PRIORITY SECURITY ALERT: %evt.desc (proc=%proc.name user=%user.name container=%container.name)
+      priority: CRITICAL
+      tags: [alert, high-priority, security]

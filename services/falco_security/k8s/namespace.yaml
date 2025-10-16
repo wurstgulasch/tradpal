@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tradpal-security
+  labels:
+    name: tradpal-security
+    app: tradpal
+    component: security

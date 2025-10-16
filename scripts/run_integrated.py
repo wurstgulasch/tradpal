@@ -9,12 +9,13 @@ import sys
 import time
 import signal
 import logging
+import asyncio
 from dotenv import load_dotenv
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import run_live_monitoring
+from main import TradPalOrchestrator, load_profile
 from integrations import integration_manager
 from integrations.telegram import TelegramIntegration, TelegramConfig
 
@@ -58,7 +59,7 @@ def setup_integrations():
         print("   Run 'python src/scripts/manage_integrations.py --setup' to configure")
         return False
 
-def run_integrated_system():
+async def run_integrated_system():
     """Run the complete integrated system"""
     global running
 
@@ -95,15 +96,33 @@ def run_integrated_system():
     print("Press Ctrl+C to stop")
 
     try:
+        # Load default profile
+        load_profile("heavy")
+
+        # Initialize the main orchestrator
+        orchestrator = TradPalOrchestrator()
+
+        # Initialize services
+        if not await orchestrator.initialize_services():
+            print("❌ Service initialization failed")
+            return
+
+        orchestrator.running = True
+
+        # Start live trading
+        await orchestrator.run_live_trading()
+
+        # Keep the system alive
         while running:
-            # Here you could implement more sophisticated monitoring
-            # For now, we'll just keep the system alive
             time.sleep(1)
 
     except KeyboardInterrupt:
         print("\n👋 Shutdown requested by user")
 
     finally:
+        # Shutdown orchestrator
+        await orchestrator.shutdown()
+
         # Shutdown integrations
         print("🔌 Shutting down integrations...")
         integration_manager.shutdown_all()
@@ -117,4 +136,4 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-    run_integrated_system()
+    asyncio.run(run_integrated_system())

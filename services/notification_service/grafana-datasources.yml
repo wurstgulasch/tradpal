@@ -1,0 +1,21 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+
+  - name: Notification Service
+    type: prometheus
+    access: proxy
+    url: http://notification-service:8001/metrics
+    editable: true
+
+dashboards:
+  - name: 'Notification Service Dashboard'
+    type: 'file'
+    options:
+      path: '/etc/grafana/provisioning/dashboards/notification-service-dashboard.json'

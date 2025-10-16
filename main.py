@@ -1,21 +1,566 @@
 #!/usr/bin/env python3
 """
-Trading Indicator System - Modular Version
-Based on EMA, RSI, Bollinger Bands and ATR for 1-minute charts.
-Continuous monitoring version that only outputs signals when they occur.
+TradPal Trading System - Hybrid Orchestrator
+
+Version 3.0.0 - Microservices Migration in Progress
+This orchestrator uses microservices where available, falls back to legacy modules.
+
+Available modes:
+- live: Live trading with microservices
+- backtest: Historical backtesting
+- discovery: Parameter optimization
+- ml-train: Machine learning training
+- multi-timeframe: MTA analysis
+- paper: Paper trading simulation
+- web-ui: Start web interface
 """
 
+import asyncio
+import argparse
+import logging
+import signal
 import sys
 import os
 import time
-import argparse
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+from typing import Dict, Any, Optional
+from pathlib import Path
 
-def load_profile(profile_name):
-    """
-    Load the appropriate .env file based on the profile name.
-    Must be called before importing config.settings.
-    """
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import configuration
+from config.settings import (
+    SYMBOL, TIMEFRAME, EXCHANGE, API_KEY, API_SECRET,
+    ENABLE_ML, ENABLE_DISCOVERY, ENABLE_BACKTEST,
+    ENABLE_LIVE_TRADING, ENABLE_NOTIFICATIONS
+)
+
+# Legacy imports (REMOVED - migration complete)
+# sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# try:
+#     from src.data_fetcher import fetch_data, fetch_historical_data
+#     from src.indicators import calculate_indicators
+#     from src.signal_generator import generate_signals, calculate_risk_management
+#     from src.output import save_signals_to_json, get_latest_signals
+#     from src.logging_config import logger as legacy_logger, log_signal, log_error, log_system_status
+#     from src.backtester import run_backtest
+#     from src.cache import clear_all_caches, get_cache_stats
+#     from src.config_validation import validate_configuration_at_startup
+#     from src.audit_logger import audit_logger
+#     from src.performance import PerformanceMonitor
+#     from src.discovery import run_discovery, load_adaptive_config, save_adaptive_config, apply_adaptive_config
+#     LEGACY_AVAILABLE = True
+# except ImportError as e:
+#     logger.warning(f"Legacy modules not available: {e}")
+#     LEGACY_AVAILABLE = False
+
+LEGACY_AVAILABLE = False  # Migration complete - legacy modules removed
+
+# Service imports (primary architecture)
+try:
+    from services.core.client import CoreServiceClient
+    CORE_SERVICE_AVAILABLE = True
+except ImportError:
+    CORE_SERVICE_AVAILABLE = False
+
+try:
+    from services.ml_trainer.client import MLTrainerServiceClient
+    ML_TRAINER_SERVICE_AVAILABLE = True
+except ImportError:
+    ML_TRAINER_SERVICE_AVAILABLE = False
+
+try:
+    from services.trading_bot_live.client import TradingBotLiveServiceClient
+    TRADING_BOT_LIVE_SERVICE_AVAILABLE = True
+except ImportError:
+    TRADING_BOT_LIVE_SERVICE_AVAILABLE = False
+
+try:
+    from services.web_ui.client import WebUIServiceClient
+    WEB_UI_SERVICE_AVAILABLE = True
+except ImportError:
+    WEB_UI_SERVICE_AVAILABLE = False
+
+try:
+    from services.backtesting_service.client import BacktestingServiceClient
+    BACKTESTING_SERVICE_AVAILABLE = True
+except ImportError:
+    BACKTESTING_SERVICE_AVAILABLE = False
+
+try:
+    from services.data_service.client import DataServiceClient
+    DATA_SERVICE_AVAILABLE = True
+except ImportError:
+    DATA_SERVICE_AVAILABLE = False
+
+try:
+    from services.discovery_service.client import DiscoveryServiceClient
+    DISCOVERY_SERVICE_AVAILABLE = True
+except ImportError:
+    DISCOVERY_SERVICE_AVAILABLE = False
+
+try:
+    from services.notification_service.client import NotificationServiceClient
+    NOTIFICATION_SERVICE_AVAILABLE = True
+except ImportError:
+    NOTIFICATION_SERVICE_AVAILABLE = False
+
+try:
+    from services.risk_service.client import RiskServiceClient
+    RISK_SERVICE_AVAILABLE = True
+except ImportError:
+    RISK_SERVICE_AVAILABLE = False
+
+
+class TradPalOrchestrator:
+    """Main orchestrator with hybrid architecture"""
+
+    def __init__(self):
+        self.services = {}
+        self.legacy_mode = not any([
+            CORE_SERVICE_AVAILABLE,
+            ML_TRAINER_SERVICE_AVAILABLE,
+            TRADING_BOT_LIVE_SERVICE_AVAILABLE,
+            WEB_UI_SERVICE_AVAILABLE
+        ])
+        self.running = False
+
+        if self.legacy_mode:
+            logger.info("🔄 Using legacy modules (microservices migration in progress)")
+        else:
+            logger.info("🚀 Using microservices architecture")
+
+    async def initialize_services(self) -> bool:
+        """Initialize available services"""
+        try:
+            logger.info("🚀 Initializing TradPal Services...")
+
+            # Initialize available microservices
+            if CORE_SERVICE_AVAILABLE:
+                self.services['core'] = CoreServiceClient()
+                await self.services['core'].authenticate()
+                logger.info("✅ Core service initialized with Zero Trust")
+
+            if ML_TRAINER_SERVICE_AVAILABLE:
+                self.services['ml_trainer'] = MLTrainerServiceClient()
+                logger.info("✅ ML Trainer service initialized")
+
+            if TRADING_BOT_LIVE_SERVICE_AVAILABLE:
+                self.services['trading_bot_live'] = TradingBotLiveServiceClient()
+                logger.info("✅ Trading Bot Live service initialized")
+
+            if WEB_UI_SERVICE_AVAILABLE:
+                self.services['web_ui'] = WebUIServiceClient()
+                logger.info("✅ Web UI service initialized")
+
+            if BACKTESTING_SERVICE_AVAILABLE:
+                self.services['backtesting'] = BacktestingServiceClient()
+                # Authenticate with security service
+                await self.services['backtesting'].initialize()
+                await self.services['backtesting'].authenticate()
+                logger.info("✅ Backtesting service initialized with Zero Trust")
+
+            if DATA_SERVICE_AVAILABLE:
+                self.services['data'] = DataServiceClient()
+                await self.services['data'].initialize()
+                await self.services['data'].authenticate()
+                logger.info("✅ Data service initialized with Zero Trust")
+
+            if DISCOVERY_SERVICE_AVAILABLE:
+                self.services['discovery'] = DiscoveryServiceClient()
+                await self.services['discovery'].authenticate()
+                logger.info("✅ Discovery service initialized with Zero Trust")
+
+            if NOTIFICATION_SERVICE_AVAILABLE:
+                self.services['notification'] = NotificationServiceClient()
+                logger.info("✅ Notification service initialized")
+
+            if RISK_SERVICE_AVAILABLE:
+                self.services['risk'] = RiskServiceClient()
+                logger.info("✅ Risk service initialized")
+
+            logger.info("✅ Services initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Service initialization failed: {e}")
+            return False
+
+    async def run_live_trading(self, **kwargs) -> None:
+        """Run live trading mode"""
+        logger.info("📈 Starting Live Trading Mode...")
+
+        try:
+            while self.running:
+                try:
+                    # Fetch data using data service
+                    if DATA_SERVICE_AVAILABLE and 'data' in self.services:
+                        data_response = await self.services['data'].fetch_realtime_data(
+                            symbol=SYMBOL,
+                            timeframe=TIMEFRAME,
+                            exchange=EXCHANGE
+                        )
+                        data = data_response.get('data', [])
+                    else:
+                        logger.error("No data service available for live trading")
+                        await asyncio.sleep(60)
+                        continue
+
+                    # Calculate indicators and signals using core service
+                    if CORE_SERVICE_AVAILABLE and 'core' in self.services:
+                        # Calculate indicators
+                        indicators_response = await self.services['core'].calculate_indicators(
+                            symbol=SYMBOL,
+                            timeframe=TIMEFRAME,
+                            data=data,
+                            indicators=['ema', 'rsi', 'bb', 'atr']
+                        )
+                        indicators = indicators_response
+
+                        # Generate signals
+                        signals_response = await self.services['core'].generate_signals(
+                            symbol=SYMBOL,
+                            timeframe=TIMEFRAME,
+                            data=data
+                        )
+                        signals = signals_response
+
+                        # Execute strategy if signals found
+                        if signals and signals.get('signals'):
+                            for signal in signals['signals']:
+                                if signal.get('action') in ['BUY', 'SELL']:
+                                    strategy_result = await self.services['core'].execute_strategy(
+                                        symbol=SYMBOL,
+                                        timeframe=TIMEFRAME,
+                                        signal=signal,
+                                        capital=10000.0,  # Default capital
+                                        risk_config={'risk_per_trade': 0.01}
+                                    )
+                                    logger.info(f"Strategy executed: {strategy_result}")
+
+                        # Log via notification service if available
+                        if NOTIFICATION_SERVICE_AVAILABLE and 'notification' in self.services:
+                            await self.services['notification'].log_signals(signals)
+
+                    await asyncio.sleep(60)  # 1-minute intervals
+
+                except Exception as e:
+                    logger.error(f"Live trading error: {e}")
+                    await asyncio.sleep(10)
+
+        except Exception as e:
+            logger.error(f"Live trading failed: {e}")
+
+    async def run_backtesting(self, **kwargs) -> Dict[str, Any]:
+        """Run backtesting mode"""
+        logger.info("📊 Starting Backtesting Mode...")
+
+        try:
+            # Use backtesting service
+            if BACKTESTING_SERVICE_AVAILABLE and 'backtesting' in self.services:
+                results = await self.services['backtesting'].run_backtest(
+                    symbol=kwargs.get('symbol', SYMBOL),
+                    timeframe=kwargs.get('timeframe', TIMEFRAME),
+                    start_date=kwargs.get('start_date'),
+                    end_date=kwargs.get('end_date'),
+                    initial_capital=10000.0,
+                    strategy_config={'indicators': ['ema', 'rsi', 'bb']},
+                    risk_config={'risk_per_trade': 0.01}
+                )
+            else:
+                raise RuntimeError("No backtesting service available")
+
+            logger.info(f"✅ Backtest completed: {results.get('summary', 'N/A')}")
+            return results
+
+        except Exception as e:
+            logger.error(f"Backtesting failed: {e}")
+            raise
+
+    async def run_discovery(self, **kwargs) -> Dict[str, Any]:
+        """Run parameter discovery/optimization"""
+        logger.info("🔍 Starting Discovery Mode...")
+
+        try:
+            # Use discovery service
+            if DISCOVERY_SERVICE_AVAILABLE and 'discovery' in self.services:
+                results = await self.services['discovery'].run_parameter_discovery(
+                    symbol=kwargs.get('symbol', SYMBOL),
+                    timeframe=kwargs.get('timeframe', TIMEFRAME),
+                    start_date=kwargs.get('start_date'),
+                    end_date=kwargs.get('end_date'),
+                    population_size=kwargs.get('population_size', 50),
+                    generations=kwargs.get('generations', 20),
+                    use_walk_forward=kwargs.get('use_walk_forward', True)
+                )
+            else:
+                raise RuntimeError("Discovery service not available")
+
+            logger.info(f"✅ Discovery completed: {results.get('best_fitness', 'N/A')}")
+            return results
+
+        except Exception as e:
+            logger.error(f"Discovery failed: {e}")
+            raise
+
+    async def run_multi_timeframe(self, **kwargs) -> None:
+        """Run multi-timeframe analysis"""
+        logger.info("📊 Starting Multi-Timeframe Analysis...")
+
+        try:
+            timeframes = kwargs.get('timeframes', ['1m', '5m', '1h', '1d'])
+
+            while self.running:
+                analyses = {}
+
+                # Analyze each timeframe
+                for tf in timeframes:
+                    # Fetch data using data service
+                    if DATA_SERVICE_AVAILABLE and 'data' in self.services:
+                        data_response = await self.services['data'].fetch_historical_data(
+                            symbol=SYMBOL,
+                            timeframe=tf,
+                            start_date='2024-01-01',  # Default start date
+                            exchange=EXCHANGE
+                        )
+                        data = data_response.get('data', [])
+                    else:
+                        continue
+
+                    # Calculate indicators and signals using core service
+                    if CORE_SERVICE_AVAILABLE and 'core' in self.services:
+                        indicators_response = await self.services['core'].calculate_indicators(
+                            symbol=SYMBOL,
+                            timeframe=tf,
+                            data=data,
+                            indicators=['ema', 'rsi', 'bb']
+                        )
+                        indicators = indicators_response
+
+                        signals_response = await self.services['core'].generate_signals(
+                            symbol=SYMBOL,
+                            timeframe=tf,
+                            data=data
+                        )
+                        signals = signals_response
+
+                        analyses[tf] = {
+                            'data': data,
+                            'indicators': indicators,
+                            'signals': signals.get('signals', [])
+                        }
+
+                # Log multi-timeframe analysis
+                if analyses:
+                    logger.info(f"Multi-timeframe analysis completed for {len(analyses)} timeframes")
+
+                await asyncio.sleep(300)  # 5-minute intervals for MTA
+
+        except Exception as e:
+            logger.error(f"Multi-timeframe analysis failed: {e}")
+
+    async def run_paper_trading(self, **kwargs) -> None:
+        """Run paper trading simulation"""
+        logger.info("📝 Starting Paper Trading Mode...")
+
+        try:
+            capital = kwargs.get('capital', 10000)
+            logger.info(f"Initial capital: ${capital}")
+
+            while self.running:
+                # Fetch data using data service
+                if DATA_SERVICE_AVAILABLE and 'data' in self.services:
+                    data_response = await self.services['data'].fetch_realtime_data(
+                        symbol=SYMBOL,
+                        timeframe=TIMEFRAME,
+                        exchange=EXCHANGE
+                    )
+                    data = data_response.get('data', [])
+                else:
+                    await asyncio.sleep(60)
+                    continue
+
+                # Calculate indicators and signals using core service
+                if CORE_SERVICE_AVAILABLE and 'core' in self.services:
+                    indicators_response = await self.services['core'].calculate_indicators(
+                        symbol=SYMBOL,
+                        timeframe=TIMEFRAME,
+                        data=data,
+                        indicators=['ema', 'rsi', 'bb', 'atr']
+                    )
+                    indicators = indicators_response
+
+                    signals_response = await self.services['core'].generate_signals(
+                        symbol=SYMBOL,
+                        timeframe=TIMEFRAME,
+                        data=data
+                    )
+                    signals = signals_response
+
+                    # Simulate paper trades using trading bot live service
+                    if TRADING_BOT_LIVE_SERVICE_AVAILABLE and 'trading_bot_live' in self.services and signals.get('signals'):
+                        for signal in signals['signals']:
+                            if signal.get('action') in ['BUY', 'SELL']:
+                                trade_result = await self.services['trading_bot_live'].execute_paper_trade(signal)
+                                logger.info(f"Paper trade executed: {trade_result}")
+
+                await asyncio.sleep(60)
+
+        except Exception as e:
+            logger.error(f"Paper trading failed: {e}")
+
+    async def run_ml_training(self, **kwargs) -> Dict[str, Any]:
+        """Run machine learning training"""
+        logger.info("🤖 Starting ML Training Mode...")
+
+        try:
+            # Use ML trainer service
+            if ML_TRAINER_SERVICE_AVAILABLE and 'ml_trainer' in self.services:
+                from services.ml_trainer.client import TrainingRequest
+
+                request = TrainingRequest(
+                    symbol=kwargs.get('symbol', SYMBOL),
+                    timeframe=kwargs.get('timeframe', TIMEFRAME),
+                    start_date=kwargs.get('start_date'),
+                    end_date=kwargs.get('end_date'),
+                    model_type=kwargs.get('model_type', 'random_forest'),
+                    target_horizon=5,
+                    use_optuna=True
+                )
+
+                training_result = await self.services['ml_trainer'].train_model(request)
+
+                logger.info(f"ML training completed: {training_result}")
+                return training_result
+
+            elif LEGACY_AVAILABLE:
+                # Legacy ML training would go here
+                logger.info("Legacy ML training not implemented")
+                return {"status": "legacy", "message": "Legacy ML training placeholder"}
+
+            else:
+                raise RuntimeError("No ML training service available")
+
+        except Exception as e:
+            logger.error(f"ML training failed: {e}")
+            raise
+
+    async def shutdown(self) -> None:
+        """Graceful shutdown"""
+        logger.info("🛑 Shutting down TradPal Orchestrator...")
+
+        self.running = False
+
+        # Shutdown services
+        for name, service in self.services.items():
+            try:
+                if hasattr(service, 'close'):
+                    await service.close()
+                logger.info(f"✅ {name} service shut down")
+            except Exception as e:
+                logger.error(f"❌ {name} service shutdown failed: {e}")
+
+        logger.info("✅ TradPal Orchestrator shut down complete")
+
+
+async def main():
+    """Main entry point"""
+    parser = argparse.ArgumentParser(description="TradPal Trading System v3.0.0")
+    parser.add_argument(
+        "mode",
+        choices=["live", "backtest", "discovery", "ml-train", "multi-timeframe", "paper", "web-ui"],
+        help="Operation mode"
+    )
+    parser.add_argument("--symbol", default=SYMBOL, help="Trading symbol")
+    parser.add_argument("--timeframe", default=TIMEFRAME, help="Timeframe")
+    parser.add_argument("--start-date", help="Start date for backtesting/training")
+    parser.add_argument("--end-date", help="End date for backtesting/training")
+    parser.add_argument("--capital", type=float, default=10000, help="Initial capital for paper trading")
+    parser.add_argument("--iterations", type=int, default=100, help="Max iterations for discovery")
+    parser.add_argument("--population-size", type=int, default=50, help="GA population size")
+    parser.add_argument("--generations", type=int, default=20, help="GA generations")
+    parser.add_argument("--use-walk-forward", action="store_true", default=True, help="Use walk-forward analysis")
+    parser.add_argument("--model-type", default="ensemble", help="ML model type")
+    parser.add_argument("--profile", choices=["light", "heavy"], default="heavy", help="Performance profile")
+
+    args = parser.parse_args()
+
+    # Load profile
+    load_profile(args.profile)
+
+    # Initialize orchestrator
+    orchestrator = TradPalOrchestrator()
+
+    # Signal handlers
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, initiating shutdown...")
+        asyncio.create_task(orchestrator.shutdown())
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    try:
+        # Initialize services
+        if not await orchestrator.initialize_services():
+            logger.error("❌ Service initialization failed")
+            return 1
+
+        orchestrator.running = True
+
+        # Execute requested mode
+        if args.mode == "live":
+            await orchestrator.run_live_trading()
+        elif args.mode == "backtest":
+            results = await orchestrator.run_backtesting(
+                symbol=args.symbol,
+                timeframe=args.timeframe,
+                start_date=args.start_date,
+                end_date=args.end_date
+            )
+            print(f"Backtest Results: {results}")
+        elif args.mode == "discovery":
+            results = await orchestrator.run_discovery(
+                symbol=args.symbol,
+                timeframe=args.timeframe,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                population_size=args.population_size,
+                generations=args.generations,
+                use_walk_forward=args.use_walk_forward
+            )
+            print(f"Discovery Results: {results}")
+        elif args.mode == "multi-timeframe":
+            await orchestrator.run_multi_timeframe()
+        elif args.mode == "paper":
+            await orchestrator.run_paper_trading(capital=args.capital)
+        elif args.mode == "ml-train":
+            results = await orchestrator.run_ml_training(
+                symbol=args.symbol,
+                timeframe=args.timeframe,
+                start_date=args.start_date,
+                end_date=args.end_date
+            )
+            print(f"ML Training Results: {results}")
+        elif args.mode == "ml-train":
+            print("ML Training not yet migrated to microservices")
+
+    except KeyboardInterrupt:
+        logger.info("Received keyboard interrupt")
+    except Exception as e:
+        logger.error(f"Unhandled exception: {e}")
+        return 1
+    finally:
+        await orchestrator.shutdown()
+
+    return 0
+
+
+def load_profile(profile_name: str) -> bool:
+    """Load environment profile"""
     from dotenv import load_dotenv
 
     profile_files = {
@@ -30,1722 +575,35 @@ def load_profile(profile_name):
             load_dotenv(env_file)
             return True
         else:
-            print(f"⚠️  Profile '{profile_name}' not found, using default .env")
-            load_dotenv()  # Fallback to default
+            print("⚠️  Profile not found, using default .env")
+            load_dotenv()
             return False
     else:
-        print(f"⚠️  Unknown profile '{profile_name}', using default .env")
-        load_dotenv()  # Fallback to default
-        return False
-
-# Parse profile argument first (before other imports)
-if __name__ == "__main__":
-    # Quick pre-parse for profile argument
-    import sys
-    profile = 'default'
-    for i, arg in enumerate(sys.argv):
-        if arg == '--profile' and i + 1 < len(sys.argv):
-            profile = sys.argv[i + 1]
-            break
-
-    # Load profile before importing settings
-    if profile != 'default':
-        load_profile(profile)
-    else:
-        # Load default .env if no profile specified
-        from dotenv import load_dotenv
+        print("⚠️  Unknown profile, using default .env")
         load_dotenv()
+        return False
 
-# Now import everything else after profile is loaded
-from src.data_fetcher import fetch_data, fetch_historical_data
-from src.indicators import calculate_indicators
-from src.signal_generator import generate_signals, calculate_risk_management
-from src.output import save_signals_to_json, get_latest_signals
-from src.logging_config import logger, log_signal, log_error, log_system_status
-from src.backtester import run_backtest
-from src.cache import clear_all_caches, get_cache_stats
-from src.config_validation import validate_configuration_at_startup
-from src.audit_logger import audit_logger
-from config.settings import SYMBOL
 
-# Optional imports for new production features
-try:
-    from src.secrets_manager import initialize_secrets_manager, get_secret
-    SECRETS_AVAILABLE = True
-except ImportError:
-    print("⚠️  Secrets manager not available (optional dependencies not installed)")
-    print("   Run: pip install hvac boto3")
-    SECRETS_AVAILABLE = False
-    def initialize_secrets_manager(*args, **kwargs):
-        pass
-    def get_secret(*args, **kwargs):
-        return None
-
-try:
-    from src.performance import PerformanceMonitor
-    PERFORMANCE_AVAILABLE = True
-except ImportError:
-    print("⚠️  Performance monitoring not available (optional dependencies not installed)")
-    print("   Run: pip install prometheus-client psutil")
-    PERFORMANCE_AVAILABLE = False
-    class PerformanceMonitor:
-        def __init__(self, *args, **kwargs):
-            pass
-        def start_monitoring(self):
-            pass
-        def record_signal(self, *args, **kwargs):
-            pass
-        def record_trade(self, *args, **kwargs):
-            pass
-
-# Optional imports for discovery functionality
-try:
-    from src.discovery import run_discovery, load_adaptive_config, save_adaptive_config, apply_adaptive_config
-    DISCOVERY_AVAILABLE = True
-except ImportError:
-    print("⚠️  Discovery module not available (deap not installed)")
-    print("   Run: pip install deap")
-    DISCOVERY_AVAILABLE = False
-    # Define dummy functions to prevent errors
-    def run_discovery(*args, **kwargs):
-        raise ImportError("Discovery module requires 'deap' package. Install with: pip install deap")
-    def load_adaptive_config(*args, **kwargs):
-        return None
-    def save_adaptive_config(*args, **kwargs):
-        pass
-    def apply_adaptive_config(*args, **kwargs):
-        return None
-
-class AdaptiveOptimizer:
-    """Manages periodic optimization during live trading."""
-
-    def __init__(self):
-        from config.settings import (
-            ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
-            ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS_LIVE,
-            ADAPTIVE_OPTIMIZATION_POPULATION,
-            ADAPTIVE_OPTIMIZATION_GENERATIONS,
-            ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS,
-            ADAPTIVE_AUTO_APPLY_BEST_LIVE,
-            ADAPTIVE_MIN_PERFORMANCE_THRESHOLD_LIVE,
-            SYMBOL,
-            TIMEFRAME,
-            get_current_indicator_config
-        )
-
-        self.enabled = ADAPTIVE_OPTIMIZATION_ENABLED_LIVE
-        self.interval_hours = ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS_LIVE
-        self.population = ADAPTIVE_OPTIMIZATION_POPULATION
-        self.generations = ADAPTIVE_OPTIMIZATION_GENERATIONS
-        self.lookback_days = ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS
-        self.auto_apply = ADAPTIVE_AUTO_APPLY_BEST_LIVE
-        self.min_threshold = ADAPTIVE_MIN_PERFORMANCE_THRESHOLD_LIVE
-        self.symbol = SYMBOL
-        self.timeframe = TIMEFRAME
-
-        self.last_optimization = 0
-        self.current_config = get_current_indicator_config()  # Use current config function
-
-        # Load existing adaptive config if available
-        self.load_existing_config()
-
-        logger.info(f"Adaptive optimizer initialized (enabled: {self.enabled})")
-
-    def load_existing_config(self):
-        """Load existing adaptive configuration."""
-        from config.settings import ADAPTIVE_CONFIG_FILE, get_current_indicator_config
-        self.current_config = load_adaptive_config(ADAPTIVE_CONFIG_FILE)
-        if self.current_config is None:
-            # Fallback to current indicator config
-            self.current_config = get_current_indicator_config()
-
-    def should_run_optimization(self) -> bool:
-        """Check if optimization should be run based on time interval."""
-        if not self.enabled:
-            return False
-
-        current_time = time.time()
-        time_since_last = current_time - self.last_optimization
-        interval_seconds = self.interval_hours * 3600
-
-        return time_since_last >= interval_seconds
-
-    def run_optimization(self):
-        """Run discovery optimization and potentially apply results."""
-        if not self.enabled:
-            return
-
-        try:
-            logger.info("🔄 Starting adaptive optimization...")
-
-            # Calculate date range for optimization
-            from datetime import datetime, timedelta
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=self.lookback_days)
-
-            print(f"🧬 Running adaptive optimization for {self.symbol}...")
-            print(f"   Period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-            print(f"   Population: {self.population}, Generations: {self.generations}")
-
-            # Run discovery
-            results = run_discovery(
-                symbol=self.symbol,
-                exchange='kraken',
-                timeframe=self.timeframe,
-                start_date=start_date.strftime('%Y-%m-%d'),
-                end_date=end_date.strftime('%Y-%m-%d'),
-                population_size=self.population,
-                generations=self.generations
-            )
-
-            if results and len(results) > 0:
-                best_result = results[0]
-
-                print(f"✅ Adaptive optimization completed!")
-                print(f"   Best Fitness: {best_result.fitness:.2f}")
-                print(f"   Win Rate: {best_result.win_rate:.1f}%")
-                print(f"   Total P&L: {best_result.pnl:.2f}%")
-
-                # Save the best configuration
-                from config.settings import ADAPTIVE_CONFIG_FILE
-                save_adaptive_config(best_result.config, best_result.fitness, ADAPTIVE_CONFIG_FILE)
-
-                # Apply if auto-apply is enabled and meets threshold
-                if self.auto_apply and best_result.fitness >= self.min_threshold:
-                    self.current_config = apply_adaptive_config(best_result.config)
-                    print(f"🔄 Applied new optimized configuration (fitness: {best_result.fitness:.2f})")
-                    logger.info(f"Applied adaptive configuration with fitness {best_result.fitness}")
-                elif self.auto_apply and best_result.fitness < self.min_threshold:
-                    print(f"⚠️ Best configuration below threshold ({best_result.fitness:.2f} < {self.min_threshold}), not applied")
-                    logger.warning(f"Best configuration below threshold: {best_result.fitness} < {self.min_threshold}")
-
-                self.last_optimization = time.time()
-
-            else:
-                logger.warning("Adaptive optimization returned no results")
-
-        except Exception as e:
-            logger.error(f"Adaptive optimization failed: {e}")
-            print(f"❌ Adaptive optimization failed: {e}")
-
-    def get_current_config(self):
-        """Get current adaptive configuration for indicator calculation."""
-        return self.current_config
-
-def run_paper_trading_mode(args, performance_monitor=None):
-    """Run paper trading mode using optimized Discovery configurations."""
-    print("📈 Starting Paper Trading Mode - Simulated Trading")
-    print(f"Trading {args.symbol} on {args.timeframe} timeframe")
-    print("⚠️  This is SIMULATED trading - no real money involved")
-
-    try:
-        import json
-        import time
-        from datetime import datetime, timedelta
-        from src.data_fetcher import fetch_data
-        from src.indicators import calculate_indicators
-        from src.signal_generator import generate_signals, calculate_risk_management
-        from src.output import save_signals_to_json
-        from config.settings import INITIAL_CAPITAL, RISK_PER_TRADE
-
-        # Load discovery results
-        results_file = 'output/discovery_results.json'
-        if not os.path.exists(results_file):
-            print("❌ No discovery results found. Run discovery mode first:")
-            print("   python main.py --mode discovery --symbol BTC/USDT --timeframe 1h")
-            return
-
-        with open(results_file, 'r') as f:
-            discovery_data = json.load(f)
-
-        top_configs = discovery_data['top_configurations'][:3]  # Use top 3 configs
-        print(f"✅ Loaded {len(top_configs)} optimized configurations from discovery")
-
-        # Initialize paper trading state
-        portfolio = {
-            'cash': INITIAL_CAPITAL,
-            'position': 0,  # 0 = no position, 1 = long, -1 = short
-            'entry_price': 0,
-            'position_size': 0,
-            'total_trades': 0,
-            'winning_trades': 0,
-            'total_pnl': 0,
-            'max_drawdown': 0,
-            'peak_value': INITIAL_CAPITAL,
-            'current_value': INITIAL_CAPITAL,
-            'trade_history': []
-        }
-
-        print(f"💰 Initial Capital: ${INITIAL_CAPITAL:.2f}")
-        print(f"🎯 Risk per Trade: {RISK_PER_TRADE*100:.1f}%")
-        print("🔄 Starting continuous paper trading simulation...")
-
-        # Use ensemble approach: combine signals from top configurations
-        last_signal_time = None
-        cycle_count = 0
-
-        while True:  # Continuous loop
-            try:
-                cycle_count += 1
-                current_time = datetime.now()
-
-                # Fetch latest data
-                data = fetch_data(limit=100, symbol=args.symbol, timeframe=args.timeframe)
-
-                if data.empty:
-                    print("⚠️  No data available, waiting...")
-                    time.sleep(60)  # Wait 1 minute
-                    continue
-
-                # Calculate indicators for each configuration
-                config_signals = []
-                for i, config_data in enumerate(top_configs):
-                    config = config_data['configuration']
-
-                    # Create data copy for this configuration
-                    data_config = data.copy()
-
-                    # Calculate indicators with config
-                    data_config = calculate_indicators(data_config, config_override=config)
-
-                    # Generate signals
-                    data_config = generate_signals(data_config, config_override=config)
-
-                    # Calculate risk management
-                    data_config = calculate_risk_management(data_config, config_override=config)
-
-                    # Get latest signals
-                    latest_signals = data_config.tail(5)  # Last 5 candles
-                    buy_signals = latest_signals['Buy_Signal'].sum()
-                    sell_signals = latest_signals['Sell_Signal'].sum()
-
-                    config_signals.append({
-                        'config_id': i+1,
-                        'buy_signals': buy_signals,
-                        'sell_signals': sell_signals,
-                        'latest_data': latest_signals.iloc[-1] if len(latest_signals) > 0 else None
-                    })
-
-                # Ensemble decision: majority vote
-                total_buy_signals = sum(cs['buy_signals'] for cs in config_signals)
-                total_sell_signals = sum(cs['sell_signals'] for cs in config_signals)
-
-                # Execute trades based on ensemble signals
-                current_price = data.iloc[-1]['close'] if len(data) > 0 else 0
-
-                if total_buy_signals > total_sell_signals and portfolio['position'] == 0:
-                    # Enter long position
-                    position_size = (portfolio['cash'] * RISK_PER_TRADE) / current_price
-                    portfolio['position'] = 1
-                    portfolio['entry_price'] = current_price
-                    portfolio['position_size'] = position_size
-
-                    trade_record = {
-                        'timestamp': current_time.isoformat(),
-                        'type': 'BUY',
-                        'price': current_price,
-                        'size': position_size,
-                        'reason': f'Ensemble signals: {total_buy_signals} buy vs {total_sell_signals} sell'
-                    }
-                    portfolio['trade_history'].append(trade_record)
-
-                    print(f"🟢 LONG ENTRY: {position_size:.4f} @ ${current_price:.2f} ({current_time.strftime('%H:%M:%S')})")
-                    print(f"   Reason: {total_buy_signals} buy vs {total_sell_signals} sell signals")
-
-                    # Record in performance monitor
-                    if performance_monitor:
-                        performance_monitor.record_signal(
-                            signal_type="PAPER_TRADE_ENTRY",
-                            price=current_price,
-                            rsi=0,  # Could calculate this
-                            position_size_pct=RISK_PER_TRADE
-                        )
-
-                elif total_sell_signals > total_buy_signals and portfolio['position'] == 1:
-                    # Exit long position
-                    exit_price = current_price
-                    pnl = (exit_price - portfolio['entry_price']) * portfolio['position_size']
-
-                    portfolio['cash'] += pnl
-                    portfolio['total_pnl'] += pnl
-                    portfolio['total_trades'] += 1
-                    portfolio['current_value'] = portfolio['cash']
-
-                    if pnl > 0:
-                        portfolio['winning_trades'] += 1
-
-                    # Update drawdown
-                    portfolio['peak_value'] = max(portfolio['peak_value'], portfolio['current_value'])
-                    current_drawdown = (portfolio['peak_value'] - portfolio['current_value']) / portfolio['peak_value']
-                    portfolio['max_drawdown'] = max(portfolio['max_drawdown'], current_drawdown)
-
-                    trade_record = {
-                        'timestamp': current_time.isoformat(),
-                        'type': 'SELL',
-                        'price': exit_price,
-                        'size': portfolio['position_size'],
-                        'pnl': pnl,
-                        'reason': f'Ensemble signals: {total_sell_signals} sell vs {total_buy_signals} buy'
-                    }
-                    portfolio['trade_history'].append(trade_record)
-
-                    print(f"🔴 LONG EXIT: {portfolio['position_size']:.4f} @ ${exit_price:.2f} (PnL: ${pnl:.2f})")
-                    print(f"   Total P&L: ${portfolio['total_pnl']:.2f}, Win Rate: {(portfolio['winning_trades']/portfolio['total_trades']*100):.1f}%")
-
-                    # Reset position
-                    portfolio['position'] = 0
-                    portfolio['entry_price'] = 0
-                    portfolio['position_size'] = 0
-
-                    # Record in performance monitor
-                    if performance_monitor:
-                        performance_monitor.record_trade(
-                            symbol=args.symbol,
-                            trade_type='paper_exit',
-                            pnl=pnl
-                        )
-
-                # Show status every 10 cycles
-                if cycle_count % 10 == 0:
-                    win_rate = (portfolio['winning_trades'] / portfolio['total_trades'] * 100) if portfolio['total_trades'] > 0 else 0
-                    print(f"📊 Status: Cash: ${portfolio['cash']:.2f}, Total P&L: ${portfolio['total_pnl']:.2f}, Trades: {portfolio['total_trades']}, Win Rate: {win_rate:.1f}%")
-
-                # Save portfolio state periodically
-                if cycle_count % 50 == 0:
-                    portfolio_file = 'output/paper_trading_portfolio.json'
-                    with open(portfolio_file, 'w') as f:
-                        json.dump(portfolio, f, indent=2, default=str)
-                    print(f"💾 Portfolio saved to {portfolio_file}")
-
-                # Wait before next cycle (respect API limits)
-                time.sleep(30)  # 30 second intervals
-
-            except KeyboardInterrupt:
-                print("\n🛑 Paper trading stopped by user")
-                break
-            except Exception as e:
-                print(f"❌ Error in paper trading cycle: {e}")
-                time.sleep(60)  # Wait longer on error
-                continue
-
-        # Final summary
-        print("\n" + "="*60)
-        print("📈 PAPER TRADING SESSION SUMMARY")
-        print("="*60)
-        print(f"Total Trades: {portfolio['total_trades']}")
-        print(f"Winning Trades: {portfolio['winning_trades']}")
-        print(f"Win Rate: {(portfolio['winning_trades']/portfolio['total_trades']*100):.1f}%" if portfolio['total_trades'] > 0 else "0%")
-        print(f"Total P&L: ${portfolio['total_pnl']:.2f}")
-        print(f"Final Capital: ${portfolio['cash']:.2f}")
-        print(f"Max Drawdown: {portfolio['max_drawdown']*100:.2f}%")
-        print(f"Return: {(portfolio['total_pnl']/INITIAL_CAPITAL*100):.2f}%")
-
-        # Save final results
-        final_results = {
-            'session_summary': {
-                'start_time': datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat(),
-                'end_time': datetime.now().isoformat(),
-                'symbol': args.symbol,
-                'timeframe': args.timeframe,
-                'total_trades': portfolio['total_trades'],
-                'winning_trades': portfolio['winning_trades'],
-                'win_rate': (portfolio['winning_trades']/portfolio['total_trades']) if portfolio['total_trades'] > 0 else 0,
-                'total_pnl': portfolio['total_pnl'],
-                'final_capital': portfolio['cash'],
-                'max_drawdown': portfolio['max_drawdown'],
-                'return_pct': portfolio['total_pnl']/INITIAL_CAPITAL
-            },
-            'portfolio': portfolio,
-            'discovery_configs_used': len(top_configs),
-            'ensemble_method': 'majority_vote'
-        }
-
-        results_file = 'output/paper_trading_results.json'
-        with open(results_file, 'w') as f:
-            json.dump(final_results, f, indent=2, default=str)
-
-        print(f"📁 Results saved to {results_file}")
-        print("🎯 Paper trading session completed!")
-
-    except Exception as e:
-        print(f"❌ Paper trading failed: {e}")
-        import traceback
-        traceback.print_exc()
-
-def run_live_trading_mode(args, performance_monitor=None):
-    """Run live trading mode with real broker integration."""
+def validate_profile_config(profile_name: str) -> bool:
+    """Validate profile configuration against requirements"""
     from config.settings import (
-        BROKER_ENABLED, BROKER_EXCHANGE, BROKER_API_KEY, BROKER_API_SECRET,
-        BROKER_TESTNET, LIVE_TRADING_MAX_DRAWDOWN, LIVE_TRADING_MAX_TRADES_PER_DAY,
-        LIVE_TRADING_MIN_SIGNAL_CONFIDENCE, LIVE_TRADING_AUTO_EXECUTE,
-        LIVE_TRADING_CONFIRMATION_REQUIRED, LIVE_TRADING_MONITOR_ENABLED,
-        LIVE_TRADING_POSITION_UPDATE_INTERVAL, LIVE_TRADING_PNL_LOG_FILE,
-        LIVE_TRADING_TRADE_LOG_FILE
-    )
-    from integrations.brokers import broker_manager, BrokerConfig, CCXTBroker
-    import json
-    import time
-    from datetime import datetime
-
-    print("🚀 Starting TradPal - Live Trading Mode")
-    print("⚠️  WARNING: This mode executes REAL TRADES!")
-    print(f"📊 Broker: {BROKER_EXCHANGE} ({'TESTNET' if BROKER_TESTNET else 'LIVE'})")
-    print(f"💰 Max Drawdown: {LIVE_TRADING_MAX_DRAWDOWN*100}%")
-    print(f"📈 Max Trades/Day: {LIVE_TRADING_MAX_TRADES_PER_DAY}")
-    print(f"🤖 Auto Execute: {LIVE_TRADING_AUTO_EXECUTE}")
-    print()
-
-    # Safety checks
-    if not BROKER_ENABLED:
-        print("❌ Live trading is disabled in configuration. Set BROKER_ENABLED=true to enable.")
-        return
-
-    if not BROKER_API_KEY or not BROKER_API_SECRET:
-        print("❌ Broker API credentials not configured. Set BROKER_API_KEY and BROKER_API_SECRET.")
-        return
-
-    if not BROKER_TESTNET and not LIVE_TRADING_CONFIRMATION_REQUIRED:
-        print("❌ LIVE TRADING WITHOUT CONFIRMATION DISABLED FOR SAFETY!")
-        print("   Set LIVE_TRADING_CONFIRMATION_REQUIRED=true for live trading.")
-        return
-
-    # Initialize broker
-    broker_config = BrokerConfig(
-        enabled=True,
-        exchange=BROKER_EXCHANGE,
-        api_key=BROKER_API_KEY,
-        api_secret=BROKER_API_SECRET,
-        testnet=BROKER_TESTNET
+        ML_ENABLED, ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
+        MONITORING_STACK_ENABLED, PERFORMANCE_MONITORING_ENABLED
     )
 
-    broker = CCXTBroker(broker_config)
-    broker_manager.register_broker('primary', broker)
-
-    if not broker_manager.initialize_all()['primary']:
-        print("❌ Failed to initialize broker. Check API credentials and network connection.")
-        return
-
-    print("✅ Broker initialized successfully")
-
-    # Initialize trading state
-    trading_state = {
-        'capital': 10000.0,  # Start with $10k
-        'trades_today': 0,
-        'last_reset_date': datetime.now().date(),
-        'open_positions': {},
-        'pnl_history': [],
-        'trade_log': []
-    }
-
-    # Load existing state if available
-    try:
-        with open(LIVE_TRADING_PNL_LOG_FILE, 'r') as f:
-            trading_state.update(json.load(f))
-        print("📊 Loaded existing trading state")
-    except FileNotFoundError:
-        print("📊 Starting with fresh trading state")
-
-    log_system_status("Live trading mode started")
-
-    try:
-        while True:
-            current_time = datetime.now()
-
-            # Reset daily counters if needed
-            if current_time.date() != trading_state['last_reset_date']:
-                trading_state['trades_today'] = 0
-                trading_state['last_reset_date'] = current_time.date()
-                print(f"📅 Daily reset: {current_time.date()}")
-
-            # Check drawdown limit
-            if trading_state['capital'] < 10000 * (1 - LIVE_TRADING_MAX_DRAWDOWN):
-                print(f"🚨 EMERGENCY STOP: Drawdown limit reached ({LIVE_TRADING_MAX_DRAWDOWN*100}%)")
-                print(f"   Current capital: ${trading_state['capital']:.2f}")
-                break
-
-            # Check daily trade limit
-            if trading_state['trades_today'] >= LIVE_TRADING_MAX_TRADES_PER_DAY:
-                print(f"📊 Daily trade limit reached ({LIVE_TRADING_MAX_TRADES_PER_DAY})")
-                time.sleep(3600)  # Wait 1 hour
-                continue
-
-            # Fetch latest data
-            data = fetch_data()
-            if data.empty:
-                print("No data available, retrying in 30 seconds...")
-                time.sleep(30)
-                continue
-
-            # Calculate indicators and signals
-            data = calculate_indicators(data)
-            data = generate_signals(data)
-            data = calculate_risk_management(data)
-
-            # Get latest signal
-            latest = data.iloc[-1]
-
-            # Check for trading signals
-            signal_detected = False
-            signal_type = None
-            confidence = 0.0
-
-            if latest['Buy_Signal'] == 1:
-                signal_type = 'BUY'
-                confidence = 0.8  # Placeholder confidence
-                signal_detected = True
-            elif latest['Sell_Signal'] == 1:
-                signal_type = 'SELL'
-                confidence = 0.8  # Placeholder confidence
-                signal_detected = True
-
-            if signal_detected and confidence >= LIVE_TRADING_MIN_SIGNAL_CONFIDENCE:
-                print(f"🎯 {signal_type} SIGNAL detected at {current_time.strftime('%H:%M:%S')}")
-                print(f"   Price: {latest['close']:.5f}, Confidence: {confidence:.2f}")
-                print(f"   Position Size: {latest['Position_Size_Percent']:.2f}%")
-
-                # Check confirmation requirement
-                if LIVE_TRADING_CONFIRMATION_REQUIRED:
-                    response = input(f"⚠️  Execute {signal_type} trade? (y/N): ")
-                    if response.lower() not in ['y', 'yes']:
-                        print("⏭️  Trade cancelled by user")
-                        time.sleep(60)
-                        continue
-
-                # Execute trade if auto-execute is enabled
-                if LIVE_TRADING_AUTO_EXECUTE:
-                    try:
-                        # Calculate position size
-                        position_size = trading_state['capital'] * latest['Position_Size_Percent'] / 100
-
-                        # For simplicity, assume market order
-                        if signal_type == 'BUY':
-                            order_result = broker.place_order(
-                                symbol=args.symbol,
-                                side='buy',
-                                amount=position_size / latest['close'],  # Convert to crypto amount
-                                order_type='market'
-                            )
-                        else:  # SELL
-                            # For sell, we need existing position - simplified for now
-                            order_result = broker.place_order(
-                                symbol=args.symbol,
-                                side='sell',
-                                amount=position_size / latest['close'],  # Simplified
-                                order_type='market'
-                            )
-
-                        if order_result.status in ['filled', 'partial']:
-                            print(f"✅ Order executed: {order_result.to_dict()}")
-
-                            # Update trading state
-                            trading_state['trades_today'] += 1
-                            trade_record = {
-                                'timestamp': current_time.isoformat(),
-                                'type': signal_type,
-                                'price': latest['close'],
-                                'size': position_size,
-                                'order_id': order_result.order_id,
-                                'status': order_result.status
-                            }
-                            trading_state['trade_log'].append(trade_record)
-
-                            # Save state
-                            with open(LIVE_TRADING_TRADE_LOG_FILE, 'w') as f:
-                                json.dump(trading_state, f, indent=2)
-
-                        else:
-                            print(f"❌ Order failed: {order_result.error}")
-
-                    except Exception as e:
-                        print(f"❌ Trade execution failed: {e}")
-                else:
-                    print("📋 Trade signal logged (auto-execute disabled)")
-
-            # Update position monitoring
-            if LIVE_TRADING_MONITOR_ENABLED:
-                try:
-                    positions = broker.get_positions()
-                    balance = broker.get_balance()
-
-                    # Update capital estimate
-                    trading_state['capital'] = balance
-
-                    # Log PNL
-                    pnl_record = {
-                        'timestamp': current_time.isoformat(),
-                        'capital': balance,
-                        'positions': {k: v.to_dict() for k, v in positions.items()}
-                    }
-                    trading_state['pnl_history'].append(pnl_record)
-
-                    # Save PNL log
-                    with open(LIVE_TRADING_PNL_LOG_FILE, 'w') as f:
-                        json.dump(trading_state, f, indent=2)
-
-                except Exception as e:
-                    print(f"⚠️  Position monitoring failed: {e}")
-
-            # Wait before next cycle
-            time.sleep(LIVE_TRADING_POSITION_UPDATE_INTERVAL)
-
-    except KeyboardInterrupt:
-        print("\n🛑 Live trading stopped by user")
-        log_system_status("Live trading mode stopped by user")
-
-    except Exception as e:
-        print(f"❌ Live trading error: {e}")
-        log_error(f"Live trading error: {e}")
-
-    # Final state save
-    try:
-        with open(LIVE_TRADING_PNL_LOG_FILE, 'w') as f:
-            json.dump(trading_state, f, indent=2)
-        print("💾 Trading state saved")
-    except Exception as e:
-        print(f"⚠️  Failed to save final state: {e}")
-
-def run_live_monitoring(performance_monitor=None):
-    """Run continuous live monitoring mode."""
-    print("Starting TradPal - Continuous Monitoring Mode...")
-    print("Press Ctrl+C to stop monitoring\n")
-
-    log_system_status("Live monitoring mode started")
-
-    # Initialize adaptive optimizer only if enabled and config file exists
-    from config.settings import ADAPTIVE_OPTIMIZATION_ENABLED_LIVE, ADAPTIVE_CONFIG_FILE_LIVE
-    import os
-    if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE and ADAPTIVE_CONFIG_FILE_LIVE and os.path.exists(ADAPTIVE_CONFIG_FILE_LIVE):
-        adaptive_optimizer = AdaptiveOptimizer()
+    if profile_name == 'light':
+        # Light profile requirements: minimal features
+        if ML_ENABLED or ADAPTIVE_OPTIMIZATION_ENABLED_LIVE or MONITORING_STACK_ENABLED or PERFORMANCE_MONITORING_ENABLED:
+            return False
+        return True
+    elif profile_name == 'heavy':
+        # Heavy profile: no restrictions, all features allowed
+        return True
     else:
-        adaptive_optimizer = None
-
-    last_signal_time = 0
-    signal_cooldown = 60  # Minimum seconds between signals
-
-    while True:
-        try:
-            # Check if adaptive optimization should run
-            if adaptive_optimizer and adaptive_optimizer.should_run_optimization():
-                adaptive_optimizer.run_optimization()
-
-            # Fetch latest data
-            data = fetch_data()
-
-            if data.empty:
-                print("No data available, retrying in 30 seconds...")
-                time.sleep(30)
-                continue
-
-            # Calculate indicators (use adaptive config if available)
-            if adaptive_optimizer:
-                adaptive_config = adaptive_optimizer.get_current_config()
-                if adaptive_config:
-                    data = calculate_indicators(data, config=adaptive_config)
-                else:
-                    data = calculate_indicators(data)
-            else:
-                data = calculate_indicators(data)
-
-            # Generate signals
-            data = generate_signals(data)
-
-            # Calculate risk management
-            data = calculate_risk_management(data)
-
-            # Check for new signals
-            latest = data.iloc[-1]  # Get most recent data point
-
-            current_time = time.time()
-            has_new_signal = False
-
-            if latest['Buy_Signal'] == 1 and (current_time - last_signal_time) > signal_cooldown:
-                print(f"🟢 BUY SIGNAL at {time.strftime('%H:%M:%S')}")
-                print(f"   Price: {latest['close']:.5f}")
-                print(f"   RSI: {latest['RSI']:.2f}")
-                print(f"   EMA9: {latest['EMA9']:.5f}, EMA21: {latest['EMA21']:.5f}")
-                print(f"   Position Size: {latest['Position_Size_Percent']:.2f}% of portfolio")
-                print(f"   Stop Loss: {latest['Stop_Loss_Buy']:.5f}")
-                print(f"   Take Profit: {latest['Take_Profit_Buy']:.5f}")
-                print(f"   Leverage: {latest['Leverage']}x")
-                print()
-
-                # Log signal for audit trail
-                log_signal(
-                    signal_type="BUY",
-                    price=latest['close'],
-                    rsi=latest['RSI'],
-                    ema9=latest['EMA9'],
-                    ema21=latest['EMA21'],
-                    position_size_pct=latest['Position_Size_Percent'],
-                    stop_loss=latest['Stop_Loss_Buy'],
-                    take_profit=latest['Take_Profit_Buy'],
-                    leverage=latest['Leverage']
-                )
-
-                # Record signal in performance monitor
-                if performance_monitor:
-                    performance_monitor.record_signal(
-                        signal_type="BUY",
-                        price=latest['close'],
-                        rsi=latest['RSI'],
-                        position_size_pct=latest['Position_Size_Percent']
-                    )
-
-                last_signal_time = current_time
-                has_new_signal = True
-
-            elif latest['Sell_Signal'] == 1 and (current_time - last_signal_time) > signal_cooldown:
-                print(f"🔴 SELL SIGNAL at {time.strftime('%H:%M:%S')}")
-                print(f"   Price: {latest['close']:.5f}")
-                print(f"   RSI: {latest['RSI']:.2f}")
-                print(f"   EMA9: {latest['EMA9']:.5f}, EMA21: {latest['EMA21']:.5f}")
-                print(f"   Position Size: {latest['Position_Size_Percent']:.2f}% of portfolio")
-                print(f"   Stop Loss: {latest['Stop_Loss_Buy']:.5f}")
-                print(f"   Take Profit: {latest['Take_Profit_Buy']:.5f}")
-                print(f"   Leverage: {latest['Leverage']}x")
-                print()
-
-                # Log signal for audit trail
-                log_signal(
-                    signal_type="SELL",
-                    price=latest['close'],
-                    rsi=latest['RSI'],
-                    ema9=latest['EMA9'],
-                    ema21=latest['EMA21'],
-                    position_size_pct=latest['Position_Size_Percent'],
-                    stop_loss=latest['Stop_Loss_Buy'],
-                    take_profit=latest['Take_Profit_Buy'],
-                    leverage=latest['Leverage']
-                )
-
-                # Record signal in performance monitor
-                if performance_monitor:
-                    performance_monitor.record_signal(
-                        signal_type="SELL",
-                        price=latest['close'],
-                        rsi=latest['RSI'],
-                        position_size_pct=latest['Position_Size_Percent']
-                    )
-
-                last_signal_time = current_time
-                has_new_signal = True
-
-            # Save signals to JSON only when there are actual signals
-            if has_new_signal:
-                save_signals_to_json(data)
-
-            # Wait before next check (30 seconds for 1-minute charts)
-            time.sleep(30)
-
-        except KeyboardInterrupt:
-            print("\nStopping TradPal...")
-            log_system_status("Live monitoring mode stopped by user")
-            break
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            log_error(f"Live monitoring error: {e}")
-            print("Retrying in 60 seconds...")
-            time.sleep(60)
-
-def run_backtest_mode(args, performance_monitor=None):
-    """Run backtesting mode."""
-    from config.settings import LOOKBACK_DAYS
-    from datetime import datetime, timedelta
-    
-    # Set default dates if not provided
-    start_date = args.start_date
-    end_date = args.end_date
-    if not start_date:
-        end_date_dt = datetime.now()
-        start_date_dt = end_date_dt - timedelta(days=LOOKBACK_DAYS)
-        start_date = start_date_dt.strftime('%Y-%m-%d')
-        end_date = end_date_dt.strftime('%Y-%m-%d')
-    
-    print(f"Running backtest for {args.symbol} on {args.timeframe} timeframe")
-    print(f"Period: {start_date} to {end_date}")
-    log_system_status(f"Backtest mode started for {args.symbol} {args.timeframe}")
-
-    try:
-        results = run_backtest(
-            symbol=args.symbol,
-            timeframe=args.timeframe,
-            start_date=start_date,
-            end_date=end_date
-        )
-
-        print("\n📊 Backtest Results:")
-        if 'backtest_results' in results and 'error' not in results['backtest_results']:
-            metrics = results['backtest_results']
-            print(f"Total Trades: {metrics.get('total_trades', 0)}")
-            print(f"Win Rate: {metrics.get('win_rate', 0)}%")
-            print(f"Total P&L: ${metrics.get('total_pnl', 0):.2f}")
-            print(f"Max Drawdown: {metrics.get('max_drawdown', 0):.2f}%")
-            print(f"Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
-            print(f"CAGR: {metrics.get('cagr', 0):.2f}%")
-            print(f"Final Capital: ${metrics.get('final_capital', 0):.2f}")
-
-            # Record backtest metrics in performance monitor
-            if performance_monitor:
-                performance_monitor.record_trade(
-                    symbol=args.symbol,
-                    trade_type='backtest',
-                    pnl=metrics.get('total_pnl', 0),
-                    win_rate=metrics.get('win_rate', 0),
-                    total_trades=metrics.get('total_trades', 0),
-                    max_drawdown=metrics.get('max_drawdown', 0)
-                )
-
-            log_system_status(f"Backtest completed: {metrics.get('total_trades', 0)} trades, {metrics.get('win_rate', 0)}% win rate")
-        else:
-            error_msg = results.get('backtest_results', {}).get('error', 'Unknown error')
-            print(f"Backtest failed: {error_msg}")
-            log_error(f"Backtest error: {error_msg}")
-
-    except Exception as e:
-        print(f"Backtest failed: {e}")
-        log_error(f"Backtest error: {e}")
-
-def run_single_analysis(performance_monitor=None):
-    """Run one-time analysis mode."""
-    print("Running single analysis...")
-
-    try:
-        # Fetch data
-        data = fetch_historical_data()
-
-        if data.empty:
-            print("No data loaded.")
-            return
-
-        print(f"Data loaded: {len(data)} rows.")
-
-        # Calculate indicators
-        data = calculate_indicators(data)
-
-        # Generate signals
-        data = generate_signals(data)
-
-        # Calculate risk management
-        data = calculate_risk_management(data)
-
-        # Record analysis metrics if performance monitor is available
-        if performance_monitor and len(data) > 0:
-            # Count signals
-            buy_signals = data['Buy_Signal'].sum()
-            sell_signals = data['Sell_Signal'].sum()
-            performance_monitor.record_signal(signal_type="ANALYSIS_SUMMARY", price=0, rsi=0, position_size_pct=buy_signals + sell_signals)
-
-        # Save output
-        save_signals_to_json(data)
-
-        # Show latest signals
-        latest = get_latest_signals(data)
-        print("Analysis completed. Latest signals:")
-        print(latest)
-
-        log_system_status("Single analysis completed")
-
-    except Exception as e:
-        print(f"Analysis failed: {e}")
-        log_error(f"Single analysis error: {e}")
-
-def calculate_buy_hold_performance(symbol, exchange, timeframe, start_date=None, end_date=None):
-    """
-    Calculate Buy & Hold performance for the given symbol and timeframe.
-
-    Args:
-        symbol: Trading symbol (e.g., 'BTC/USDT')
-        exchange: Exchange name
-        timeframe: Timeframe string
-        start_date: Start date for calculation
-        end_date: End date for calculation
-
-    Returns:
-        Float: Buy & Hold return percentage
-    """
-    try:
-        from src.data_fetcher import fetch_historical_data
-        from datetime import datetime, timedelta
-
-        # Set default dates if not provided
-        if not start_date:
-            end_date_dt = datetime.now()
-            start_date_dt = end_date_dt - timedelta(days=365)  # Default 1 year
-            start_date = start_date_dt.strftime('%Y-%m-%d')
-            end_date = end_date_dt.strftime('%Y-%m-%d')
-
-        # Fetch historical data
-        data = fetch_historical_data(
-            symbol=symbol,
-            timeframe=timeframe,
-            start_date=start_date,
-            limit=5000
-        )
-
-        if data.empty or len(data) < 2:
-            print(f"⚠️  Insufficient data for Buy & Hold calculation: {len(data)} points")
-            return 0.0
-
-        # Calculate Buy & Hold return: (final_price - initial_price) / initial_price * 100
-        initial_price = data['close'].iloc[0]
-        final_price = data['close'].iloc[-1]
-
-        buy_hold_return = ((final_price - initial_price) / initial_price) * 100
-
-        return round(buy_hold_return, 2)
-
-    except Exception as e:
-        print(f"⚠️  Error calculating Buy & Hold performance: {e}")
-        return 0.0
-
-# Optional: Initialize monitoring stack (Prometheus, Grafana, Redis)
-def initialize_monitoring_stack():
-    """Initialize optional monitoring stack (Prometheus, Grafana, Redis)."""
-    try:
-        from config.settings import MONITORING_STACK_ENABLED
-        if not MONITORING_STACK_ENABLED:
-            print("ℹ️  Monitoring stack disabled in configuration.")
-            return False
-
-        print("Initializing monitoring stack...")
-        import subprocess
-
-        # Check if docker-compose is available
-        try:
-            subprocess.run(['docker-compose', '--version'], capture_output=True, check=True)
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            print("⚠️  Docker Compose not available. Monitoring stack requires Docker.")
-            return False
-
-        # Start monitoring services
-        result = subprocess.run([
-            'docker-compose', 'up', '-d',
-            'prometheus', 'grafana', 'redis'
-        ], cwd=os.path.dirname(__file__), capture_output=True, text=True)
-
-        if result.returncode == 0:
-            print("✅ Monitoring stack started successfully.")
-            print("   Prometheus: http://localhost:9090")
-            print("   Grafana: http://localhost:3000 (admin/admin)")
-            print("   Redis: localhost:6379")
-            return True
-        else:
-            print(f"⚠️  Failed to start monitoring stack: {result.stderr}")
-            return False
-
-    except Exception as e:
-        print(f"⚠️  Monitoring stack initialization failed: {e}")
-        return False
-
-def initialize_rate_limiting():
-    """Initialize adaptive rate limiting for data fetching."""
-    try:
-        from config.settings import ADAPTIVE_RATE_LIMITING_ENABLED
-        if not ADAPTIVE_RATE_LIMITING_ENABLED:
-            print("ℹ️  Adaptive rate limiting disabled in configuration.")
-            return False
-
-        print("Initializing adaptive rate limiting...")
-        # The rate limiting is initialized automatically in data_fetcher.py
-        # when ADAPTIVE_RATE_LIMITING_ENABLED is True
-        print("✅ Adaptive rate limiting initialized.")
+        # Unknown profiles are allowed (no validation)
         return True
 
-    except Exception as e:
-        print(f"⚠️  Rate limiting initialization failed: {e}")
-        return False
 
-def print_profile_info():
-    """Print information about available performance profiles."""
-    print("📊 Available Performance Profiles:")
-    print("   light    - Minimal resources, basic indicators only (no AI/ML)")
-    print("   heavy    - Full functionality, all features enabled (with AI/ML)")
-    print("   default  - Use .env file (current behavior)")
-    print()
-
-def validate_profile_config(profile_name):
-    """
-    Validate that the profile configuration is complete and consistent.
-    Returns True if valid, False otherwise.
-    """
-    try:
-        from config.settings import (
-            ML_ENABLED, ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
-            MONITORING_STACK_ENABLED, PERFORMANCE_MONITORING_ENABLED
-        )
-
-        issues = []
-
-        # Light profile should have AI/ML disabled
-        if profile_name == 'light':
-            if ML_ENABLED:
-                issues.append("Light profile should have ML_ENABLED=false")
-            if ADAPTIVE_OPTIMIZATION_ENABLED_LIVE:
-                issues.append("Light profile should have ADAPTIVE_OPTIMIZATION_ENABLED=false")
-            if MONITORING_STACK_ENABLED:
-                issues.append("Light profile should have MONITORING_STACK_ENABLED=false")
-            if PERFORMANCE_MONITORING_ENABLED:
-                issues.append("Light profile should have PERFORMANCE_MONITORING_ENABLED=false")
-
-        # Heavy profile should have advanced features enabled
-        elif profile_name == 'heavy':
-            # Heavy profile can have everything enabled, but we don't enforce it
-            pass
-
-        if issues:
-            print(f"⚠️  Profile validation issues for '{profile_name}':")
-            for issue in issues:
-                print(f"   - {issue}")
-            return False
-
-        print(f"✅ Profile '{profile_name}' validation passed")
-        return True
-
-    except Exception as e:
-        print(f"⚠️  Profile validation failed: {e}")
-        return False
-
-def run_discovery_mode(args):
-    """Run discovery optimization mode using genetic algorithms."""
-    print("🧬 Starting Discovery Mode - Genetic Algorithm Optimization")
-    print(f"Optimizing indicators for {args.symbol} on {args.timeframe} timeframe")
-    print(f"Population: {args.population}, Generations: {args.generations}")
-
-    try:
-        from src.discovery import run_discovery
-
-        results = run_discovery(
-            symbol=args.symbol,
-            exchange='kraken',  # Default exchange
-            timeframe=args.timeframe,
-            start_date=args.start_date,
-            end_date=args.end_date,
-            population_size=args.population,
-            generations=args.generations
-        )
-
-        # Calculate Buy & Hold performance for comparison
-        buy_hold_performance = calculate_buy_hold_performance(
-            symbol=args.symbol,
-            exchange='kraken',
-            timeframe=args.timeframe,
-            start_date=args.start_date,
-            end_date=args.end_date
-        )
-
-        print("\n🏆 Discovery Results - Top 10 Configurations:")
-        print("=" * 80)
-        print(f"📊 Buy & Hold Performance (Benchmark): {buy_hold_performance:.2f}%")
-        print("=" * 80)
-
-        for i, result in enumerate(results, 1):
-            print(f"\n#{i} - Fitness: {result.fitness:.2f}")
-            print(f"   P&L: {result.pnl:.2f}%, Win Rate: {result.win_rate:.1f}%")
-            print(f"   Sharpe: {result.sharpe_ratio:.2f}, Trades: {result.total_trades}")
-            print(f"   Daily Perf: {result.pnl / max(result.backtest_duration_days, 1):.3f}%")
-
-            # Show performance vs benchmark
-            vs_benchmark = result.pnl - buy_hold_performance
-            print(f"   vs Benchmark: {vs_benchmark:+.2f}% ({'better' if vs_benchmark > 0 else 'worse'})")
-
-            # Show enabled indicators
-            enabled = []
-            config = result.config
-            if config['ema']['enabled']:
-                enabled.append(f"EMA{config['ema']['periods']}")
-            if config['rsi']['enabled']:
-                enabled.append(f"RSI({config['rsi']['period']})")
-            if config['bb']['enabled']:
-                enabled.append(f"BB({config['bb']['period']})")
-            if config['atr']['enabled']:
-                enabled.append(f"ATR({config['atr']['period']})")
-            if config['adx']['enabled']:
-                enabled.append("ADX")
-
-            print(f"   Indicators: {', '.join(enabled) if enabled else 'None'}")
-
-        print(f"\n📁 Results saved to output/discovery_results.json")
-
-    except Exception as e:
-        print(f"❌ Discovery failed: {e}")
-        import traceback
-        traceback.print_exc()
-
-def main():
-    # Validate configuration at startup
-    print("Validating configuration...")
-    if not validate_configuration_at_startup():
-        print("❌ Configuration validation failed. Please fix the errors above and restart.")
-        sys.exit(1)
-    print("✅ Configuration validation passed.\n")
-
-    # Show profile information
-    print_profile_info()
-
-    # Initialize secrets manager for secure API key handling
-    if SECRETS_AVAILABLE:
-        print("Initializing secrets manager...")
-        try:
-            initialize_secrets_manager()
-            print("✅ Secrets manager initialized.")
-        except Exception as e:
-            print(f"⚠️  Secrets manager initialization failed: {e}")
-            print("   Continuing with environment variables...")
-    else:
-        print("ℹ️  Secrets manager not available (optional feature).")
-
-    # Initialize performance monitoring
-    performance_monitor = None
-    if PERFORMANCE_AVAILABLE:
-        print("Initializing performance monitoring...")
-        try:
-            performance_monitor = PerformanceMonitor()
-            performance_monitor.start_monitoring()
-            print("✅ Performance monitoring initialized.")
-        except Exception as e:
-            print(f"⚠️  Performance monitoring initialization failed: {e}")
-            print("   Continuing without monitoring...")
-    else:
-        print("ℹ️  Performance monitoring not available (optional feature).")
-
-    # Initialize monitoring stack (Prometheus, Grafana, Redis)
-    monitoring_stack_started = initialize_monitoring_stack()
-
-    # Initialize adaptive rate limiting
-    rate_limiting_enabled = initialize_rate_limiting()
-
-    # Log system startup
-    audit_logger.log_system_event(
-        event_type="SYSTEM_STARTUP",
-        message="TradPal System started",
-        details={
-            "version": "2.0.0",
-            "mode": "initialization",
-            "config_validated": True,
-            "secrets_manager": SECRETS_AVAILABLE,
-            "performance_monitoring": PERFORMANCE_AVAILABLE,
-            "monitoring_stack": monitoring_stack_started,
-            "rate_limiting": rate_limiting_enabled
-        }
-    )
-
-    parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
-    parser.add_argument('--mode', choices=['live', 'live-trading', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
-                       default='live', help='Operation mode (default: live)')
-    parser.add_argument('--profile', choices=['light', 'heavy'],
-                       default='default', help='Performance profile (default: default .env)')
-    parser.add_argument('--symbol', default=SYMBOL, help=f'Trading symbol (default: {SYMBOL})')
-    parser.add_argument('--timeframe', default='1m', help='Timeframe (default: 1m)')
-    parser.add_argument('--start-date', help='Backtest start date (YYYY-MM-DD)')
-    parser.add_argument('--end-date', help='Backtest end date (YYYY-MM-DD)')
-    parser.add_argument('--clear-cache', action='store_true', help='Clear all caches before running')
-    parser.add_argument('--population', type=int, default=50, help='GA population size (default: 50)')
-    parser.add_argument('--generations', type=int, default=20, help='GA generations (default: 20)')
-    parser.add_argument('--models', nargs='+', 
-                       choices=['traditional_ml', 'lstm', 'transformer', 'ensemble'],
-                       help='ML models to test in multi-model backtest (default: all available)')
-    parser.add_argument('--max-workers', type=int, default=4,
-                       help='Maximum parallel workers for multi-model backtest (default: 4)')
-    parser.add_argument('--train-missing', action='store_true',
-                       help='Automatically train missing ML models before backtesting')
-    parser.add_argument('--retrain-all', action='store_true',
-                       help='Retrain all ML models before backtesting (forces complete retraining)')
-
-    args = parser.parse_args()
-
-    # Validate profile configuration if a specific profile was selected
-    if hasattr(args, 'profile') and args.profile in ['light', 'heavy']:
-        validate_profile_config(args.profile)
-
-    # Handle cache clearing
-    if args.clear_cache:
-        print("Clearing all caches...")
-        clear_all_caches()
-        cache_stats = get_cache_stats()
-        print(f"Caches cleared. Stats: {cache_stats}")
-
-    if args.mode == 'live':
-        run_live_monitoring(performance_monitor)
-    elif args.mode == 'backtest':
-        run_backtest_mode(args, performance_monitor)
-    elif args.mode == 'analysis':
-        run_single_analysis(performance_monitor)
-    elif args.mode == 'discovery':
-        run_discovery_mode(args)
-    elif args.mode == 'live-trading':
-        run_live_trading_mode(args, performance_monitor)
-    elif args.mode == 'paper':
-        run_paper_trading_mode(args, performance_monitor)
-    elif args.mode == 'multi-model':
-        run_multi_model_backtest_mode(args, performance_monitor)
-    else:
-        print(f"Unknown mode: {args.mode}")
-
-    # Log system shutdown
-    audit_logger.log_system_event(
-        event_type="SYSTEM_SHUTDOWN",
-        message="TradPal System shutdown",
-        details={
-            "mode": args.mode,
-            "shutdown_reason": "normal_exit"
-        }
-    )
-    audit_logger.log_performance_metrics()
-
-def run_multi_model_backtest_mode(args, performance_monitor=None):
-    """Run multi-model backtesting mode to compare ML models."""
-    from config.settings import LOOKBACK_DAYS
-    from datetime import datetime, timedelta
-    from src.backtester import run_multi_model_backtest
-    
-    # Set default dates if not provided
-    start_date = args.start_date
-    end_date = args.end_date
-    if not start_date:
-        end_date_dt = datetime.now()
-        start_date_dt = end_date_dt - timedelta(days=LOOKBACK_DAYS)
-        start_date = start_date_dt.strftime('%Y-%m-%d')
-        end_date = end_date_dt.strftime('%Y-%m-%d')
-    
-    print(f"🚀 Running multi-model backtest for {args.symbol} on {args.timeframe} timeframe")
-    print(f"📊 Testing models: {args.models or 'all available'}")
-    print(f"⏱️  Period: {start_date} to {end_date}")
-    print(f"🔄 Max workers: {args.max_workers}")
-    if hasattr(args, 'train_missing') and args.train_missing:
-        print("🤖 Auto-training missing models: ENABLED")
-    if hasattr(args, 'retrain_all') and args.retrain_all:
-        print("🔄 Force retraining all models: ENABLED")
-    
-    log_system_status(f"Multi-model backtest started for {args.symbol} {args.timeframe}")
-    
-    # Auto-train models if requested
-    if hasattr(args, 'retrain_all') and args.retrain_all:
-        print("\n🔄 Force retraining all ML models...")
-        _auto_train_models(args.models, force_retrain=True, symbol=args.symbol, timeframe=args.timeframe)
-    elif hasattr(args, 'train_missing') and args.train_missing:
-        print("\n🤖 Auto-training missing ML models...")
-        _auto_train_models(args.models, force_retrain=False, symbol=args.symbol, timeframe=args.timeframe)
-    
-    try:
-        # Run multi-model backtest
-        results = run_multi_model_backtest(
-            symbol=args.symbol,
-            exchange='kraken',  # Default exchange
-            timeframe=args.timeframe,
-            start_date=start_date,
-            end_date=end_date,
-            models_to_test=args.models,
-            max_workers=args.max_workers
-        )
-        
-        if 'error' in results:
-            print(f"❌ Multi-model backtest failed: {results['error']}")
-            log_error(f"Multi-model backtest error: {results['error']}")
-            return
-        
-        # Display results
-        print("\n🏆 Multi-Model Backtest Results:")
-        print("=" * 80)
-        print(f"Best Model: {results.get('best_model', 'N/A')}")
-        print(f"Models Tested: {', '.join(results.get('successful_models', []))}")
-        
-        if results.get('failed_models'):
-            print(f"Failed Models: {', '.join(results['failed_models'])}")
-        
-        print("\n📊 Performance Comparison:")
-        print("-" * 80)
-        
-        # Display comparison table
-        if 'comparison' in results:
-            comparison_data = results['comparison']
-            if comparison_data:
-                # Print header
-                headers = list(comparison_data[0].keys())
-                print(f"{headers[0]:<15} {' | '.join(f'{h:<12}' for h in headers[1:])}")
-                print("-" * (15 + 13 * (len(headers) - 1)))
-                
-                # Print data rows
-                for row in comparison_data:
-                    values = [f"{row[h]:<12.2f}" if isinstance(row[h], (int, float)) else f"{row[h]:<12}" for h in headers[1:]]
-                    print(f"{row[headers[0]]:<15} {' | '.join(values)}")
-        
-        print("\n🏅 Rankings by Metric:")
-        rankings = results.get('rankings', {})
-        for metric, ranking in rankings.items():
-            print(f"  {metric}: {' > '.join(ranking)}")
-        
-        print(f"\n🎯 Best Model Metrics:")
-        best_metrics = results.get('best_metrics', {})
-        if best_metrics and 'error' not in best_metrics:
-            print(f"  Total Trades: {best_metrics.get('total_trades', 0)}")
-            print(f"  Win Rate: {best_metrics.get('win_rate', 0)}%")
-            print(f"  Total P&L: ${best_metrics.get('total_pnl', 0):.2f}")
-            print(f"  Sharpe Ratio: {best_metrics.get('sharpe_ratio', 0):.2f}")
-            print(f"  Max Drawdown: {best_metrics.get('max_drawdown', 0):.2f}%")
-            print(f"  CAGR: {best_metrics.get('cagr', 0):.2f}%")
-            print(f"  Final Capital: ${best_metrics.get('final_capital', 0):.2f}")
-            
-            # Record best model metrics in performance monitor
-            if performance_monitor:
-                performance_monitor.record_trade(
-                    symbol=args.symbol,
-                    trade_type='backtest',
-                    pnl=best_metrics.get('total_pnl', 0)
-                )
-        
-        log_system_status(f"Multi-model backtest completed: Best model is {results.get('best_model', 'N/A')}")
-        
-    except Exception as e:
-        print(f"❌ Multi-model backtest failed: {e}")
-        log_error(f"Multi-model backtest error: {e}")
-
-
-def _auto_train_models(models_to_test=None, force_retrain=False, symbol='BTC/USDT', timeframe='1m'):
-    """
-    Automatically train missing ML models or retrain all models.
-    
-    Args:
-        models_to_test: List of models to check/train
-        force_retrain: If True, retrain all models regardless of current status
-        symbol: Trading symbol for training data
-        timeframe: Timeframe for training data
-    """
-    from scripts.train_ml_model import train_ml_model as train_traditional_ml
-    from src.ml_predictor import (
-        get_ml_predictor, is_ml_available,
-        get_lstm_predictor, is_lstm_available,
-        get_transformer_predictor, is_transformer_available
-    )
-    
-    # Available models to potentially train
-    available_models = ['traditional_ml', 'lstm', 'transformer']
-    
-    if models_to_test is None:
-        models_to_train = available_models
-    else:
-        models_to_train = [m for m in models_to_test if m in available_models]
-    
-    print(f"🔍 Checking models: {models_to_train}")
-    
-    trained_count = 0
-    failed_count = 0
-    
-    for model_type in models_to_train:
-        try:
-            needs_training = force_retrain
-            
-            if not needs_training:
-                # Check if model is already trained
-                if model_type == 'traditional_ml' and is_ml_available():
-                    predictor = get_ml_predictor()
-                    needs_training = not (predictor and predictor.is_trained)
-                elif model_type == 'lstm' and is_lstm_available():
-                    predictor = get_lstm_predictor()
-                    needs_training = not (predictor and predictor.is_trained)
-                elif model_type == 'transformer' and is_transformer_available():
-                    predictor = get_transformer_predictor()
-                    needs_training = not (predictor and predictor.is_trained)
-            
-            if needs_training:
-                print(f"🤖 Training {model_type} model...")
-                
-                if model_type == 'traditional_ml':
-                    success = train_traditional_ml(symbol=symbol, timeframe=timeframe, force_retrain=force_retrain)
-                elif model_type == 'lstm':
-                    # For LSTM, we need to implement training logic here
-                    success = _train_lstm_model(symbol, timeframe, force_retrain)
-                elif model_type == 'transformer':
-                    # For Transformer, we need to implement training logic here
-                    success = _train_transformer_model(symbol, timeframe, force_retrain)
-                else:
-                    print(f"⚠️  Unknown model type: {model_type}")
-                    continue
-                
-                if success:
-                    print(f"✅ {model_type} training completed successfully")
-                    trained_count += 1
-                else:
-                    print(f"❌ {model_type} training failed")
-                    failed_count += 1
-            else:
-                print(f"✅ {model_type} already trained")
-                
-        except Exception as e:
-            print(f"❌ Error training {model_type}: {e}")
-            failed_count += 1
-    
-    print(f"\n📊 Training Summary: {trained_count} trained, {failed_count} failed")
-    
-    if failed_count > 0:
-        print("⚠️  Some models failed to train. Backtest will only use successfully trained models.")
-    
-    return trained_count, failed_count
-
-
-def _train_lstm_model(symbol: str, timeframe: str, force_retrain: bool = False):
-    """
-    Train LSTM model for signal prediction.
-    
-    Args:
-        symbol: Trading symbol
-        timeframe: Timeframe for training
-        force_retrain: Force retraining even if model exists
-        
-    Returns:
-        bool: True if training successful, False otherwise
-    """
-    from src.ml_predictor import get_lstm_predictor, is_lstm_available
-    from src.data_fetcher import fetch_historical_data
-    from src.indicators import calculate_indicators
-    from config.settings import LOOKBACK_DAYS
-    from datetime import datetime, timedelta
-    
-    if not is_lstm_available():
-        print("❌ TensorFlow not available for LSTM training")
-        return False
-    
-    try:
-        lstm_predictor = get_lstm_predictor()
-        if lstm_predictor is None:
-            print("❌ Failed to initialize LSTM predictor")
-            return False
-        
-        # Check if already trained
-        if lstm_predictor.is_trained and not force_retrain:
-            print("ℹ️  LSTM model already trained")
-            return True
-        
-        # Fetch historical data
-        print("📊 Fetching data for LSTM training...")
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=LOOKBACK_DAYS)
-        
-        df = fetch_historical_data(
-            symbol=symbol,
-            exchange_name='kraken',
-            timeframe=timeframe,
-            start_date=start_date,
-            limit=5000
-        )
-        
-        if df.empty or len(df) < 200:
-            print(f"❌ Insufficient data for LSTM training: {len(df)} samples")
-            return False
-        
-        # Calculate indicators
-        df = calculate_indicators(df)
-        df_clean = df.dropna()
-        
-        if len(df_clean) < 100:
-            print(f"❌ Insufficient clean data for LSTM training: {len(df_clean)} samples")
-            return False
-        
-        # Train the model
-        print("🎯 Training LSTM model...")
-        result = lstm_predictor.train_model(df_clean)
-        
-        if result and result.get('success', False):
-            print("✅ LSTM training completed successfully")
-            return True
-        else:
-            print(f"❌ LSTM training failed: {result.get('error', 'Unknown error') if result else 'No result'}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ LSTM training error: {e}")
-        return False
-
-
-def _train_transformer_model(symbol: str, timeframe: str, force_retrain: bool = False):
-    """
-    Train Transformer model for signal prediction.
-    
-    Args:
-        symbol: Trading symbol
-        timeframe: Timeframe for training
-        force_retrain: Force retraining even if model exists
-        
-    Returns:
-        bool: True if training successful, False otherwise
-    """
-    from src.ml_predictor import get_transformer_predictor, is_transformer_available
-    from src.data_fetcher import fetch_historical_data
-    from src.indicators import calculate_indicators
-    from config.settings import LOOKBACK_DAYS
-    from datetime import datetime, timedelta
-    
-    if not is_transformer_available():
-        print("❌ PyTorch not available for Transformer training")
-        return False
-    
-    try:
-        transformer_predictor = get_transformer_predictor()
-        if transformer_predictor is None:
-            print("❌ Failed to initialize Transformer predictor")
-            return False
-        
-        # Check if already trained
-        if transformer_predictor.is_trained and not force_retrain:
-            print("ℹ️  Transformer model already trained")
-            return True
-        
-        # Fetch historical data
-        print("📊 Fetching data for Transformer training...")
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=LOOKBACK_DAYS)
-        
-        df = fetch_historical_data(
-            symbol=symbol,
-            exchange_name='kraken',
-            timeframe=timeframe,
-            start_date=start_date,
-            limit=5000
-        )
-        
-        if df.empty or len(df) < 200:
-            print(f"❌ Insufficient data for Transformer training: {len(df)} samples")
-            return False
-        
-        # Calculate indicators
-        df = calculate_indicators(df)
-        df_clean = df.dropna()
-        
-        if len(df_clean) < 100:
-            print(f"❌ Insufficient clean data for Transformer training: {len(df_clean)} samples")
-            return False
-        
-        # Train the model
-        print("🎯 Training Transformer model...")
-        result = transformer_predictor.train_model(df_clean)
-        
-        if result and result.get('success', False):
-            print("✅ Transformer training completed successfully")
-            return True
-        else:
-            print(f"❌ Transformer training failed: {result.get('error', 'Unknown error') if result else 'No result'}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Transformer training error: {e}")
-        return False
-
-def main():
-    # Validate configuration at startup
-    print("Validating configuration...")
-    if not validate_configuration_at_startup():
-        print("❌ Configuration validation failed. Please fix the errors above and restart.")
-        sys.exit(1)
-    print("✅ Configuration validation passed.\n")
-
-    # Show profile information
-    print_profile_info()
-
-    # Initialize secrets manager for secure API key handling
-    if SECRETS_AVAILABLE:
-        print("Initializing secrets manager...")
-        try:
-            initialize_secrets_manager()
-            print("✅ Secrets manager initialized.")
-        except Exception as e:
-            print(f"⚠️  Secrets manager initialization failed: {e}")
-            print("   Continuing with environment variables...")
-    else:
-        print("ℹ️  Secrets manager not available (optional feature).")
-
-    # Initialize performance monitoring
-    performance_monitor = None
-    if PERFORMANCE_AVAILABLE:
-        print("Initializing performance monitoring...")
-        try:
-            performance_monitor = PerformanceMonitor()
-            performance_monitor.start_monitoring()
-            print("✅ Performance monitoring initialized.")
-        except Exception as e:
-            print(f"⚠️  Performance monitoring initialization failed: {e}")
-            print("   Continuing without monitoring...")
-    else:
-        print("ℹ️  Performance monitoring not available (optional feature).")
-
-    # Initialize monitoring stack (Prometheus, Grafana, Redis)
-    monitoring_stack_started = initialize_monitoring_stack()
-
-    # Initialize adaptive rate limiting
-    rate_limiting_enabled = initialize_rate_limiting()
-
-    # Log system startup
-    audit_logger.log_system_event(
-        event_type="SYSTEM_STARTUP",
-        message="TradPal System started",
-        details={
-            "version": "2.0.0",
-            "mode": "initialization",
-            "config_validated": True,
-            "secrets_manager": SECRETS_AVAILABLE,
-            "performance_monitoring": PERFORMANCE_AVAILABLE,
-            "monitoring_stack": monitoring_stack_started,
-            "rate_limiting": rate_limiting_enabled
-        }
-    )
-
-    parser = argparse.ArgumentParser(description='TradPal Trading Indicator System')
-    parser.add_argument('--mode', choices=['live', 'live-trading', 'backtest', 'analysis', 'discovery', 'paper', 'multi-model'],
-                       default='live', help='Operation mode (default: live)')
-    parser.add_argument('--profile', choices=['light', 'heavy'],
-                       default='default', help='Performance profile (default: default .env)')
-    parser.add_argument('--symbol', default=SYMBOL, help=f'Trading symbol (default: {SYMBOL})')
-    parser.add_argument('--timeframe', default='1m', help='Timeframe (default: 1m)')
-    parser.add_argument('--start-date', help='Backtest start date (YYYY-MM-DD)')
-    parser.add_argument('--end-date', help='Backtest end date (YYYY-MM-DD)')
-    parser.add_argument('--clear-cache', action='store_true', help='Clear all caches before running')
-    parser.add_argument('--population', type=int, default=50, help='GA population size (default: 50)')
-    parser.add_argument('--generations', type=int, default=20, help='GA generations (default: 20)')
-    parser.add_argument('--models', nargs='+', 
-                       choices=['traditional_ml', 'lstm', 'transformer', 'ensemble'],
-                       help='ML models to test in multi-model backtest (default: all available)')
-    parser.add_argument('--max-workers', type=int, default=4,
-                       help='Maximum parallel workers for multi-model backtest (default: 4)')
-    parser.add_argument('--train-missing', action='store_true',
-                       help='Automatically train missing ML models before backtesting')
-    parser.add_argument('--retrain-all', action='store_true',
-                       help='Retrain all ML models before backtesting (forces complete retraining)')
-
-    args = parser.parse_args()
-
-    # Validate profile configuration if a specific profile was selected
-    if hasattr(args, 'profile') and args.profile in ['light', 'heavy']:
-        validate_profile_config(args.profile)
-
-    # Handle cache clearing
-    if args.clear_cache:
-        print("Clearing all caches...")
-        clear_all_caches()
-        cache_stats = get_cache_stats()
-        print(f"Caches cleared. Stats: {cache_stats}")
-
-    if args.mode == 'live':
-        run_live_monitoring(performance_monitor)
-    elif args.mode == 'backtest':
-        run_backtest_mode(args, performance_monitor)
-    elif args.mode == 'analysis':
-        run_single_analysis(performance_monitor)
-    elif args.mode == 'discovery':
-        run_discovery_mode(args)
-    elif args.mode == 'live-trading':
-        run_live_trading_mode(args, performance_monitor)
-    elif args.mode == 'paper':
-        run_paper_trading_mode(args, performance_monitor)
-    elif args.mode == 'multi-model':
-        run_multi_model_backtest_mode(args, performance_monitor)
-    else:
-        print(f"Unknown mode: {args.mode}")
-
-    # Log system shutdown
-    audit_logger.log_system_event(
-        event_type="SYSTEM_SHUTDOWN",
-        message="TradPal System shutdown",
-        details={
-            "mode": args.mode,
-            "shutdown_reason": "normal_exit"
-        }
-    )
-    audit_logger.log_performance_metrics()
+if __name__ == "__main__":
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)

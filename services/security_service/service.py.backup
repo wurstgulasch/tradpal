@@ -1,0 +1,493 @@
+"""
+Security Service for TradPal
+Provides Zero-Trust Security with mTLS, JWT, and secrets management.
+"""
+
+from typing import Dict, Any, Optional, List
+import asyncio
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+import json
+import secrets
+import hashlib
+import base64
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.backends import default_backend
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+import jwt
+import hvac
+from pydantic import BaseModel, Field
+
+
+class SecurityConfig(BaseModel):
+    """Configuration for security service."""
+    enable_mtls: bool = True
+    enable_jwt: bool = True
+    enable_vault: bool = False
+    jwt_secret_key: str = Field(default_factory=lambda: secrets.token_hex(32))
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_hours: int = 24
+    ca_cert_path: Optional[str] = None
+    ca_key_path: Optional[str] = None
+    vault_url: Optional[str] = None
+    vault_token: Optional[str] = None
+    cert_validity_days: int = 365
+
+
+class ServiceCredentials(BaseModel):
+    """Service credentials for mTLS."""
+    service_name: str
+    certificate: str
+    private_key: str
+    ca_certificate: str
+    issued_at: datetime
+    expires_at: datetime
+
+
+class JWTToken(BaseModel):
+    """JWT token information."""
+    token: str
+    service_name: str
+    issued_at: datetime
+    expires_at: datetime
+    permissions: List[str]
+
+
+class SecurityService:
+    """
+    Zero-Trust Security Service providing mTLS authentication,
+    JWT token management, and secrets management.
+    """
+
+    def __init__(self, config: SecurityConfig):
+        self.config = config
+        self.logger = logging.getLogger(__name__)
+
+        # Certificate Authority
+        self.ca_private_key: Optional[rsa.RSAPrivateKey] = None
+        self.ca_certificate: Optional[x509.Certificate] = None
+
+        # Service credentials storage
+        self.service_credentials: Dict[str, ServiceCredentials] = {}
+
+        # JWT tokens
+        self.active_tokens: Dict[str, JWTToken] = {}
+
+        # Vault client
+        self.vault_client: Optional[hvac.Client] = None
+
+        # Service state
+        self.is_running = False
+
+    async def start(self) -> None:
+        """Start the security service."""
+        self.logger.info("Starting Security Service...")
+
+        # Initialize Certificate Authority
+        if self.config.enable_mtls:
+            await self._initialize_ca()
+
+        # Initialize Vault client
+        if self.config.enable_vault and self.config.vault_url and self.config.vault_token:
+            await self._initialize_vault()
+
+        # Load existing credentials
+        await self._load_credentials()
+
+        self.is_running = True
+        self.logger.info("Security Service started successfully")
+
+    async def stop(self) -> None:
+        """Stop the security service."""
+        self.logger.info("Stopping Security Service...")
+        self.is_running = False
+        self.logger.info("Security Service stopped")
+
+    async def _initialize_ca(self) -> None:
+        """Initialize Certificate Authority."""
+        try:
+            ca_dir = Path("cache/security/ca")
+            ca_dir.mkdir(parents=True, exist_ok=True)
+
+            ca_key_path = ca_dir / "ca_key.pem"
+            ca_cert_path = ca_dir / "ca_cert.pem"
+
+            if ca_key_path.exists() and ca_cert_path.exists():
+                # Load existing CA
+                with open(ca_key_path, 'rb') as f:
+                    self.ca_private_key = serialization.load_pem_private_key(
+                        f.read(), password=None, backend=default_backend()
+                    )
+                with open(ca_cert_path, 'rb') as f:
+                    self.ca_certificate = x509.load_pem_x509_certificate(f.read(), default_backend())
+                self.logger.info("Loaded existing Certificate Authority")
+            else:
+                # Create new CA
+                self.ca_private_key = rsa.generate_private_key(
+                    public_exponent=65537, key_size=2048, backend=default_backend()
+                )
+
+                # Create CA certificate
+                subject = issuer = x509.Name([
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
+                    x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Berlin"),
+                    x509.NameAttribute(NameOID.LOCALITY_NAME, "Berlin"),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, "TradPal"),
+                    x509.NameAttribute(NameOID.COMMON_NAME, "TradPal CA"),
+                ])
+
+                self.ca_certificate = x509.CertificateBuilder().subject_name(
+                    subject
+                ).issuer_name(
+                    issuer
+                ).public_key(
+                    self.ca_private_key.public_key()
+                ).serial_number(
+                    x509.random_serial_number()
+                ).not_valid_before(
+                    datetime.utcnow()
+                ).not_valid_after(
+                    datetime.utcnow() + timedelta(days=3650)  # 10 years
+                ).add_extension(
+                    x509.BasicConstraints(ca=True, path_length=None), critical=True,
+                ).sign(self.ca_private_key, hashes.SHA256(), default_backend())
+
+                # Save CA certificate and key
+                with open(ca_key_path, 'wb') as f:
+                    f.write(self.ca_private_key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption()
+                    ))
+
+                with open(ca_cert_path, 'wb') as f:
+                    f.write(self.ca_certificate.public_bytes(serialization.Encoding.PEM))
+
+                self.logger.info("Created new Certificate Authority")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize CA: {e}")
+            raise
+
+    async def _initialize_vault(self) -> None:
+        """Initialize HashiCorp Vault client."""
+        try:
+            self.vault_client = hvac.Client(
+                url=self.config.vault_url,
+                token=self.config.vault_token
+            )
+
+            # Test connection
+            if not self.vault_client.is_authenticated():
+                raise RuntimeError("Vault authentication failed")
+
+            self.logger.info("HashiCorp Vault client initialized")
+
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Vault: {e}")
+            self.vault_client = None
+
+    async def _load_credentials(self) -> None:
+        """Load existing service credentials."""
+        try:
+            creds_dir = Path("cache/security/credentials")
+            creds_dir.mkdir(parents=True, exist_ok=True)
+
+            for cred_file in creds_dir.glob("*.json"):
+                try:
+                    with open(cred_file, 'r') as f:
+                        data = json.load(f)
+                        creds = ServiceCredentials(**data)
+                        self.service_credentials[creds.service_name] = creds
+                except Exception as e:
+                    self.logger.warning(f"Could not load credentials from {cred_file}: {e}")
+
+            self.logger.info(f"Loaded {len(self.service_credentials)} service credentials")
+
+        except Exception as e:
+            self.logger.error(f"Failed to load credentials: {e}")
+
+    async def issue_service_credentials(self, service_name: str) -> ServiceCredentials:
+        """
+        Issue mTLS credentials for a service.
+
+        Args:
+            service_name: Name of the service
+
+        Returns:
+            Service credentials
+        """
+        if not self.config.enable_mtls or not self.ca_private_key or not self.ca_certificate:
+            raise RuntimeError("mTLS not enabled or CA not initialized")
+
+        try:
+            # Generate service private key
+            private_key = rsa.generate_private_key(
+                public_exponent=65537, key_size=2048, backend=default_backend()
+            )
+
+            # Create service certificate
+            subject = x509.Name([
+                x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "TradPal"),
+                x509.NameAttribute(NameOID.COMMON_NAME, service_name),
+            ])
+
+            certificate = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                self.ca_certificate.subject
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                datetime.utcnow()
+            ).not_valid_after(
+                datetime.utcnow() + timedelta(days=self.config.cert_validity_days)
+            ).add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName(service_name),
+                    x509.DNSName(f"{service_name}.tradpal.local"),
+                ]),
+                critical=False,
+            ).sign(self.ca_private_key, hashes.SHA256(), default_backend())
+
+            # Convert to PEM format
+            cert_pem = certificate.public_bytes(serialization.Encoding.PEM).decode()
+            key_pem = private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ).decode()
+            ca_cert_pem = self.ca_certificate.public_bytes(serialization.Encoding.PEM).decode()
+
+            # Create credentials object
+            credentials = ServiceCredentials(
+                service_name=service_name,
+                certificate=cert_pem,
+                private_key=key_pem,
+                ca_certificate=ca_cert_pem,
+                issued_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(days=self.config.cert_validity_days)
+            )
+
+            # Store credentials
+            self.service_credentials[service_name] = credentials
+
+            # Save to file
+            creds_dir = Path("cache/security/credentials")
+            creds_dir.mkdir(parents=True, exist_ok=True)
+            cred_file = creds_dir / f"{service_name}.json"
+
+            with open(cred_file, 'w') as f:
+                json.dump(credentials.dict(), f, indent=2, default=str)
+
+            self.logger.info(f"Issued mTLS credentials for service: {service_name}")
+            return credentials
+
+        except Exception as e:
+            self.logger.error(f"Failed to issue credentials for {service_name}: {e}")
+            raise
+
+    async def generate_jwt_token(self, service_name: str, permissions: List[str] = None) -> JWTToken:
+        """
+        Generate a JWT token for service authentication.
+
+        Args:
+            service_name: Name of the service
+            permissions: List of permissions for the service
+
+        Returns:
+            JWT token
+        """
+        if not self.config.enable_jwt:
+            raise RuntimeError("JWT authentication not enabled")
+
+        if permissions is None:
+            permissions = ["read"]
+
+        try:
+            issued_at = datetime.utcnow()
+            expires_at = issued_at + timedelta(hours=self.config.jwt_expiration_hours)
+
+            payload = {
+                "service": service_name,
+                "permissions": permissions,
+                "iat": issued_at,
+                "exp": expires_at.timestamp(),
+                "iss": "tradpal-security-service"
+            }
+
+            token = jwt.encode(
+                payload,
+                self.config.jwt_secret_key,
+                algorithm=self.config.jwt_algorithm
+            )
+
+            jwt_token = JWTToken(
+                token=token,
+                service_name=service_name,
+                issued_at=issued_at,
+                expires_at=expires_at,
+                permissions=permissions
+            )
+
+            # Store active token
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            self.active_tokens[token_hash] = jwt_token
+
+            self.logger.info(f"Generated JWT token for service: {service_name}")
+            return jwt_token
+
+        except Exception as e:
+            self.logger.error(f"Failed to generate JWT token for {service_name}: {e}")
+            raise
+
+    async def validate_jwt_token(self, token: str) -> Optional[JWTToken]:
+        """
+        Validate a JWT token.
+
+        Args:
+            token: JWT token to validate
+
+        Returns:
+            Token info if valid, None otherwise
+        """
+        if not self.config.enable_jwt:
+            return None
+
+        try:
+            # Check if token is in active tokens
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            if token_hash in self.active_tokens:
+                stored_token = self.active_tokens[token_hash]
+
+                # Check expiration
+                if datetime.utcnow() > stored_token.expires_at:
+                    del self.active_tokens[token_hash]
+                    return None
+
+                return stored_token
+
+            # Decode and validate token
+            payload = jwt.decode(
+                token,
+                self.config.jwt_secret_key,
+                algorithms=[self.config.jwt_algorithm]
+            )
+
+            # Create token object from payload
+            jwt_token = JWTToken(
+                token=token,
+                service_name=payload["service"],
+                issued_at=datetime.fromtimestamp(payload["iat"]),
+                expires_at=datetime.fromtimestamp(payload["exp"]),
+                permissions=payload.get("permissions", [])
+            )
+
+            # Store for future validation
+            self.active_tokens[token_hash] = jwt_token
+
+            return jwt_token
+
+        except jwt.ExpiredSignatureError:
+            self.logger.warning("JWT token has expired")
+            return None
+        except jwt.InvalidTokenError:
+            self.logger.warning("Invalid JWT token")
+            return None
+        except Exception as e:
+            self.logger.error(f"Failed to validate JWT token: {e}")
+            return None
+
+    async def store_secret(self, path: str, data: Dict[str, Any]) -> bool:
+        """
+        Store a secret in Vault or local storage.
+
+        Args:
+            path: Secret path
+            data: Secret data
+
+        Returns:
+            Success status
+        """
+        try:
+            if self.vault_client and self.vault_client.is_authenticated():
+                # Store in Vault
+                result = self.vault_client.secrets.kv.v2.create_or_update_secret_version(
+                    path=path,
+                    secret=data
+                )
+                success = result.status_code == 200
+            else:
+                # Store locally (fallback)
+                secrets_dir = Path("cache/security/secrets")
+                secrets_dir.mkdir(parents=True, exist_ok=True)
+
+                secret_file = secrets_dir / f"{path.replace('/', '_')}.json"
+                with open(secret_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+
+                success = True
+
+            if success:
+                self.logger.info(f"Stored secret at path: {path}")
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Failed to store secret at {path}: {e}")
+            return False
+
+    async def retrieve_secret(self, path: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a secret from Vault or local storage.
+
+        Args:
+            path: Secret path
+
+        Returns:
+            Secret data if found
+        """
+        try:
+            if self.vault_client and self.vault_client.is_authenticated():
+                # Retrieve from Vault
+                result = self.vault_client.secrets.kv.v2.read_secret_version(path=path)
+                if result.status_code == 200:
+                    return result["data"]["data"]
+
+            else:
+                # Retrieve from local storage
+                secrets_dir = Path("cache/security/secrets")
+                secret_file = secrets_dir / f"{path.replace('/', '_')}.json"
+
+                if secret_file.exists():
+                    with open(secret_file, 'r') as f:
+                        return json.load(f)
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Failed to retrieve secret at {path}: {e}")
+            return None
+
+    async def health_check(self) -> Dict[str, Any]:
+        """Perform health check of security service."""
+        health = {
+            "service": "security_service",
+            "status": "healthy" if self.is_running else "stopped",
+            "timestamp": datetime.now().isoformat(),
+            "components": {
+                "mtls": self.config.enable_mtls and self.ca_certificate is not None,
+                "jwt": self.config.enable_jwt,
+                "vault": self.vault_client is not None and self.vault_client.is_authenticated() if self.vault_client else False,
+            },
+            "active_credentials": len(self.service_credentials),
+            "active_tokens": len(self.active_tokens)
+        }
+
+        return health</content>
+<parameter name="filePath">/Users/danielsadowski/VSCodeProjects/tradpal_indicator/services/security_service/service.py

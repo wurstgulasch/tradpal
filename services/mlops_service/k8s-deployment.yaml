@@ -1,0 +1,146 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlops-service
+  labels:
+    app: mlops-service
+    component: mlops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlops-service
+  template:
+    metadata:
+      labels:
+        app: mlops-service
+        component: mlops
+    spec:
+      containers:
+      - name: mlops-service
+        image: tradpal-mlops-service:latest
+        ports:
+        - containerPort: 8001
+          name: api
+        - containerPort: 5000
+          name: mlflow
+        env:
+        - name: MLOPS_API_HOST
+          value: "0.0.0.0"
+        - name: MLOPS_API_PORT
+          value: "8001"
+        - name: MLOPS_MLFLOW_TRACKING_URI
+          value: "http://localhost:5000"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: mlruns-storage
+          mountPath: /app/mlruns
+        - name: models-storage
+          mountPath: /app/cache/ml_models
+      volumes:
+      - name: mlruns-storage
+        persistentVolumeClaim:
+          claimName: mlops-mlruns-pvc
+      - name: models-storage
+        persistentVolumeClaim:
+          claimName: mlops-models-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlops-service
+  labels:
+    app: mlops-service
+spec:
+  selector:
+    app: mlops-service
+  ports:
+  - name: api
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  - name: mlflow
+    port: 5000
+    targetPort: 5000
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlops-mlruns-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlops-models-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mlops-service-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mlops-service
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mlops-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mlops-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
