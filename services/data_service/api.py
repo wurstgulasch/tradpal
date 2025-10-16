@@ -420,13 +420,13 @@ async def retrieve_market_data(
         result = await data_service.retrieve_market_data(symbol, timeframe, start, end)
 
         if not result["success"]:
-            raise HTTPException(status_code=404, detail=result["error"])
+            raise HTTPException(status_code=404, detail="Requested market data not found or unavailable.")
 
         return result
 
     except Exception as e:
         logger.error(f"Market data retrieval failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 
 @app.post("/data-mesh/features/store")
@@ -448,13 +448,14 @@ async def store_ml_features(request: FeatureStorage):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
+            # Don't leak internal errors to clients
+            raise HTTPException(status_code=400, detail="Failed to store ML features.")
 
         return result
 
     except Exception as e:
         logger.error(f"ML features storage failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 
 @app.get("/data-mesh/features/retrieve")
@@ -472,13 +473,14 @@ async def retrieve_ml_features(
         result = await data_service.retrieve_ml_features(feature_set_name, features_list)
 
         if not result["success"]:
-            raise HTTPException(status_code=404, detail=result["error"])
+            # Don't leak internal errors to clients
+            raise HTTPException(status_code=404, detail="Feature set not found or unavailable.")
 
         return result
 
     except Exception as e:
         logger.error(f"ML features retrieval failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 
 @app.post("/data-mesh/archive")
@@ -500,13 +502,14 @@ async def archive_historical_data(request: ArchivalRequest):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
+            # Don't leak internal errors to clients
+            raise HTTPException(status_code=400, detail="Failed to archive data.")
 
         return result
 
     except Exception as e:
         logger.error(f"Data archival failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred.")
 
 
 @app.get("/data-mesh/status")
