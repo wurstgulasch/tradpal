@@ -187,7 +187,9 @@ class VectorizedIndicators:
 
         rs = gain / loss.replace(0, np.nan)
         rsi = 100 - (100 / (1 + rs))
-        rsi = rsi.where(loss != 0, np.nan)
+        # Handle edge cases: pure uptrend (loss=0) = 100, pure downtrend (gain=0) = 0
+        rsi = rsi.where(loss != 0, 100)  # Pure uptrend
+        rsi = rsi.where(gain != 0, 0)    # Pure downtrend
 
         return rsi.values
 
@@ -924,10 +926,8 @@ class MemoryOptimizedIndicators:
         else:
             data = series.values if hasattr(series, 'values') else np.asarray(series)
 
-        # Use chunked processing for large datasets
-        if len(data) > self.chunk_size:
-            return self._process_in_chunks(data, lambda chunk: VectorizedIndicators.ema_vectorized(chunk, period))
-
+        # EMA cannot be properly chunked due to continuity requirements
+        # Always calculate on full dataset for correctness
         return VectorizedIndicators.ema_vectorized(data, period)
 
     @timing_decorator

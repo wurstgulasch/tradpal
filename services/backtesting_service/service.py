@@ -915,6 +915,9 @@ class AsyncBacktester:
             if self.data.empty:
                 return {"success": False, "error": "No data available for backtest period"}
 
+            # Fetch additional data sources (Funding Rate, Liquidation)
+            await self._fetch_additional_data_async()
+
             # Prepare signals based on strategy
             if strategy == 'traditional':
                 self.data = await self._prepare_traditional_signals_async(self.data)
@@ -952,49 +955,70 @@ class AsyncBacktester:
     async def _fetch_data_async(self) -> pd.DataFrame:
         """Fetch historical data asynchronously."""
         try:
-            # Use data service if available
+            # Try to use data service if available and working
             if self.data_client:
-                await self.data_client.authenticate()
-                
-                response = await self.data_client.fetch_historical_data(
-                    symbol=self.symbol,
-                    timeframe=self.timeframe,
-                    start_date=self.start_date,
-                    end_date=self.end_date,
-                    data_source=self.data_source
-                )
-                
-                if response.get("success"):
-                    # Convert response data to DataFrame
-                    data_dict = response.get("data", {})
-                    if isinstance(data_dict, dict) and "ohlcv" in data_dict:
-                        # Convert from service format to DataFrame
-                        ohlcv_data = data_dict["ohlcv"]
-                        df = pd.DataFrame.from_dict(ohlcv_data, orient='index')
-                        df.index = pd.to_datetime(df.index)
-                        df = df.sort_index()
-                        return df
-                    else:
-                        logger.warning("Unexpected data format from data service")
-                        return pd.DataFrame()
-                else:
-                    logger.error(f"Data service request failed: {response.get('error')}")
-                    return pd.DataFrame()
-            else:
-                # Fallback to legacy method
-                return await self._fetch_data_legacy_async()
-                
+                try:
+                    await self.data_client.authenticate()
+                    response = await self.data_client.fetch_historical_data(
+                        symbol=self.symbol,
+                        timeframe=self.timeframe,
+                        start_date=self.start_date,
+                        end_date=self.end_date,
+                        data_source=self.data_source
+                    )
+
+                    if response.get("success"):
+                        # Convert response data to DataFrame
+                        data_dict = response.get("data", {})
+                        if isinstance(data_dict, dict) and "ohlcv" in data_dict:
+                            # Convert from service format to DataFrame
+                            ohlcv_data = data_dict["ohlcv"]
+                            df = pd.DataFrame.from_dict(ohlcv_data, orient='index')
+                            df.index = pd.to_datetime(df.index)
+                            df = df.sort_index()
+                            return df
+                        else:
+                            logger.warning("Unexpected data format from data service")
+                except Exception as e:
+                    logger.warning(f"Data service failed: {e}, falling back to legacy method")
+
+            # Fallback to legacy method
+            return await self._fetch_data_legacy_async()
+
         except Exception as e:
             logger.error(f"Error fetching data: {e}")
-            # Try legacy fallback
-            try:
-                return await self._fetch_data_legacy_async()
-            except Exception as e2:
-                logger.error(f"Legacy data fetch also failed: {e2}")
-                return pd.DataFrame()
+            return pd.DataFrame()
 
     async def _fetch_data_legacy_async(self) -> pd.DataFrame:
         """Legacy data fetching method for fallback."""
+        try:
+            # Try Yahoo Finance first for reliable data
+            from services.data_service.data_sources.yahoo_finance import YahooFinanceDataSource
+            yahoo_source = YahooFinanceDataSource()
+
+            # Convert symbol format for Yahoo Finance
+            yahoo_symbol = self.symbol.replace('/', '-')
+            if 'BTC' in yahoo_symbol and 'USDT' in yahoo_symbol:
+                yahoo_symbol = 'BTC-USD'  # Yahoo Finance uses BTC-USD for Bitcoin
+
+            df = yahoo_source.fetch_historical_data(
+                symbol=yahoo_symbol,
+                timeframe=self.timeframe,
+                start_date=self.start_date,
+                end_date=self.end_date
+            )
+
+            if not df.empty:
+                logger.info(f"Successfully fetched {len(df)} records from Yahoo Finance")
+                # Ensure timezone naive for consistency
+                if df.index.tz is not None:
+                    df.index = df.index.tz_localize(None)
+                return df
+
+        except Exception as e:
+            logger.warning(f"Yahoo Finance failed: {e}, falling back to legacy method")
+
+        # Original legacy method as final fallback
         # Calculate limit based on timeframe and date range
         days = (self.end_date - self.start_date).days if self.start_date and self.end_date else 365
         if self.timeframe == '1m':
@@ -1028,6 +1052,122 @@ class AsyncBacktester:
 
         return data
 
+    async def _fetch_additional_data_async(self) -> None:
+        """
+        Fetch additional data sources (Funding Rate, Liquidation) for enhanced signals.
+        """
+        try:
+            logger.info("Fetching additional data sources...")
+
+            # Import data sources directly
+            from services.data_service.data_sources.funding_rate import FundingRateDataSource
+            from services.data_service.data_sources.liquidation import LiquidationDataSource
+
+            # Initialize data sources
+            funding_source = FundingRateDataSource()
+            liquidation_source = LiquidationDataSource()
+
+            # Fetch funding rate data (run in thread pool since it's synchronous)
+            funding_data = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: funding_source.fetch_historical_data(
+                    symbol=self.symbol.replace('/', ''),  # Remove slash for Binance format
+                    timeframe='8h',  # Funding rates are 8-hour intervals
+                    start_date=self.start_date,
+                    end_date=self.end_date
+                )
+            )
+
+            # Ensure consistent timezone handling
+            if not funding_data.empty:
+                if funding_data.index.tz is not None:
+                    funding_data.index = funding_data.index.tz_localize(None)
+
+            if not funding_data.empty:
+                # Merge funding rate data
+                self.data = self.data.merge(
+                    funding_data[['funding_rate', 'market_regime']],
+                    left_index=True,
+                    right_index=True,
+                    how='left'
+                )
+                logger.info(f"Added funding rate data: {len(funding_data)} records")
+            else:
+                logger.warning("No funding rate data available")
+
+            # Fetch liquidation data (aggregated over timeframes)
+            liquidation_data = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: liquidation_source.fetch_historical_data(
+                    symbol=self.symbol.replace('/', ''),  # Remove slash for exchange format
+                    timeframe=self.timeframe,
+                    start_date=self.start_date,
+                    end_date=self.end_date
+                )
+            )
+
+            # Ensure consistent timezone handling
+            if not liquidation_data.empty:
+                # Make timezone naive if needed
+                if liquidation_data.index.tz is not None:
+                    liquidation_data.index = liquidation_data.index.tz_localize(None)
+
+            if not liquidation_data.empty:
+                # Merge liquidation data
+                self.data = self.data.merge(
+                    liquidation_data[['liquidation_signal', 'total_value_liquidated']],
+                    left_index=True,
+                    right_index=True,
+                    how='left'
+                )
+                logger.info(f"Added liquidation data: {len(liquidation_data)} records")
+            else:
+                # Try alternative volatility data as fallback
+                logger.info("Liquidation data not available, trying volatility indicators as alternative...")
+                try:
+                    from services.data_service.data_sources.volatility import VolatilityDataSource
+                    volatility_source = VolatilityDataSource()
+                    volatility_data = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda: volatility_source.fetch_historical_data(
+                            symbol=self.symbol.replace('/', ''),
+                            timeframe=self.timeframe,
+                            start_date=self.start_date,
+                            end_date=self.end_date
+                        )
+                    )
+
+                    # Ensure consistent timezone handling
+                    if not volatility_data.empty:
+                        if volatility_data.index.tz is not None:
+                            volatility_data.index = volatility_data.index.tz_localize(None)
+
+                    if not volatility_data.empty:
+                        # Use volatility data as liquidation proxy
+                        self.data = self.data.merge(
+                            volatility_data[['volatility_signal', 'liquidation_proxy']].rename(
+                                columns={'volatility_signal': 'liquidation_signal', 'liquidation_proxy': 'total_value_liquidated'}
+                            ),
+                            left_index=True,
+                            right_index=True,
+                            how='left'
+                        )
+                        logger.info(f"Added volatility-based liquidation proxy data: {len(volatility_data)} records")
+                    else:
+                        logger.warning("No alternative volatility data available")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch alternative volatility data: {e}")
+
+            # Fill missing values
+            self.data['funding_rate'] = self.data['funding_rate'].fillna(0)
+            self.data['market_regime'] = self.data['market_regime'].fillna('neutral')
+            self.data['liquidation_signal'] = self.data['liquidation_signal'].fillna(0)
+            self.data['total_value_liquidated'] = self.data['total_value_liquidated'].fillna(0)
+
+        except Exception as e:
+            logger.error(f"Error fetching additional data: {e}")
+            # Continue without additional data if there's an error
+
     async def _prepare_traditional_signals_async(self, data: pd.DataFrame) -> pd.DataFrame:
         """Prepare data with traditional indicators and signals asynchronously."""
         # Run calculations in thread pool
@@ -1043,6 +1183,11 @@ class AsyncBacktester:
         data = await loop.run_in_executor(
             None,
             lambda: self._calculate_risk_management(data, self.config)
+        )
+        # Integrate additional data sources into signals
+        data = await loop.run_in_executor(
+            None,
+            lambda: self._integrate_additional_signals(data)
         )
         return data
 
@@ -1513,3 +1658,104 @@ class AsyncBacktester:
                 'take_profit_atr_buy': 2.5,  # Moderate take profits
                 'take_profit_atr_sell': 2.5
             }
+
+    def _integrate_additional_signals(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Integrate funding rate and liquidation signals into traditional signals.
+
+        This enhances the trading strategy by incorporating:
+        - Funding Rate: Market sentiment and regime confirmation
+        - Liquidation Data: Volatility and momentum signals
+        """
+        # Ensure we have the additional data columns
+        if 'funding_rate' not in data.columns:
+            data['funding_rate'] = 0
+        if 'market_regime' not in data.columns:
+            data['market_regime'] = 'neutral'
+        if 'liquidation_signal' not in data.columns:
+            data['liquidation_signal'] = 0
+        if 'liquidation_volume' not in data.columns:
+            data['liquidation_volume'] = 0
+
+        # Initialize enhanced signal columns
+        data['Enhanced_Buy_Signal'] = data['Buy_Signal'].copy()
+        data['Enhanced_Sell_Signal'] = data['Sell_Signal'].copy()
+        data['Signal_Strength'] = 0.0
+        data['Signal_Reason'] = ''
+
+        # Process each row to integrate additional signals
+        for idx in range(len(data)):
+            buy_signal = data['Buy_Signal'].iloc[idx] == 1
+            sell_signal = data['Sell_Signal'].iloc[idx] == 1
+            funding_rate = data['funding_rate'].iloc[idx]
+            market_regime = data['market_regime'].iloc[idx]
+            liquidation_signal = data['liquidation_signal'].iloc[idx]
+            liquidation_volume = data['liquidation_volume'].iloc[idx]
+
+            # Calculate signal strength based on multiple factors
+            strength = 0.0
+            reasons = []
+
+            # 1. Traditional signal strength (base level)
+            if buy_signal or sell_signal:
+                strength += 0.4
+                reasons.append('traditional')
+
+            # 2. Funding rate confirmation
+            if funding_rate != 0:
+                if buy_signal and funding_rate < -0.01:  # Negative funding rate in bull signal
+                    strength += 0.3
+                    reasons.append('funding_rate_bullish')
+                elif sell_signal and funding_rate > 0.01:  # Positive funding rate in bear signal
+                    strength += 0.3
+                    reasons.append('funding_rate_bearish')
+
+            # 3. Market regime confirmation
+            if market_regime != 'neutral':
+                if buy_signal and market_regime == 'bull':
+                    strength += 0.2
+                    reasons.append('regime_bullish')
+                elif sell_signal and market_regime == 'bear':
+                    strength += 0.2
+                    reasons.append('regime_bearish')
+
+            # 4. Liquidation signal integration
+            if liquidation_signal != 0:
+                if buy_signal and liquidation_signal < 0:  # Long liquidations during buy signals
+                    strength += 0.2
+                    reasons.append('liquidation_bullish')
+                elif sell_signal and liquidation_signal > 0:  # Short liquidations during sell signals
+                    strength += 0.2
+                    reasons.append('liquidation_bearish')
+
+            # 5. Liquidation volume as momentum indicator
+            if liquidation_volume > 1000000:  # Significant liquidation volume ($1M+)
+                if buy_signal:
+                    strength += 0.1
+                    reasons.append('high_volume_bullish')
+                elif sell_signal:
+                    strength += 0.1
+                    reasons.append('high_volume_bearish')
+
+            # Apply enhanced signals based on strength threshold
+            if strength >= 0.6:  # Strong combined signal
+                data.iloc[idx, data.columns.get_loc('Enhanced_Buy_Signal')] = 1 if buy_signal else 0
+                data.iloc[idx, data.columns.get_loc('Enhanced_Sell_Signal')] = 1 if sell_signal else 0
+            elif strength >= 0.3:  # Moderate signal - keep original
+                pass  # Keep original signals
+            else:  # Weak signal - reduce or eliminate
+                if strength < 0.2:
+                    data.iloc[idx, data.columns.get_loc('Enhanced_Buy_Signal')] = 0
+                    data.iloc[idx, data.columns.get_loc('Enhanced_Sell_Signal')] = 0
+
+            # Store signal metadata
+            data.iloc[idx, data.columns.get_loc('Signal_Strength')] = strength
+            data.iloc[idx, data.columns.get_loc('Signal_Reason')] = ', '.join(reasons)
+
+        # Override original signals with enhanced versions
+        data['Buy_Signal'] = data['Enhanced_Buy_Signal']
+        data['Sell_Signal'] = data['Enhanced_Sell_Signal']
+
+        logger.info(f"Enhanced {data['Buy_Signal'].sum()} buy signals and {data['Sell_Signal'].sum()} sell signals with additional data")
+
+        return data

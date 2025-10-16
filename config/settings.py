@@ -1044,3 +1044,475 @@ GOVERNANCE_ALERT_EMAILS = os.getenv('GOVERNANCE_ALERT_EMAILS', '').split(',') if
 GOVERNANCE_SLACK_WEBHOOK = os.getenv('GOVERNANCE_SLACK_WEBHOOK', '')  # Slack webhook for alerts
 GOVERNANCE_METRICS_PREFIX = os.getenv('GOVERNANCE_METRICS_PREFIX', 'tradpal_governance_')  # Prometheus metrics prefix
 
+def get_settings():
+    """
+    Get all configuration settings as a dictionary.
+
+    Returns:
+        dict: Dictionary containing all configuration settings
+    """
+    return {
+        # Core settings
+        'symbol': SYMBOL,
+        'exchange': EXCHANGE,
+        'timeframe': TIMEFRAME,
+        'capital': CAPITAL,
+        'risk_per_trade': RISK_PER_TRADE,
+
+        # Timeframe parameters
+        'timeframe_params': TIMEFRAME_PARAMS,
+        'current_params': current_params,
+
+        # Risk management
+        'sl_multiplier': SL_MULTIPLIER,
+        'tp_multiplier': TP_MULTIPLIER,
+        'max_leverage': MAX_LEVERAGE,
+        'leverage_base': LEVERAGE_BASE,
+        'leverage_min': LEVERAGE_MIN,
+        'leverage_max': LEVERAGE_MAX,
+
+        # RSI settings
+        'rsi_oversold': RSI_OVERSOLD,
+        'rsi_overbought': RSI_OVERBOUGHT,
+        'rsi_period': RSI_PERIOD,
+
+        # Indicator periods
+        'ema_short': EMA_SHORT,
+        'ema_long': EMA_LONG,
+        'bb_period': BB_PERIOD,
+        'bb_std_dev': BB_STD_DEV,
+        'atr_period': ATR_PERIOD,
+
+        # Optional indicators
+        'adx_enabled': ADX_ENABLED,
+        'adx_threshold': ADX_THRESHOLD,
+        'fibonacci_enabled': FIBONACCI_ENABLED,
+        'volatility_filter_enabled': VOLATILITY_FILTER_ENABLED,
+
+        # Signal generation
+        'strict_signals_enabled': STRICT_SIGNALS_ENABLED,
+        'config_mode': CONFIG_MODE,
+
+        # Indicator configurations
+        'conservative_config': CONSERVATIVE_CONFIG,
+        'discovery_config': DISCOVERY_CONFIG,
+        'optimized_config': OPTIMIZED_CONFIG,
+
+        # Discovery mode
+        'discovery_population_size': DISCOVERY_POPULATION_SIZE,
+        'discovery_generations': DISCOVERY_GENERATIONS,
+        'discovery_mutation_rate': DISCOVERY_MUTATION_RATE,
+        'discovery_crossover_rate': DISCOVERY_CROSSOVER_RATE,
+        'discovery_lookback_days': DISCOVERY_LOOKBACK_DAYS,
+
+        # Adaptive optimization
+        'adaptive_optimization_enabled': ADAPTIVE_OPTIMIZATION_ENABLED,
+        'adaptive_optimization_interval_hours': ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS,
+        'adaptive_auto_apply_best': ADAPTIVE_AUTO_APPLY_BEST,
+        'adaptive_min_performance_threshold': ADAPTIVE_MIN_PERFORMANCE_THRESHOLD,
+        'adaptive_config_file': ADAPTIVE_CONFIG_FILE,
+
+        # ML settings
+        'ml_enabled': ML_ENABLED,
+        'ml_model_dir': ML_MODEL_DIR,
+        'ml_confidence_threshold': ML_CONFIDENCE_THRESHOLD,
+        'ml_training_horizon': ML_TRAINING_HORIZON,
+        'ml_retraining_interval_hours': ML_RETRAINING_INTERVAL_HOURS,
+        'ml_min_training_samples': ML_MIN_TRAINING_SAMPLES,
+        'ml_test_size': ML_TEST_SIZE,
+        'ml_cv_folds': ML_CV_FOLDS,
+        'ml_feature_engineering': ML_FEATURE_ENGINEERING,
+
+        # ML model preferences
+        'ml_preferred_model': ML_PREFERRED_MODEL,
+        'ml_model_selection_criteria': ML_MODEL_SELECTION_CRITERIA,
+
+        # ML model configurations
+        'ml_gradient_boosting_n_estimators': ML_GRADIENT_BOOSTING_N_ESTIMATORS,
+        'ml_gradient_boosting_learning_rate': ML_GRADIENT_BOOSTING_LEARNING_RATE,
+        'ml_gradient_boosting_max_depth': ML_GRADIENT_BOOSTING_MAX_DEPTH,
+        'ml_rf_n_estimators': ML_RF_N_ESTIMATORS,
+        'ml_rf_max_depth': ML_RF_MAX_DEPTH,
+
+        # Advanced ML
+        'ml_use_pytorch': ML_USE_PYTORCH,
+        'ml_pytorch_model_type': ML_PYTORCH_MODEL_TYPE,
+        'ml_use_automl': ML_USE_AUTOML,
+        'ml_use_ensemble': ML_USE_ENSEMBLE,
+        'ml_ensemble_weights': ML_ENSEMBLE_WEIGHTS,
+
+        # Kelly Criterion
+        'kelly_enabled': KELLY_ENABLED,
+        'kelly_fraction': KELLY_FRACTION,
+        'kelly_lookback_trades': KELLY_LOOKBACK_TRADES,
+        'kelly_min_trades': KELLY_MIN_TRADES,
+
+        # Sentiment Analysis
+        'sentiment_enabled': SENTIMENT_ENABLED,
+        'sentiment_sources': SENTIMENT_SOURCES,
+        'sentiment_weight': SENTIMENT_WEIGHT,
+
+        # Paper Trading
+        'paper_trading_enabled': PAPER_TRADING_ENABLED,
+        'paper_trading_initial_balance': PAPER_TRADING_INITIAL_BALANCE,
+        'paper_trading_fee_rate': PAPER_TRADING_FEE_RATE,
+        'paper_trading_max_position_size': PAPER_TRADING_MAX_POSITION_SIZE,
+
+        # Redis
+        'redis_enabled': REDIS_ENABLED,
+        'redis_host': REDIS_HOST,
+        'redis_port': REDIS_PORT,
+        'redis_db': REDIS_DB,
+
+        # Data sources
+        'data_source': DATA_SOURCE,
+        'data_source_config': DATA_SOURCE_CONFIG,
+
+        # Broker/Live Trading
+        'broker_enabled': BROKER_ENABLED,
+        'broker_exchange': BROKER_EXCHANGE,
+        'broker_testnet': BROKER_TESTNET,
+        'live_trading_enabled': LIVE_TRADING_ENABLED,
+        'live_trading_max_drawdown': LIVE_TRADING_MAX_DRAWDOWN,
+
+        # Service URLs
+        'data_service_url': DATA_SERVICE_URL,
+        'core_service_url': CORE_SERVICE_URL,
+        'ml_trainer_url': ML_TRAINER_URL,
+        'backtesting_service_url': BACKTESTING_SERVICE_URL,
+        'trading_bot_live_url': TRADING_BOT_LIVE_URL,
+        'risk_service_url': RISK_SERVICE_URL,
+        'notification_service_url': NOTIFICATION_SERVICE_URL,
+        'web_ui_url': WEB_UI_URL,
+
+        # Service flags
+        'enable_data_service': ENABLE_DATA_SERVICE,
+        'enable_core_service': ENABLE_CORE_SERVICE,
+        'enable_ml_trainer': ENABLE_ML_TRAINER,
+        'enable_backtesting': ENABLE_BACKTESTING,
+        'enable_live_trading': ENABLE_LIVE_TRADING,
+        'enable_risk_service': ENABLE_RISK_SERVICE,
+        'enable_notifications': ENABLE_NOTIFICATIONS,
+        'enable_web_ui': ENABLE_WEB_UI,
+
+        # Output and logging
+        'output_file': OUTPUT_FILE,
+        'output_format': OUTPUT_FORMAT,
+        'log_file': LOG_FILE,
+        'log_level': LOG_LEVEL,
+
+        # Performance settings
+        'parallel_processing_enabled': PARALLEL_PROCESSING_ENABLED,
+        'vectorization_enabled': VECTORIZATION_ENABLED,
+        'memory_optimization_enabled': MEMORY_OPTIMIZATION_ENABLED,
+        'max_workers': MAX_WORKERS,
+
+        # Data limits
+        'default_data_limit': DEFAULT_DATA_LIMIT,
+        'historical_data_limit': HISTORICAL_DATA_LIMIT,
+        'max_backtest_results': MAX_BACKTEST_RESULTS,
+
+        # Fitness function weights
+        'fitness_weights': FITNESS_WEIGHTS,
+        'fitness_bounds': FITNESS_BOUNDS,
+
+        # Discovery parameters
+        'discovery_params': DISCOVERY_PARAMS,
+
+        # Data mesh
+        'data_mesh_enabled': DATA_MESH_ENABLED,
+        'data_mesh_domains': DATA_MESH_DOMAINS,
+        'data_mesh_products': DATA_MESH_PRODUCTS,
+
+        # Data governance
+        'data_governance_enabled': DATA_GOVERNANCE_ENABLED,
+        'governance_roles': GOVERNANCE_ROLES,
+        'governance_policies': GOVERNANCE_POLICIES,
+        'data_quality_rules': DATA_QUALITY_RULES,
+
+        # Security
+        'enable_mtls': ENABLE_MTLS,
+        'jwt_secret_key': JWT_SECRET_KEY,
+        'jwt_algorithm': JWT_ALGORITHM,
+
+        # Monitoring
+        'prometheus_enabled': PROMETHEUS_ENABLED,
+        'monitoring_stack_enabled': MONITORING_STACK_ENABLED,
+
+        # Rate limiting
+        'rate_limit_enabled': RATE_LIMIT_ENABLED,
+        'adaptive_rate_limiting_enabled': ADAPTIVE_RATE_LIMITING_ENABLED,
+
+        # WebSocket
+        'websocket_data_enabled': WEBSOCKET_DATA_ENABLED,
+
+        # Funding rate
+        'funding_rate_enabled': FUNDING_RATE_ENABLED,
+        'funding_rate_threshold': FUNDING_RATE_THRESHOLD,
+        'funding_rate_weight': FUNDING_RATE_WEIGHT,
+
+        # Multi-timeframe analysis
+        'mta_enabled': MTA_ENABLED,
+        'mta_higher_timeframe': MTA_HIGHER_TIMEFRAME,
+        'mta_timeframes': MTA_TIMEFRAMES,
+        'mta_data_limit': MTA_DATA_LIMIT,
+
+        # Cache settings
+        'cache_ttl_live': CACHE_TTL_LIVE,
+        'cache_ttl_historical': CACHE_TTL_HISTORICAL,
+
+        # Retry settings
+        'max_retries_live': MAX_RETRIES_LIVE,
+        'max_retries_historical': MAX_RETRIES_HISTORICAL,
+
+        # UI settings
+        'ui_refresh_interval': UI_REFRESH_INTERVAL,
+
+        # Request timeout
+        'request_timeout': REQUEST_TIMEOUT,
+
+        # Output directory
+        'output_dir': OUTPUT_DIR,
+
+        # Max positions
+        'max_positions': MAX_POSITIONS,
+
+        # Max drawdown
+        'max_drawdown': MAX_DRAWDOWN,
+
+        # Order timeout
+        'order_timeout': ORDER_TIMEOUT,
+
+        # Position update interval
+        'position_update_interval': POSITION_UPDATE_INTERVAL,
+
+        # Default historical days
+        'default_historical_days': DEFAULT_HISTORICAL_DAYS,
+
+        # Kraken max per request
+        'kraken_max_per_request': KRAKEN_MAX_PER_REQUEST,
+
+        # Volatility window
+        'volatility_window': VOLATILITY_WINDOW,
+
+        # Trend lookback
+        'trend_lookback': TREND_LOOKBACK,
+
+        # JSON indent
+        'json_indent': JSON_INDENT,
+
+        # Initial capital
+        'initial_capital': INITIAL_CAPITAL,
+
+        # Lookback days
+        'lookback_days': LOOKBACK_DAYS,
+
+        # ML features
+        'ml_features': ML_FEATURES,
+        'ml_target_horizon': ML_TARGET_HORIZON,
+        'ml_training_window': ML_TRAINING_WINDOW,
+        'ml_validation_split': ML_VALIDATION_SPLIT,
+        'ml_random_state': ML_RANDOM_STATE,
+
+        # ML training config
+        'ml_models_dir': ML_MODELS_DIR,
+
+        # Adaptive optimization (live)
+        'adaptive_optimization_enabled_live': ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
+        'adaptive_optimization_interval_hours_live': ADAPTIVE_OPTIMIZATION_INTERVAL_HOURS_LIVE,
+        'adaptive_optimization_population': ADAPTIVE_OPTIMIZATION_POPULATION,
+        'adaptive_optimization_generations': ADAPTIVE_OPTIMIZATION_GENERATIONS,
+        'adaptive_optimization_lookback_days': ADAPTIVE_OPTIMIZATION_LOOKBACK_DAYS,
+        'adaptive_auto_apply_best_live': ADAPTIVE_AUTO_APPLY_BEST_LIVE,
+        'adaptive_min_performance_threshold_live': ADAPTIVE_MIN_PERFORMANCE_THRESHOLD_LIVE,
+        'adaptive_config_file_live': ADAPTIVE_CONFIG_FILE_LIVE,
+
+        # Live trading monitoring
+        'live_trading_monitor_enabled': LIVE_TRADING_MONITOR_ENABLED,
+        'live_trading_position_update_interval': LIVE_TRADING_POSITION_UPDATE_INTERVAL,
+        'live_trading_pnl_log_file': LIVE_TRADING_PNL_LOG_FILE,
+        'live_trading_trade_log_file': LIVE_TRADING_TRADE_LOG_FILE,
+
+        # Paper trading risk management
+        'paper_trading_stop_loss_enabled': PAPER_TRADING_STOP_LOSS_ENABLED,
+        'paper_trading_take_profit_enabled': PAPER_TRADING_TAKE_PROFIT_ENABLED,
+        'paper_trading_max_drawdown': PAPER_TRADING_MAX_DRAWDOWN,
+        'paper_trading_max_trades_per_day': PAPER_TRADING_MAX_TRADES_PER_DAY,
+
+        # Live trading risk management
+        'live_trading_max_trades_per_day': LIVE_TRADING_MAX_TRADES_PER_DAY,
+        'live_trading_min_signal_confidence': LIVE_TRADING_MIN_SIGNAL_CONFIDENCE,
+        'live_trading_auto_execute': LIVE_TRADING_AUTO_EXECUTE,
+        'live_trading_confirmation_required': LIVE_TRADING_CONFIRMATION_REQUIRED,
+
+        # Broker settings
+        'broker_max_position_size_percent': BROKER_MAX_POSITION_SIZE_PERCENT,
+        'broker_min_order_size': BROKER_MIN_ORDER_SIZE,
+        'broker_retry_attempts': BROKER_RETRY_ATTEMPTS,
+        'broker_retry_delay': BROKER_RETRY_DELAY,
+        'broker_timeout': BROKER_TIMEOUT,
+
+        # API keys (masked for security)
+        'api_key': '***masked***' if API_KEY else '',
+        'api_secret': '***masked***' if API_SECRET else '',
+        'broker_api_key': '***masked***' if BROKER_API_KEY else '',
+        'broker_api_secret': '***masked***' if BROKER_API_SECRET else '',
+
+        # Twitter API (masked)
+        'twitter_api_key': '***masked***' if TWITTER_API_KEY else '',
+        'twitter_api_secret': '***masked***' if TWITTER_API_SECRET else '',
+        'twitter_access_token': '***masked***' if TWITTER_ACCESS_TOKEN else '',
+        'twitter_access_token_secret': '***masked***' if TWITTER_ACCESS_TOKEN_SECRET else '',
+        'twitter_bearer_token': '***masked***' if TWITTER_BEARER_TOKEN else '',
+
+        # News API
+        'news_api_key': '***masked***' if NEWS_API_KEY else '',
+
+        # Reddit API
+        'reddit_client_id': '***masked***' if REDDIT_CLIENT_ID else '',
+        'reddit_client_secret': '***masked***' if REDDIT_CLIENT_SECRET else '',
+
+        # Vault/Secrets
+        'vault_addr': VAULT_ADDR,
+        'vault_token': '***masked***' if VAULT_TOKEN else '',
+        'aws_region': AWS_REGION,
+        'aws_secretsmanager_access_key': '***masked***' if os.getenv('AWS_ACCESS_KEY_ID') else '',
+        'aws_secretsmanager_secret_key': '***masked***' if os.getenv('AWS_SECRET_ACCESS_KEY') else '',
+
+        # MTLS
+        'mtls_cert_path': MTLS_CERT_PATH,
+        'mtls_key_path': MTLS_KEY_PATH,
+        'ca_cert_path': CA_CERT_PATH,
+
+        # Security service
+        'security_service_url': SECURITY_SERVICE_URL,
+        'security_service_port': SECURITY_SERVICE_PORT,
+
+        # JWT
+        'jwt_expiration_hours': JWT_EXPIRATION_HOURS,
+
+        # Prometheus
+        'prometheus_port': PROMETHEUS_PORT,
+
+        # Deployment
+        'deployment_env': DEPLOYMENT_ENV,
+
+        # Rate limiting
+        'rate_limit_max_retries': RATE_LIMIT_MAX_RETRIES,
+        'rate_limit_base_backoff': RATE_LIMIT_BASE_BACKOFF,
+        'rate_limit_max_backoff': RATE_LIMIT_MAX_BACKOFF,
+
+        # WebSocket
+        'websocket_reconnect_attempts': WEBSOCKET_RECONNECT_ATTEMPTS,
+        'websocket_reconnect_delay': WEBSOCKET_RECONNECT_DELAY,
+        'websocket_ping_timeout': WEBSOCKET_PING_TIMEOUT,
+
+        # Performance
+        'performance_enabled': PERFORMANCE_ENABLED,
+        'performance_monitoring_enabled': PERFORMANCE_MONITORING_ENABLED,
+        'performance_log_level': PERFORMANCE_LOG_LEVEL,
+
+        # Backtesting
+        'parallel_backtesting_enabled': PARALLEL_BACKTESTING_ENABLED,
+        'max_backtest_workers': MAX_BACKTEST_WORKERS,
+        'backtest_batch_size': BACKTEST_BATCH_SIZE,
+
+        # Chunk processing
+        'chunk_size': CHUNK_SIZE,
+
+        # InfluxDB
+        'influxdb_enabled': INFLUXDB_ENABLED,
+        'influxdb_url': INFLUXDB_URL,
+        'influxdb_token': '***masked***' if INFLUXDB_TOKEN else '',
+        'influxdb_org': INFLUXDB_ORG,
+        'influxdb_bucket': INFLUXDB_BUCKET,
+        'influxdb_measurement_prefix': INFLUXDB_MEASUREMENT_PREFIX,
+
+        # Data Lake
+        'data_lake_enabled': DATA_LAKE_ENABLED,
+        'data_lake_type': DATA_LAKE_TYPE,
+        'data_lake_endpoint': DATA_LAKE_ENDPOINT,
+        'data_lake_access_key': '***masked***' if DATA_LAKE_ACCESS_KEY else '',
+        'data_lake_secret_key': '***masked***' if DATA_LAKE_SECRET_KEY else '',
+        'data_lake_bucket': DATA_LAKE_BUCKET,
+        'data_lake_region': DATA_LAKE_REGION,
+        'data_lake_archive_prefix': DATA_LAKE_ARCHIVE_PREFIX,
+
+        # Feature Store
+        'feature_store_enabled': FEATURE_STORE_ENABLED,
+        'feature_store_key_prefix': FEATURE_STORE_KEY_PREFIX,
+        'feature_store_metadata_prefix': FEATURE_STORE_METADATA_PREFIX,
+        'feature_store_version_prefix': FEATURE_STORE_VERSION_PREFIX,
+
+        # Data Product Registry
+        'data_product_registry_enabled': DATA_PRODUCT_REGISTRY_ENABLED,
+        'data_product_key_prefix': DATA_PRODUCT_KEY_PREFIX,
+        'data_product_schema_prefix': DATA_PRODUCT_SCHEMA_PREFIX,
+
+        # Data Mesh Governance
+        'data_mesh_governance_enabled': DATA_MESH_GOVERNANCE_ENABLED,
+        'data_mesh_audit_log_enabled': DATA_MESH_AUDIT_LOG_ENABLED,
+        'data_mesh_audit_key_prefix': DATA_MESH_AUDIT_KEY_PREFIX,
+        'data_mesh_access_control_enabled': DATA_MESH_ACCESS_CONTROL_ENABLED,
+
+        # Data Quality
+        'data_mesh_quality_enabled': DATA_MESH_QUALITY_ENABLED,
+        'data_mesh_quality_check_interval': DATA_MESH_QUALITY_CHECK_INTERVAL,
+        'data_mesh_quality_alert_threshold': DATA_MESH_QUALITY_ALERT_THRESHOLD,
+
+        # Data Mesh Performance
+        'data_mesh_batch_size': DATA_MESH_BATCH_SIZE,
+        'data_mesh_parallel_workers': DATA_MESH_PARALLEL_WORKERS,
+        'data_mesh_cache_ttl': DATA_MESH_CACHE_TTL,
+
+        # Data Governance
+        'data_governance_audit_enabled': DATA_GOVERNANCE_AUDIT_ENABLED,
+        'data_governance_access_control_enabled': DATA_GOVERNANCE_ACCESS_CONTROL_ENABLED,
+        'data_governance_quality_monitoring_enabled': DATA_GOVERNANCE_QUALITY_MONITORING_ENABLED,
+
+        # Audit
+        'audit_log_retention_days': AUDIT_LOG_RETENTION_DAYS,
+        'audit_log_max_events': AUDIT_LOG_MAX_EVENTS,
+        'audit_log_compliance_mode': AUDIT_LOG_COMPLIANCE_MODE,
+
+        # Access Control
+        'access_control_default_policy': ACCESS_CONTROL_DEFAULT_POLICY,
+        'access_control_cache_ttl': ACCESS_CONTROL_CACHE_TTL,
+        'access_control_max_policies': ACCESS_CONTROL_MAX_POLICIES,
+
+        # Quality Monitoring
+        'quality_monitor_check_interval': QUALITY_MONITOR_CHECK_INTERVAL,
+        'quality_monitor_alert_threshold': QUALITY_MONITOR_ALERT_THRESHOLD,
+        'quality_monitor_max_issues': QUALITY_MONITOR_MAX_ISSUES,
+        'quality_monitor_auto_correction': QUALITY_MONITOR_AUTO_CORRECTION,
+
+        # Compliance
+        'compliance_enabled': COMPLIANCE_ENABLED,
+        'compliance_report_interval': COMPLIANCE_REPORT_INTERVAL,
+        'compliance_retention_years': COMPLIANCE_RETENTION_YEARS,
+        'compliance_auto_reporting': COMPLIANCE_AUTO_REPORTING,
+
+        # Governance Monitoring
+        'governance_monitoring_enabled': GOVERNANCE_MONITORING_ENABLED,
+        'governance_alert_emails': GOVERNANCE_ALERT_EMAILS,
+        'governance_slack_webhook': '***masked***' if GOVERNANCE_SLACK_WEBHOOK else '',
+        'governance_metrics_prefix': GOVERNANCE_METRICS_PREFIX,
+
+        # Log settings
+        'log_max_bytes': LOG_MAX_BYTES,
+        'log_backup_count': LOG_BACKUP_COUNT,
+
+        # Secrets backend
+        'secrets_backend': SECRETS_BACKEND,
+
+        # Redis password (masked)
+        'redis_password': '***masked***' if REDIS_PASSWORD else '',
+
+        # Current indicator config
+        'current_indicator_config': get_current_indicator_config(),
+
+        # Validation functions (not serializable, so excluded)
+        # 'validate_timeframe': validate_timeframe,
+        # 'validate_risk_params': validate_risk_params,
+    }
+

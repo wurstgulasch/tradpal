@@ -7,6 +7,7 @@ Tests the backtesting system with proper indicators and realistic Bitcoin data.
 import asyncio
 import sys
 import os
+import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.backtesting_service.service import AsyncBacktester
@@ -100,6 +101,7 @@ async def create_realistic_btc_data():
 
     return df
 
+@pytest.mark.asyncio
 async def test_improved_backtesting():
     """Test backtesting with improved indicators and realistic data."""
     print("🧪 Testing improved backtesting system...")

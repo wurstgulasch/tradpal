@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # Redis Cache - Required for all services
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - tradpal-dev
+
+  # Data Service - Core data management
+  data-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.data_service.api
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./cache:/app/cache:rw
+      - ./logs:/app/logs:rw
+      - ./config:/app/config:ro
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - SERVICE_NAME=data_service
+      - REDIS_URL=redis://redis:6379
+      - DEPLOYMENT_ENV=development
+      - SECRETS_BACKEND=env
+      - LOG_LEVEL=INFO
+      # Disable complex features for development
+      - MTLS_ENABLED=false
+      - PROMETHEUS_ENABLED=false
+      - DATA_MESH_ENABLED=false
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - tradpal-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Backtesting Service - Trading simulation
+  backtesting-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m services.backtesting_service.api
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./cache:/app/cache:rw
+      - ./logs:/app/logs:rw
+      - ./config:/app/config:ro
+      - ./output:/app/output:rw
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - SERVICE_NAME=backtesting_service
+      - REDIS_URL=redis://redis:6379
+      - DATA_SERVICE_URL=http://data-service:8001
+      - DEPLOYMENT_ENV=development
+      - SECRETS_BACKEND=env
+      - LOG_LEVEL=INFO
+      # Disable complex features for development
+      - MTLS_ENABLED=false
+      - PROMETHEUS_ENABLED=false
+    depends_on:
+      data-service:
+        condition: service_healthy
+    networks:
+      - tradpal-dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Simple Web UI (optional)
+  web-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: streamlit run services/web_ui/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./cache:/app/cache:rw
+      - ./logs:/app/logs:rw
+      - ./config:/app/config:ro
+      - ./output:/app/output:rw
+    environment:
+      - PYTHONPATH=/app
+      - SERVICE_NAME=web_ui
+      - DATA_SERVICE_URL=http://data-service:8001
+      - BACKTESTING_SERVICE_URL=http://backtesting-service:8002
+    depends_on:
+      - data-service
+      - backtesting-service
+    networks:
+      - tradpal-dev
+    profiles:
+      - ui
+
+volumes:
+  redis_data:
+
+networks:
+  tradpal-dev:
+    driver: bridge

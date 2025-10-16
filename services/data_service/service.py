@@ -57,6 +57,9 @@ except ImportError:
 import logging
 from .data_mesh import DataMeshManager, DataDomain, DataProduct, FeatureSet
 from .data_governance import DataGovernanceManager, AccessLevel, AuditEventType
+from .cache_manager import CacheManager
+from .quality_manager import DataQualityManager
+from .data_sources.factory import DataSourceFactory
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -267,6 +270,31 @@ class DataService:
         }
 
         logger.info("Data Service initialized with Data Mesh support")
+
+    async def initialize(self):
+        """Initialize the data service."""
+        # Initialize cache manager
+        self.cache_manager = CacheManager()
+        await self.cache_manager.initialize()
+
+        # Initialize quality manager
+        self.quality_manager = DataQualityManager()
+
+        # Initialize data source factory
+        self.data_source_factory = DataSourceFactory
+
+        logger.info("Data service initialized")
+
+    async def cleanup(self):
+        """Cleanup data service resources."""
+        if hasattr(self, 'cache_manager'):
+            await self.cache_manager.cleanup()
+
+        logger.info("Data service cleaned up")
+
+    def get_available_data_sources(self):
+        """Get list of available data sources."""
+        return DataSourceFactory.get_available_sources()
 
     def _generate_cache_key(self, symbol: str, timeframe: str, start_date: datetime, end_date: datetime) -> str:
         """Generate a unique cache key for data requests."""

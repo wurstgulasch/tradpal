@@ -7,12 +7,14 @@ Tests the data service integration without running full services.
 import asyncio
 import sys
 import os
+import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.data_service.client import DataServiceClient
 from services.backtesting_service.service import AsyncBacktester
 import pandas as pd
 
+@pytest.mark.asyncio
 async def test_backtester_direct():
     """Test backtester directly with mock data."""
     print("🧪 Testing backtester with mock Kaggle data...")
@@ -105,6 +107,7 @@ async def test_backtester_direct():
     else:
         print(f"❌ Backtest failed: {result.get('error')}")
 
+@pytest.mark.asyncio
 async def test_kaggle_integration():
     """Test Kaggle data source integration."""
     print("🧪 Testing Kaggle data source integration...")

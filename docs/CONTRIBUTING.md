@@ -1,75 +1,75 @@
 # Contributing to TradPal Indicator
 
-Vielen Dank für Ihr Interesse an der Weiterentwicklung von TradPal! Wir freuen uns über Beiträge aus der Community.
+Thank you for your interest in developing TradPal! We welcome contributions from the community.
 
-## 🚀 Wie kann ich beitragen?
+## 🚀 How can I contribute?
 
-### Arten von Beiträgen
+### Types of Contributions
 
-1. **🐛 Bug Reports**: Fehler melden
-2. **💡 Feature Requests**: Neue Ideen vorschlagen
-3. **📝 Documentation**: Dokumentation verbessern
-4. **💻 Code Contributions**: Code beitragen
-5. **🧪 Testing**: Tests schreiben oder ausführen
-6. **📊 Performance**: Benchmarks und Optimierungen
+1. **🐛 Bug Reports**: Report bugs
+2. **💡 Feature Requests**: Suggest new ideas
+3. **📝 Documentation**: Improve documentation
+4. **💻 Code Contributions**: Contribute code
+5. **🧪 Testing**: Write or run tests
+6. **📊 Performance**: Benchmarks and optimizations
 
-### Entwicklungs-Workflow
+### Development Workflow
 
-#### 1. Repository forken
+#### 1. Fork Repository
 ```bash
-git clone https://github.com/your-org/tradpal-indicator.git
-cd tradpal-indicator
+git clone https://github.com/wurstgulasch/tradpal.git
+cd tradpal_indicator
 git checkout -b feature/your-feature-name
 ```
 
-#### 2. Entwicklungsumgebung einrichten
+#### 2. Set up Development Environment
 ```bash
-# Conda-Umgebung erstellen (empfohlen)
+# Create conda environment (recommended)
 conda env create -f environment.yml
-conda activate tradpal_env
+conda activate tradpal-env
 
-# Oder mit pip
+# Or with pip
 pip install -e .[dev,ml,webui]
 ```
 
-#### 3. Tests ausführen
+#### 3. Run Tests
 ```bash
-# Alle Tests
+# All tests
 pytest tests/ -v
 
-# Mit Coverage
-pytest tests/ --cov=src --cov-report=html
+# With coverage
+pytest tests/ --cov=services --cov-report=html
 ```
 
-#### 4. Code-Qualität sicherstellen
+#### 4. Ensure Code Quality
 ```bash
 # Linting
-flake8 src/ tests/
+flake8 services/ tests/
 
 # Type checking
-mypy src/
+mypy services/
 
-# Formatierung
-black src/ tests/
-isort src/ tests/
+# Formatting
+black services/ tests/
+isort services/ tests/
 ```
 
-#### 5. Commit und Push
+#### 5. Commit and Push
 ```bash
 git add .
 git commit -m "feat: Add your feature description"
 git push origin feature/your-feature-name
 ```
 
-#### 6. Pull Request erstellen
-- Gehen Sie zu GitHub und erstellen Sie einen PR
-- Verwenden Sie eine der [Pull Request Templates](.github/PULL_REQUEST_TEMPLATE/)
-- Warten Sie auf Review
+#### 6. Create Pull Request
+- Go to GitHub and create a PR
+- Use one of the [Pull Request Templates](.github/PULL_REQUEST_TEMPLATE/)
+- Wait for review
 
 ## 📋 Pull Request Guidelines
 
 ### Commit Messages
-Folgen Sie dem [Conventional Commits](https://conventionalcommits.org/) Format:
+Follow the [Conventional Commits](https://conventionalcommits.org/) format:
 
 ```
 type(scope): description
@@ -80,15 +80,15 @@ type(scope): description
 ```
 
 **Types:**
-- `feat`: Neue Features
+- `feat`: New features
 - `fix`: Bug fixes
-- `docs`: Dokumentation
+- `docs`: Documentation
 - `style`: Code style changes
 - `refactor`: Code refactoring
-- `test`: Tests hinzufügen
+- `test`: Adding tests
 - `chore`: Maintenance tasks
 
-**Beispiele:**
+**Examples:**
 ```
 feat(ml): Add LSTM model support
 fix(backtester): Resolve memory leak in simulation
@@ -98,13 +98,13 @@ docs(api): Update parameter descriptions
 ### Code Style
 
 #### Python
-- **PEP 8** konform
-- **Type Hints** verwenden
-- **Docstrings** für alle öffentlichen Funktionen
-- **Black** für Formatierung
-- **isort** für Import-Sortierung
+- **PEP 8** compliant
+- Use **type hints**
+- **Docstrings** for all public functions
+- **Black** for formatting
+- **isort** for import sorting
 
-#### Beispiel:
+#### Example:
 ```python
 def calculate_indicator(data: pd.DataFrame, period: int = 14) -> pd.Series:
     """
@@ -122,146 +122,145 @@ def calculate_indicator(data: pd.DataFrame, period: int = 14) -> pd.Series:
 ```
 
 ### Tests
-- **pytest** Framework verwenden
-- Unit Tests für alle neuen Features
-- Integration Tests für Workflows
-- Mindestens 80% Code Coverage
-- Tests sollten schnell laufen (< 30 Sekunden)
+- Use **pytest** framework
+- Unit tests for all new features
+- Integration tests for workflows
+- Minimum 80% code coverage
+- Tests should run fast (< 30 seconds)
 
-#### Test Beispiel:
+#### Test Example:
 ```python
 import pytest
 import pandas as pd
-from src.indicators import calculate_rsi
+from services.data_service.data_sources.liquidation import LiquidationDataSource
 
-def test_calculate_rsi():
+def test_liquidation_fallback():
     # Arrange
-    data = pd.DataFrame({
-        'close': [100, 110, 105, 115, 120]
-    })
+    source = LiquidationDataSource()
 
     # Act
-    result = calculate_rsi(data, period=3)
+    data = source.fetch_recent_data('BTC/USDT', '1h', limit=10)
 
     # Assert
-    assert len(result) == len(data)
-    assert not result.isna().all()
+    assert not data.empty
+    assert 'liquidation_signal' in data.columns
+    assert 'data_source' in data.columns
 ```
 
-## 🏗️ Architektur Guidelines
+## 🏗️ Architecture Guidelines
 
-### Modulare Struktur
+### Modular Structure
 ```
-src/                    # Kernmodule
-├── indicators.py       # Technische Indikatoren
-├── signal_generator.py # Signal-Generierung
-├── backtester.py       # Backtesting-Engine
-├── ml_predictor.py     # ML-Modelle
+services/               # Service components
+├── data_service/       # Data management
+│   └── data_sources/   # Data source implementations
+├── core/               # Core calculations
+├── backtesting_service/# Backtesting engine
 └── ...
 
-services/               # Service-Komponenten
-├── web_ui/            # Web-Interface
-└── ...
-
-scripts/               # Utility-Scripts
-tests/                 # Unit-Tests
+scripts/               # Utility scripts
+tests/                 # Unit tests
+docs/                  # Documentation
 ```
 
-### Abhängigkeiten
-- **Kern-Abhängigkeiten**: pandas, numpy, TA-Lib
-- **ML-Abhängigkeiten**: pytorch, optuna, scikit-learn
-- **Web-UI**: streamlit, plotly
-- **Dev-Tools**: pytest, black, mypy, flake8
+### Dependencies
+- **Core Dependencies**: pandas, numpy, requests
+- **ML Dependencies**: pytorch, optuna, scikit-learn
+- **Web UI**: streamlit, plotly
+- **Dev Tools**: pytest, black, mypy, flake8
 
-### Konfiguration
-- **settings.py**: Zentrale Konfiguration
-- **Umgebungsvariablen**: Für Secrets
-- **Profile**: light/heavy für Performance
+### Configuration
+- **settings.py**: Central configuration
+- **Environment variables**: For secrets
+- **Profiles**: light/heavy for performance
 
 ## 🔍 Code Review Process
 
-### Checkliste für Reviewer
-- [ ] Code Style konform (PEP 8, Black)
-- [ ] Type Hints vorhanden
-- [ ] Docstrings vollständig
-- [ ] Tests vorhanden und passing
-- [ ] Keine Security Issues
-- [ ] Performance optimiert
-- [ ] Dokumentation aktualisiert
+### Reviewer Checklist
+- [ ] Code style compliant (PEP 8, Black)
+- [ ] Type hints present
+- [ ] Docstrings complete
+- [ ] Tests present and passing
+- [ ] No security issues
+- [ ] Performance optimized
+- [ ] Documentation updated
 
-### Checkliste für Contributors
-- [ ] Alle Tests passing
-- [ ] Code formatiert (Black)
-- [ ] Imports sortiert (isort)
-- [ ] Linting ohne Fehler
-- [ ] Typprüfung erfolgreich
-- [ ] Dokumentation aktualisiert
-- [ ] Changelog aktualisiert
+### Contributor Checklist
+- [ ] All tests passing
+- [ ] Code formatted (Black)
+- [ ] Imports sorted (isort)
+- [ ] Linting without errors
+- [ ] Type checking successful
+- [ ] Documentation updated
+- [ ] Changelog updated
 
-## 🎯 Feature Entwicklung
+## 🎯 Feature Development
 
-### Ideenfindung
-1. **Issues** prüfen für offene Features
-2. **Discussions** für neue Ideen
-3. **Discord** Community für Feedback
+### Ideation
+1. Check **Issues** for open features
+2. **Discussions** for new ideas
+3. **Discord** community for feedback
 
-### Implementierung
-1. **Design Document** erstellen
-2. **Prototype** entwickeln
-3. **Tests** schreiben
-4. **Dokumentation** aktualisieren
-5. **Review** anfordern
+### Implementation
+1. Create **Design Document**
+2. Develop **Prototype**
+3. Write **Tests**
+4. Update **Documentation**
+5. Request **Review**
 
-### Beispiel: Neue Indikator hinzufügen
+### Example: Adding New Data Source
 
 ```python
-# src/indicators.py
-def calculate_new_indicator(data: pd.DataFrame, period: int = 14) -> pd.Series:
-    """Calculate new technical indicator."""
-    # Implementation
-    pass
+# services/data_service/data_sources/new_source.py
+from .base import BaseDataSource
 
-# config/settings.py
-INDICATORS = {
-    'new_indicator': {
-        'enabled': True,
-        'period': 14
-    }
-}
+class NewDataSource(BaseDataSource):
+    """New data source implementation."""
 
-# tests/test_indicators.py
-def test_calculate_new_indicator():
+    def fetch_recent_data(self, symbol: str, timeframe: str, limit: int = 100):
+        # Implementation
+        pass
+
+# services/data_service/data_sources/factory.py
+from .new_source import NewDataSource
+
+# Add to factory
+elif name == 'new_source':
+    return NewDataSource(config)
+
+# tests/unit/test_new_source.py
+def test_new_data_source():
     # Test implementation
     pass
 ```
 
 ## 📊 Performance Benchmarks
 
-### Ziele
-- **Backtest Speed**: < 10 Sekunden für 1 Jahr 1h Daten
-- **Memory Usage**: < 1GB für typische Workloads
-- **Accuracy**: > 95% Signalkonsistenz
+### Targets
+- **Backtest Speed**: < 10 seconds for 1 year 1h data
+- **Memory Usage**: < 1GB for typical workloads
+- **Accuracy**: > 95% signal consistency
 
-### Benchmarks ausführen
+### Run Benchmarks
 ```bash
-python scripts/benchmark_performance.py
+python scripts/performance_benchmark.py
 ```
 
 ## 🤝 Community Guidelines
 
-### Kommunikation
-- **Respektvoll** und **konstruktiv** bleiben
-- **Englisch** als Standardsprache
-- **Issues** für technische Diskussionen
-- **Discussions** für allgemeine Themen
+### Communication
+- Stay **respectful** and **constructive**
+- **English** as standard language
+- **Issues** for technical discussions
+- **Discussions** for general topics
 
-### Verhaltenskodex
-- Keine Diskriminierung
-- Keine Spam-Posts
-- Konstruktives Feedback
-- Gemeinschaftsorientiert
+### Code of Conduct
+- No discrimination
+- No spam posts
+- Constructive feedback
+- Community-oriented
 
-## 🏆 Belohnungen
+## 🏆 Rewards
 
 ### Contributor Levels
 - **🥉 Bronze**: 1-5 merged PRs
@@ -270,14 +269,14 @@ python scripts/benchmark_performance.py
 - **💎 Diamond**: Significant contributions
 
 ### Hall of Fame
-Besondere Erwähnung für außergewöhnliche Beiträge:
-- [Liste der Top-Contributors]
+Special mention for outstanding contributions:
+- [List of Top Contributors]
 
 ## 📞 Support
 
-Bei Fragen:
-- **GitHub Issues**: Für Bugs und Features
-- **GitHub Discussions**: Für Fragen
-- **Discord**: Für schnellen Support
+For questions:
+- **GitHub Issues**: For bugs and features
+- **GitHub Discussions**: For questions
+- **Discord**: For quick support
 
-Vielen Dank für Ihren Beitrag zu TradPal! 🚀
+Thank you for your contribution to TradPal! 🚀

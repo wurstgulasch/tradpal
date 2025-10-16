@@ -33,6 +33,41 @@ except ImportError:
     KAGGLE_AVAILABLE = False
     logger.warning("Kaggle data source not available")
 
+try:
+    from .funding_rate import FundingRateDataSource
+    FUNDING_RATE_AVAILABLE = True
+except ImportError:
+    FUNDING_RATE_AVAILABLE = False
+    logger.warning("Funding Rate data source not available")
+
+try:
+    from .liquidation import LiquidationDataSource
+    LIQUIDATION_AVAILABLE = True
+except ImportError:
+    LIQUIDATION_AVAILABLE = False
+    logger.warning("Liquidation data source not available")
+
+try:
+    from .volatility import VolatilityDataSource
+    VOLATILITY_AVAILABLE = True
+except ImportError:
+    VOLATILITY_AVAILABLE = False
+    logger.warning("Volatility data source not available")
+
+try:
+    from .sentiment import SentimentDataSource
+    SENTIMENT_AVAILABLE = True
+except ImportError:
+    SENTIMENT_AVAILABLE = False
+    logger.warning("Sentiment data source not available")
+
+try:
+    from .onchain import OnChainMetricsDataSource
+    ONCHAIN_AVAILABLE = True
+except ImportError:
+    ONCHAIN_AVAILABLE = False
+    logger.warning("On-Chain Metrics data source not available")
+
 class DataSourceFactory:
     """
     Factory class for creating data source instances.
@@ -74,6 +109,31 @@ class DataSourceFactory:
             if not KAGGLE_AVAILABLE:
                 raise ValueError("Kaggle data source is not available. Install kaggle and configure API key.")
             return KaggleDataSource(config)
+
+        elif name == 'funding_rate' or name == 'funding':
+            if not FUNDING_RATE_AVAILABLE:
+                raise ValueError("Funding Rate data source is not available. Install requests.")
+            return FundingRateDataSource(config)
+
+        elif name == 'liquidation' or name == 'liquidations':
+            if not LIQUIDATION_AVAILABLE:
+                raise ValueError("Liquidation data source is not available. Install requests.")
+            return LiquidationDataSource(config)
+
+        elif name == 'volatility' or name == 'volatility_indicators':
+            if not VOLATILITY_AVAILABLE:
+                raise ValueError("Volatility data source is not available. Install requests.")
+            return VolatilityDataSource(config)
+
+        elif name == 'sentiment' or name == 'sentiment_analysis':
+            if not SENTIMENT_AVAILABLE:
+                raise ValueError("Sentiment data source is not available. Install requests.")
+            return SentimentDataSource(config)
+
+        elif name == 'onchain' or name == 'onchain_metrics':
+            if not ONCHAIN_AVAILABLE:
+                raise ValueError("On-Chain Metrics data source is not available. Install requests.")
+            return OnChainMetricsDataSource(config)
 
         else:
             available_sources = []
@@ -124,7 +184,12 @@ class DataSourceFactory:
         return {
             'yahoo_finance': YAHOO_AVAILABLE,
             'ccxt': CCXT_AVAILABLE,
-            'kaggle': KAGGLE_AVAILABLE
+            'kaggle': KAGGLE_AVAILABLE,
+            'funding_rate': FUNDING_RATE_AVAILABLE,
+            'liquidation': LIQUIDATION_AVAILABLE,
+            'volatility': VOLATILITY_AVAILABLE,
+            'sentiment': SENTIMENT_AVAILABLE,
+            'onchain': ONCHAIN_AVAILABLE
         }
 
     @staticmethod

@@ -54,7 +54,9 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
 
     rs = gain / loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
-    rsi = rsi.where(loss != 0, np.nan)
+    # Handle edge cases: pure uptrend (loss=0) = 100, pure downtrend (gain=0) = 0
+    rsi = rsi.where(loss != 0, 100)  # Pure uptrend
+    rsi = rsi.where(gain != 0, 0)    # Pure downtrend
 
     return rsi
 

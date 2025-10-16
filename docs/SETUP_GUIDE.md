@@ -1,275 +1,275 @@
-# Setup und Installation
+# Setup and Installation
 
-Diese Anleitung führt Sie durch die Installation und Konfiguration von TradPal Indicator.
+This guide walks you through the installation and configuration of TradPal Indicator.
 
-## 🔧 Systemvoraussetzungen
+## 🔧 System Requirements
 
-### Minimale Anforderungen
+### Minimum Requirements
 - **Python**: 3.10+
 - **RAM**: 4GB
-- **Speicher**: 2GB frei
+- **Storage**: 2GB free
 - **OS**: Linux, macOS, Windows
 
-### Empfohlene Anforderungen
+### Recommended Requirements
 - **Python**: 3.10+
 - **RAM**: 8GB+
-- **Speicher**: 10GB+ SSD
+- **Storage**: 10GB+ SSD
 - **OS**: Linux (Ubuntu 20.04+)
 
 ## 📦 Installation
 
-### Option 1: Conda (Empfohlen)
+### Option 1: Conda (Recommended)
 
 ```bash
-# Repository klonen
-git clone https://github.com/your-org/tradpal-indicator.git
-cd tradpal-indicator
+# Clone repository
+git clone https://github.com/wurstgulasch/tradpal.git
+cd tradpal_indicator
 
-# Conda-Umgebung erstellen
+# Create conda environment
 conda env create -f environment.yml
-conda activate tradpal_env
+conda activate tradpal-env
 
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -r requirements.txt
 ```
 
 ### Option 2: pip
 
 ```bash
-# Repository klonen
-git clone https://github.com/your-org/tradpal-indicator.git
-cd tradpal-indicator
+# Clone repository
+git clone https://github.com/wurstgulasch/tradpal.git
+cd tradpal_indicator
 
-# Virtuelle Umgebung erstellen
+# Create virtual environment
 python -m venv tradpal_env
 source tradpal_env/bin/activate  # Linux/macOS
-# oder tradpal_env\Scripts\activate  # Windows
+# or tradpal_env\Scripts\activate  # Windows
 
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -e .[dev,ml,webui]
 ```
 
 ### Option 3: Docker
 
 ```bash
-# Repository klonen
-git clone https://github.com/your-org/tradpal-indicator.git
-cd tradpal-indicator
+# Clone repository
+git clone https://github.com/wurstgulasch/tradpal.git
+cd tradpal_indicator
 
-# Docker-Image bauen
+# Build Docker image
 docker build -t tradpal-indicator .
 
-# Container starten
+# Start container
 docker run -p 8501:8501 tradpal-indicator
 ```
 
-## ⚙️ Konfiguration
+## ⚙️ Configuration
 
-### Grundkonfiguration
+### Basic Configuration
 
-1. **API-Keys konfigurieren**
+1. **Configure API Keys**
 ```bash
-# .env Datei erstellen
-cp .env.example .env
+# Create .env file
+cp config/.env.example config/.env
 
-# API-Keys hinzufügen
-echo "BINANCE_API_KEY=your_api_key" >> .env
-echo "BINANCE_API_SECRET=your_api_secret" >> .env
+# Add API keys
+echo "BINANCE_API_KEY=your_api_key" >> config/.env
+echo "BINANCE_API_SECRET=your_api_secret" >> config/.env
 ```
 
-2. **Settings anpassen**
+2. **Adjust Settings**
 ```python
-# config/settings.py bearbeiten
-SYMBOL = 'BTC/USDT'  # Trading-Paar
-TIMEFRAME = '1h'     # Zeitrahmen
-CAPITAL = 10000      # Startkapital
+# Edit config/settings.py
+SYMBOL = 'BTC/USDT'  # Trading pair
+TIMEFRAME = '1h'     # Timeframe
+CAPITAL = 10000      # Starting capital
 ```
 
-### Performance-Profile
+### Performance Profiles
 
-TradPal unterstützt verschiedene Performance-Profile:
+TradPal supports different performance profiles:
 
-#### Light Profile (Ressourcen-schonend)
+#### Light Profile (Resource-friendly)
 ```bash
 python main.py --profile light
 ```
-- Kein ML/AI
-- Minimale Indikatoren
-- Schnellere Ausführung
+- No ML/AI
+- Minimal indicators
+- Faster execution
 
-#### Heavy Profile (Alle Features)
+#### Heavy Profile (All Features)
 ```bash
 python main.py --profile heavy
 ```
-- Alle ML-Modelle
-- Maximale Indikatoren
-- Umfassende Analyse
+- All ML models
+- Maximum indicators
+- Comprehensive analysis
 
-## 🚀 Erste Ausführung
+## 🚀 First Execution
 
-### Backtest ausführen
+### Run Backtest
 ```bash
-# Einfacher Backtest
+# Simple backtest
 python main.py --mode backtest --symbol BTC/USDT --timeframe 1d
 
-# Mit Web-UI
+# With Web UI
 python main.py --mode webui
 ```
 
 ### Discovery Mode (Genetic Algorithms)
 ```bash
-# Parameter optimieren
+# Optimize parameters
 python main.py --mode discovery --symbol BTC/USDT --generations 50
 ```
 
 ### Live Trading
 ```bash
-# Paper Trading (empfohlen für Tests)
+# Paper trading (recommended for testing)
 python main.py --mode paper --symbol BTC/USDT
 
-# Live Trading (Vorsicht!)
+# Live trading (caution!)
 python main.py --mode live --symbol BTC/USDT
 ```
 
-## 🔍 Verifikation der Installation
+## 🔍 Installation Verification
 
-### Tests ausführen
+### Run Tests
 ```bash
-# Alle Tests
+# All tests
 pytest tests/ -v
 
-# Spezifische Tests
-pytest tests/test_indicators.py -v
-pytest tests/test_backtester.py -v
+# Specific tests
+pytest tests/unit/test_indicators.py -v
+pytest tests/unit/test_backtester.py -v
 ```
 
-### Beispiel-Skript ausführen
+### Run Example Script
 ```python
-# examples/demo_performance_features.py ausführen
+# Run examples/demo_performance_features.py
 python examples/demo_performance_features.py
 ```
 
-## 🐛 Fehlerbehebung
+## 🐛 Troubleshooting
 
-### Häufige Probleme
+### Common Issues
 
-#### 1. Import-Fehler
+#### 1. Import Errors
 ```
 ModuleNotFoundError: No module named 'talib'
 ```
-**Lösung:**
+**Solution:**
 ```bash
-# TA-Lib installieren
+# Install TA-Lib
 conda install -c conda-forge ta-lib
-# oder
+# or
 pip install TA-Lib
 ```
 
-#### 2. Memory-Fehler
+#### 2. Memory Errors
 ```
 MemoryError: Unable to allocate array
 ```
-**Lösung:**
-- Mehr RAM verwenden
-- Light Profile aktivieren
-- Datenbereich reduzieren
+**Solution:**
+- Use more RAM
+- Enable light profile
+- Reduce data range
 
-#### 3. API-Fehler
+#### 3. API Errors
 ```
 APIError: Invalid API key
 ```
-**Lösung:**
-- API-Keys in `.env` überprüfen
-- IP-Whitelist bei Exchange prüfen
-- Rate-Limits beachten
+**Solution:**
+- Check API keys in `.env`
+- Verify IP whitelist at exchange
+- Respect rate limits
 
-#### 4. Docker-Probleme
+#### 4. Docker Issues
 ```
 docker: Error response from daemon: pull access denied
 ```
-**Lösung:**
-- Docker-Image lokal bauen
-- Registry-Zugangsdaten prüfen
+**Solution:**
+- Build Docker image locally
+- Check registry credentials
 
-### Logs überprüfen
+### Check Logs
 ```bash
-# Logs anzeigen
+# View logs
 tail -f logs/tradpal.log
 
-# Debug-Modus aktivieren
+# Enable debug mode
 export PYTHONPATH=/app
 python main.py --debug
 ```
 
 ## 🔄 Updates
 
-### Automatische Updates
+### Automatic Updates
 ```bash
-# Repository aktualisieren
+# Update repository
 git pull origin main
 
-# Abhängigkeiten aktualisieren
+# Update dependencies
 pip install -r requirements.txt --upgrade
 ```
 
-### Manuelle Updates
+### Manual Updates
 ```bash
-# Neue Version herunterladen
-wget https://github.com/your-org/tradpal-indicator/releases/latest/download/tradpal-indicator.tar.gz
+# Download new version
+wget https://github.com/wurstgulasch/tradpal/releases/latest/download/tradpal-indicator.tar.gz
 tar -xzf tradpal-indicator.tar.gz
 cd tradpal-indicator
 
-# Installation wiederholen
+# Repeat installation
 pip install -e .
 ```
 
-## 🌐 Netzwerk-Konfiguration
+## 🌐 Network Configuration
 
-### Proxy-Einstellungen
+### Proxy Settings
 ```bash
 export HTTP_PROXY=http://proxy.company.com:8080
 export HTTPS_PROXY=http://proxy.company.com:8080
 ```
 
 ### Firewall
-Stellen Sie sicher, dass folgende Ports offen sind:
-- **8501**: Streamlit Web-UI
+Ensure the following ports are open:
+- **8501**: Streamlit Web UI
 - **8000**: Prometheus Metrics (optional)
 
 ## 📊 Monitoring
 
-### System-Monitoring
+### System Monitoring
 ```bash
-# Ressourcen-Nutzung überwachen
+# Monitor resource usage
 top -p $(pgrep -f tradpal)
 
-# Speicher-Nutzung
+# Memory usage
 free -h
 ```
 
-### Anwendungs-Monitoring
+### Application Monitoring
 ```bash
-# Prometheus-Metrics
+# Prometheus metrics
 curl http://localhost:8000/metrics
 
-# Health-Check
+# Health check
 curl http://localhost:8000/health
 ```
 
-## 🆘 Hilfe
+## 🆘 Help
 
-Bei Problemen:
-1. **Dokumentation** lesen
-2. **GitHub Issues** durchsuchen
-3. **Neues Issue** erstellen
-4. **Community** kontaktieren
+For issues:
+1. Read **documentation**
+2. Search **GitHub Issues**
+3. Create **new Issue**
+4. Contact **community**
 
-### Support-Informationen sammeln
+### Collect Support Information
 ```bash
-# System-Info
+# System info
 python -c "import sys; print(f'Python: {sys.version}')"
 
-# Abhängigkeiten
+# Dependencies
 pip list | grep -E "(pandas|numpy|talib|pytorch)"
 
 # Logs

@@ -1,138 +1,135 @@
 #!/usr/bin/env python3
 """
-Test Script for Enhanced Data Quality Features
+Test Script for Volatility Data Source as Liquidation Proxy
 
-Demonstrates the new fallback system, indicator validation, and quality monitoring.
+Tests the new volatility indicators as alternative to liquidation data.
 """
 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from src.data_fetcher import fetch_historical_data_with_fallback
-from src.indicators import calculate_indicators_with_validation
-from src.data_quality_monitor import get_data_quality_monitor
+from services.data_service.data_sources.volatility import VolatilityDataSource
+from services.data_service.data_sources.liquidation import LiquidationDataSource
 from datetime import datetime, timedelta
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
-def test_fallback_system():
-    """Test the automatic fallback system."""
-    print("🔄 **Testing Automatic Fallback System**")
+def test_volatility_data_source():
+    """Test the volatility data source directly."""
+    print("� **Testing Volatility Data Source**")
     print("=" * 50)
 
     try:
-        # Test with BTC/USDT
-        df = fetch_historical_data_with_fallback(
-            symbol='BTC/USDT',
+        source = VolatilityDataSource()
+
+        # Test current data
+        current_data = source.fetch_current_data('BTCUSDT')
+        print(f"✅ Current volatility data: {len(current_data)} records")
+        if not current_data.empty:
+            print(f"   Columns: {list(current_data.columns)}")
+            print(f"   Sample values:")
+            print(current_data.head(3))
+
+        # Test historical data
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        end_date = datetime.now().strftime('%Y-%m-%d')
+
+        historical_data = source.fetch_historical_data(
+            symbol='BTCUSDT',
             timeframe='1d',
-            limit=100,
-            show_progress=True
+            start_date=start_date,
+            end_date=end_date
         )
 
-        print(f"✅ Successfully fetched {len(df)} records")
-        print(f"   Date range: {df.index.min()} to {df.index.max()}")
-        print(f"   Columns: {list(df.columns)}")
+        print(f"✅ Historical volatility data: {len(historical_data)} records")
+        if not historical_data.empty:
+            print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
+            print(f"   Columns: {list(historical_data.columns)}")
+            print(f"   Sample values:")
+            print(historical_data.head(3))
 
-        return df
+        return historical_data
 
     except Exception as e:
-        print(f"❌ Fallback system failed: {e}")
+        print(f"❌ Volatility data source failed: {e}")
         return None
 
-def test_indicator_validation(df):
-    """Test indicator validation system."""
-    print("\n🔧 **Testing Indicator Validation**")
+def test_liquidation_fallback():
+    """Test liquidation data source with fallback to volatility."""
+    print("\n� **Testing Liquidation Fallback System**")
     print("=" * 50)
 
-    if df is None or df.empty:
-        print("❌ No data available for indicator testing")
-        return
-
     try:
-        # Calculate indicators with validation
-        valid_indicators = calculate_indicators_with_validation(df)
+        source = LiquidationDataSource()
 
-        print(f"✅ Successfully calculated {len(valid_indicators)} valid indicators:")
-        for name, indicator in valid_indicators.items():
-            valid_ratio = indicator.notnull().mean() * 100
-            print(".1f")
+        # Test current data
+        current_data = source.fetch_current_data('BTCUSDT')
+        print(f"✅ Current liquidation data: {len(current_data)} records")
+        if not current_data.empty:
+            print(f"   Columns: {list(current_data.columns)}")
+            print(f"   Sample values:")
+            print(current_data.head(3))
 
-        if len(valid_indicators) < 5:  # We expect at least 5 indicators
-            print("⚠️  Some indicators were excluded due to quality issues")
+        # Test historical data (should fallback to volatility)
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+        end_date = datetime.now().strftime('%Y-%m-%d')
 
-        return valid_indicators
+        historical_data = source.fetch_historical_data(
+            symbol='BTCUSDT',
+            timeframe='1d',
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        print(f"✅ Historical liquidation data (with fallback): {len(historical_data)} records")
+        if not historical_data.empty:
+            print(f"   Date range: {historical_data.index.min()} to {historical_data.index.max()}")
+            print(f"   Columns: {list(historical_data.columns)}")
+            print(f"   Sample values:")
+            print(historical_data.head(3))
+
+        return historical_data
 
     except Exception as e:
-        print(f"❌ Indicator validation failed: {e}")
-        return {}
-
-def test_quality_monitoring(df):
-    """Test data quality monitoring."""
-    print("\n📊 **Testing Data Quality Monitoring**")
-    print("=" * 50)
-
-    if df is None or df.empty:
-        print("❌ No data available for quality monitoring")
-        return
-
-    try:
-        monitor = get_data_quality_monitor()
-        quality_report = monitor.monitor_data_quality(df, "test_source")  # Use monitor_data_quality instead of get_quality_report
-        report_text = monitor.get_quality_report(df, "test_source")
-
-        print(report_text)
-
-        return quality_report
-
-    except Exception as e:
-        print(f"❌ Quality monitoring failed: {e}")
+        print(f"❌ Liquidation fallback failed: {e}")
         return None
 
 def main():
     """Main test function."""
-    print("🧪 **TradPal Enhanced Data Quality Test**")
+    print("🧪 **TradPal Volatility as Liquidation Proxy Test**")
     print("=" * 60)
 
-    # Test fallback system
-    df = test_fallback_system()
+    # Test volatility data source
+    volatility_data = test_volatility_data_source()
 
-    # Test indicator validation
-    indicators = test_indicator_validation(df)
-
-    # Test quality monitoring
-    quality_report = test_quality_monitoring(df)
+    # Test liquidation fallback
+    liquidation_data = test_liquidation_fallback()
 
     # Summary
     print("\n📋 **Test Summary**")
     print("=" * 30)
 
     success_count = 0
-    total_tests = 3
+    total_tests = 2
 
-    if df is not None and not df.empty:
+    if volatility_data is not None and not volatility_data.empty:
         success_count += 1
-        print("✅ Fallback System: PASSED")
+        print("✅ Volatility Data Source: PASSED")
     else:
-        print("❌ Fallback System: FAILED")
+        print("❌ Volatility Data Source: FAILED")
 
-    if indicators and len(indicators) >= 3:
+    if liquidation_data is not None and not liquidation_data.empty:
         success_count += 1
-        print("✅ Indicator Validation: PASSED")
+        print("✅ Liquidation Fallback: PASSED")
     else:
-        print("❌ Indicator Validation: FAILED")
-
-    if quality_report and quality_report.get('quality_score', 0) > 70:
-        success_count += 1
-        print("✅ Quality Monitoring: PASSED")
-    else:
-        print("❌ Quality Monitoring: FAILED")
+        print("❌ Liquidation Fallback: FAILED")
 
     print(f"\n🎯 **Overall Result: {success_count}/{total_tests} tests passed**")
 
     if success_count == total_tests:
-        print("🎉 All enhanced data quality features are working correctly!")
+        print("🎉 Volatility indicators successfully implemented as liquidation proxy!")
     else:
         print("⚠️  Some features need attention")
 

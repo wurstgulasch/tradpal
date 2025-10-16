@@ -1,196 +1,257 @@
 # TradPal - AI Trading System
 
-TradPal ist ein vollautonomes AI Trading System basierend auf einer vollständigen Microservices-Architektur. Ziel ist die konsistente Outperformance von Buy&Hold und traditionellen Indikatoren durch fortschrittliche ML-Modelle, Ensemble-Methoden und Risikomanagement.
+TradPal is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
-## 🏗️ Projektstruktur
+## 🏗️ Project Structure
 
 ```
 tradpal_indicator/
-├── services/                    # Microservices-Architektur
-│   ├── core/                    # Kernberechnungen & Memory-Optimierung
-│   ├── data_service/            # Daten-Management (CCXT, Kaggle, Yahoo Finance, Caching, HDF5)
-│   │   └── data_sources/        # Modulare Datenquellen (Kaggle Bitcoin Datasets, Exchanges)
-│   ├── trading_bot_live/        # Live-Trading-Engine mit AI-Modellen
-│   ├── backtesting_service/     # Historische Simulation
-│   ├── discovery_service/       # ML-Parameter-Optimierung
-│   ├── risk_service/            # Risikomanagement & Position-Sizing
+├── services/                    # Microservices Architecture
+│   ├── core/                    # Core calculations & Memory optimization
+│   ├── data_service/            # Data Management (CCXT, Kaggle, Yahoo Finance, Caching, HDF5)
+│   │   └── data_sources/        # Modular data sources (Kaggle Bitcoin Datasets, Exchanges)
+│   │       ├── liquidation.py   # Liquidation data with fallback chain
+│   │       ├── volatility.py    # Volatility indicators as liquidation proxy
+│   │       ├── sentiment.py     # Sentiment analysis data source
+│   │       ├── onchain.py       # On-chain metrics data source
+│   │       └── factory.py       # Data source factory with 8+ sources
+│   ├── trading_bot_live/        # Live-Trading-Engine with AI models
+│   ├── backtesting_service/     # Historical simulation
+│   ├── discovery_service/       # ML parameter optimization
+│   ├── risk_service/            # Risk management & position sizing
 │   ├── notification_service/    # Alerts (Telegram, Discord, Email)
-│   ├── mlops_service/           # ML-Experiment-Tracking
-│   ├── security_service/        # Zero-Trust-Authentifizierung
-│   └── web_ui/                  # Streamlit/Plotly Dashboard
-├── config/                      # Zentrale Konfiguration
-│   ├── settings.py              # Hauptkonfiguration
-│   ├── .env                     # Environment-Variablen
-│   ├── .env.example             # Beispiel-Konfiguration
-│   ├── .env.light               # Light-Profil (ohne KI/ML)
-│   └── .env.heavy               # Heavy-Profil (volle Features)
-├── data/                        # Daten-Verzeichnisse
-│   ├── cache/                   # Cache-Dateien
-│   ├── logs/                    # Log-Dateien
-│   └── output/                  # Ausgabe-Dateien (Backtests, Reports)
-├── infrastructure/              # Infrastruktur & Deployment
-│   ├── deployment/              # AWS, Kubernetes Konfigurationen
-│   └── monitoring/              # Prometheus, Grafana Setups
-├── tests/                       # Test-Suite (nach Best-Practices organisiert)
-│   ├── unit/                    # Unit-Tests
-│   ├── integration/             # Integration-Tests
-│   └── services/                # Service-spezifische Tests
-├── scripts/                     # Utility-Scripts für Training/Demos
-├── examples/                    # Jupyter-Notebooks und Demos
-├── integrations/                # Externe Integrationen
-├── docs/                        # Dokumentation
-├── main.py                      # Hybrid-Orchestrator mit Service-Clients
-└── pyproject.toml               # Python-Projekt-Konfiguration
+│   ├── mlops_service/           # ML experiment tracking
+│   ├── security_service/        # Zero-trust authentication
+│   └── web_ui/                  # Streamlit/Plotly dashboard
+├── config/                      # Central configuration
+│   ├── settings.py              # Main configuration
+│   ├── .env                     # Environment variables
+│   ├── .env.example             # Example configuration
+│   ├── .env.light               # Light profile (without AI/ML)
+│   └── .env.heavy               # Heavy profile (full features)
+├── data/                        # Data directories
+│   ├── cache/                   # Cache files
+│   ├── logs/                    # Log files
+│   └── output/                  # Output files (backtests, reports)
+├── infrastructure/              # Infrastructure & deployment
+│   ├── deployment/              # AWS, Kubernetes configurations
+│   └── monitoring/              # Prometheus, Grafana setups
+├── tests/                       # Test suite (organized by best practices)
+│   ├── unit/                    # Unit tests
+│   ├── integration/             # Integration tests
+│   └── services/                # Service-specific tests
+├── scripts/                     # Utility scripts for training/demos
+├── examples/                    # Jupyter notebooks and demos
+├── integrations/                # External integrations
+├── docs/                        # Documentation
+├── main.py                      # Hybrid orchestrator with service clients
+└── pyproject.toml               # Python project configuration
 ```
 
-## 🚀 Schnellstart
+## 🚀 Quick Start for Developers
 
-### Voraussetzungen
+### New Docker-based Development Environment (Recommended)
+```bash
+# One-time setup
+make setup
+
+# Start services
+make dev-up
+
+# Open Web UI (optional)
+make dev-ui
+```
+
+**Available Services:**
+- 📊 Data Service: http://localhost:8001
+- 📈 Backtesting Service: http://localhost:8002
+- 🎨 Web UI: http://localhost:8501
+
+**Useful Commands:**
+```bash
+make test          # Run tests
+make backtest      # Run backtest
+make quality-check # Check code quality
+make help          # Show all commands
+```
+
+📖 **[Detailed Guide](DEVELOPMENT.md)**
+
+### Traditional Setup
+
+### Prerequisites
 - Python 3.10+
-- Conda/Minconda
+- Conda/Miniconda
 - Git
 
 ### Installation
 
-1. **Repository klonen:**
+1. **Clone repository:**
    ```bash
    git clone https://github.com/wurstgulasch/tradpal.git
    cd tradpal_indicator
    ```
 
-2. **Environment einrichten:**
+2. **Set up environment:**
    ```bash
    conda env create -f environment.yml
    conda activate tradpal-env
    ```
 
-3. **Konfiguration:**
+3. **Configuration:**
    ```bash
    cp config/.env.example config/.env
-   # .env Datei anpassen
+   # Edit .env file
    ```
 
-4. **Tests ausführen:**
+4. **Run tests:**
    ```bash
    pytest tests/
    ```
 
-### Verwendung
+### Usage
 
 ```bash
-# Live-Trading mit Light-Profil (ohne KI)
+# Live trading with light profile (without AI)
 python main.py --profile light --mode live
 
-# Backtest mit allen Features
+# Backtest with all features
 python main.py --profile heavy --mode backtest --start-date 2024-01-01
 
-# Performance-Benchmark
+# Performance benchmark
 python scripts/performance_benchmark.py
 ```
 
-## 🧪 Test-Organisation
+## 🧪 Test Organization
 
-Die Test-Suite folgt Best-Practices für Microservices:
+The test suite follows best practices for microservices:
 
-- **Unit-Tests** (`tests/unit/`): Isolierte Komponenten-Tests
-- **Integration-Tests** (`tests/integration/`): Service-Interaktionen
-- **Service-Tests** (`tests/services/`): Service-spezifische Tests
+- **Unit Tests** (`tests/unit/`): Isolated component tests
+- **Integration Tests** (`tests/integration/`): Service interactions
+- **Service Tests** (`tests/services/`): Service-specific tests
 
 ```bash
-# Alle Tests
+# All tests
 pytest
 
-# Nur Unit-Tests
+# Unit tests only
 pytest tests/unit/
 
-# Service-spezifische Tests
+# Service-specific tests
 pytest tests/services/core/
 ```
 
 ## 📊 Performance & Benchmarks
 
-Aktuelle Benchmarks zeigen signifikante Verbesserungen:
+Current benchmarks show significant improvements:
 
-- **Memory-Optimierung**: 10.25x schneller als traditionelle Methoden
-- **Memory-Verbrauch**: Konstant niedrig (~85 MB) unabhängig von Datengröße
-- **Test-Coverage**: >90% für alle Services
-- **Datenquellen**: Modulare Architektur mit Kaggle Bitcoin Datasets für verbessertes Backtesting
+- **Memory Optimization**: 10.25x faster than traditional methods
+- **Memory Usage**: Constantly low (~85 MB) regardless of data size
+- **Test Coverage**: >90% for all services
+- **Data Sources**: Modular architecture with Kaggle Bitcoin Datasets for improved backtesting
 
-Detaillierte Benchmarks: [PERFORMANCE_PROFILES.md](PERFORMANCE_PROFILES.md)
+Detailed benchmarks: [PERFORMANCE_PROFILES.md](PERFORMANCE_PROFILES.md)
 
-## 🔌 Datenquellen-Features
+## 🔌 Data Sources Features
 
-TradPal bietet eine modulare Datenquellen-Architektur für optimale Backtesting-Ergebnisse:
+TradPal offers a modular data sources architecture for optimal backtesting results:
 
-### Verfügbare Datenquellen
-- **Kaggle Bitcoin Datasets**: Hochwertige historische Bitcoin-Daten mit Minuten-Auflösung
-- **Yahoo Finance**: Aktien, ETFs und Kryptowährungen
-- **CCXT Integration**: 100+ Krypto-Börsen für Live-Daten
+### Available Data Sources
+- **Kaggle Bitcoin Datasets**: High-quality historical Bitcoin data with minute resolution
+- **Yahoo Finance**: Stocks, ETFs and cryptocurrencies
+- **CCXT Integration**: 100+ crypto exchanges for live data
+- **Alternative Data Sources**: Sentiment analysis, on-chain metrics, volatility indicators
 
-### Automatische Datenquellen-Auswahl
+### Advanced Fallback System
+When primary liquidation data is unavailable (API authentication issues), the system automatically falls back to alternative data sources:
+
 ```python
 from services.data_service.data_sources.factory import DataSourceFactory
 
-# Automatische Auswahl der besten verfügbaren Quelle (Kaggle als Priorität)
-source = DataSourceFactory.create_data_source()
-data = source.fetch_historical_data('BTC/USDT', '1d', start_date, end_date)
+# Automatic fallback chain: Liquidation → Volatility → Sentiment → On-Chain → Open Interest
+liquidation_source = DataSourceFactory.create_data_source('liquidation')
+data = liquidation_source.fetch_recent_data('BTC/USDT', '1h', limit=100)
+
+# Data will contain either real liquidation data or proxy data from alternative sources
+# with 'data_source' field indicating which fallback was used
 ```
 
-### Datenqualität & Validierung
-- Automatische OHLC-Validierung
-- NaN-Wert-Behandlung
-- Konsistente Datenformate
-- Chunked Processing für große Datasets
+### Alternative Data Sources
 
-## 🏛️ Architektur-Prinzipien
+#### Sentiment Analysis (`sentiment.py`)
+- **Fear & Greed Index**: Real-time market sentiment from Alternative.me
+- **Social Sentiment**: Simulated social media sentiment analysis
+- **News Sentiment**: Market news sentiment indicators
+- **Market Sentiment**: Overall market psychology proxy
 
-- **Microservices-First**: Jede neue Funktionalität als separater Service
-- **Event-Driven**: Apache Kafka/Redis Streams für Service-Kommunikation
-- **Zero-Trust-Security**: mTLS, OAuth/JWT, Secrets-Management
-- **Observability**: Distributed Tracing, Metrics, Logs
-- **Resilience**: Circuit Breaker, Retry-Patterns, Chaos Engineering
+#### On-Chain Metrics (`onchain.py`)
+- **Active Addresses**: Daily active blockchain addresses
+- **Transaction Volume**: On-chain transaction volumes
+- **Hash Rate**: Network mining difficulty proxy
+- **Exchange Flows**: Net capital flows to/from exchanges
 
-## 🔧 Entwicklung
+#### Volatility Indicators (`volatility.py`)
+- **Open Interest**: Futures market positioning
+- **24h Volume**: Trading volume analysis
+- **Funding Rates**: Perpetual futures funding rates
+- **Order Book**: Market depth and bid-ask spreads
+- **Recent Trades**: Trade flow analysis and momentum
 
-### Neue Features hinzufügen
-1. Service in `services/` erstellen
-2. Tests in `tests/services/` hinzufügen
-3. Dokumentation aktualisieren
-4. CI/CD Pipeline erweitern
+### Data Quality & Validation
+- Automatic OHLC validation
+- NaN value handling
+- Consistent data formats
+- Chunked processing for large datasets
 
-### Code-Qualität
-- **Type-Safety**: Vollständige Type-Hints
-- **Testing**: >90% Coverage, Integrationstests
+## 🏛️ Architecture Principles
+
+- **Microservices-First**: Every new functionality as a separate service
+- **Event-Driven**: Apache Kafka/Redis Streams for service communication
+- **Zero-Trust-Security**: mTLS, OAuth/JWT, secrets management
+- **Observability**: Distributed tracing, metrics, logs
+- **Resilience**: Circuit breaker, retry patterns, chaos engineering
+
+## 🔧 Development
+
+### Adding New Features
+1. Create service in `services/`
+2. Add tests in `tests/services/`
+3. Update documentation
+4. Extend CI/CD pipeline
+
+### Code Quality
+- **Type Safety**: Complete type hints
+- **Testing**: >90% coverage, integration tests
 - **Linting**: flake8, mypy
 - **Formatting**: black, isort
 
 ## 📈 Roadmap 2025
 
-1. **AI-Outperformance**: ML-Modelle die konsistent Benchmarks übertreffen
-2. **Service-Optimierung**: Performance, Skalierbarkeit, Reliability
-3. **Advanced Features**: Reinforcement Learning, Market Regime Detection, Alternative Data
-4. **Datenquellen-Erweiterung**: Zusätzliche Datasets und Echtzeit-Feeds für verbessertes Backtesting
-5. **Enterprise-Readiness**: Security, Monitoring, Deployment-Automatisierung
+1. **AI Outperformance**: ML models that consistently outperform benchmarks
+2. **Service Optimization**: Performance, scalability, reliability
+3. **Advanced Features**: Reinforcement learning, market regime detection, alternative data
+4. **Data Sources Expansion**: Additional datasets and real-time feeds for improved backtesting
+5. **Enterprise Readiness**: Security, monitoring, deployment automation
 
-## 🤝 Beitragen
+## 🤝 Contributing
 
-1. Fork das Repository
-2. Feature-Branch erstellen (`git checkout -b feature/AmazingFeature`)
-3. Tests schreiben
-4. Commit machen (`git commit -m 'Add some AmazingFeature'`)
-5. Pushen (`git push origin feature/AmazingFeature`)
-6. Pull Request erstellen
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Write tests
+4. Commit changes (`git commit -m 'Add some AmazingFeature'`)
+5. Push to branch (`git push origin feature/AmazingFeature`)
+6. Create Pull Request
 
-## 📄 Lizenz
+## 📄 License
 
-Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) Datei für Details.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/wurstgulasch/tradpal/issues)
-- **Dokumentation**: [docs/](docs/)
-- **Beispiele**: [examples/](examples/)
+- **Documentation**: [docs/](docs/)
+- **Examples**: [examples/](examples/)
 
 ---
 
-**TradPal v3.0.0** - *Letzte Aktualisierung: Oktober 2025*
+**TradPal v3.0.0** - *Last updated: October 2025*

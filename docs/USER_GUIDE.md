@@ -1,54 +1,54 @@
 # TradPal Indicator - Community Wiki
 
-Willkommen bei der TradPal Community! Dieses Wiki enthält umfassende Dokumentation, Tutorials und Best Practices für das Trading-Indikator-System.
+Welcome to the TradPal Community! This wiki contains comprehensive documentation, tutorials, and best practices for the trading indicator system.
 
-## 🚀 Schnellstart
+## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-# Mit pip
+# With pip
 pip install tradpal-indicator
 
-# Mit conda (empfohlen)
+# With conda (recommended)
 conda env create -f environment.yml
-conda activate tradpal_env
+conda activate tradpal-env
 pip install -r requirements.txt
 ```
 
-### Erste Schritte
+### Getting Started
 
 ```python
 from tradpal_indicator import TradPal
 
-# Initialisiere mit Standardeinstellungen
+# Initialize with default settings
 tp = TradPal()
 
-# Führe Backtest aus
+# Run backtest
 results = tp.run_backtest('BTC/USDT', '1d', '2024-01-01', '2024-12-31')
 print(f"P&L: {results['total_pnl']}%")
 ```
 
-## 📚 Inhaltsverzeichnis
+## 📚 Table of Contents
 
-### Benutzerhandbuch
-- [Installation und Setup](wiki/setup.md)
-- [Konfiguration](wiki/configuration.md)
+### User Manual
+- [Installation and Setup](wiki/setup.md)
+- [Configuration](wiki/configuration.md)
 - [Backtesting](wiki/backtesting.md)
 - [Live Trading](wiki/live-trading.md)
-- [Web-UI](wiki/web-ui.md)
+- [Web UI](wiki/web-ui.md)
 
-### Entwicklerhandbuch
-- [Architektur](wiki/architecture.md)
-- [API Referenz](wiki/api-reference.md)
-- [Erweiterungen entwickeln](wiki/extensions.md)
+### Developer Manual
+- [Architecture](wiki/architecture.md)
+- [API Reference](wiki/api-reference.md)
+- [Developing Extensions](wiki/extensions.md)
 - [Testing](wiki/testing.md)
 
-### Fortgeschrittene Themen
+### Advanced Topics
 - [Machine Learning Integration](wiki/ml-integration.md)
 - [Genetic Algorithms](wiki/genetic-algorithms.md)
 - [Walk-Forward Analysis](wiki/walk-forward.md)
-- [Performance Optimierung](wiki/performance.md)
+- [Performance Optimization](wiki/performance.md)
 
 ### Deployment
 - [Docker](wiki/docker.md)
@@ -60,35 +60,34 @@ print(f"P&L: {results['total_pnl']}%")
 - [Code of Conduct](wiki/code-of-conduct.md)
 - [Support](wiki/support.md)
 
-## 🆘 Hilfe bekommen
+## 🆘 Getting Help
 
 ### Issues
-- [Bug Reports](https://github.com/your-org/tradpal-indicator/issues/new?template=bug_report.md)
-- [Feature Requests](https://github.com/your-org/tradpal-indicator/issues/new?template=feature_request.md)
-- [Questions](https://github.com/your-org/tradpal-indicator/issues/new?template=question.md)
+- [Bug Reports](https://github.com/wurstgulasch/tradpal/issues/new?template=bug_report.md)
+- [Feature Requests](https://github.com/wurstgulasch/tradpal/issues/new?template=feature_request.md)
+- [Questions](https://github.com/wurstgulasch/tradpal/issues/new?template=question.md)
 
-### Diskussionen
-- [GitHub Discussions](https://github.com/your-org/tradpal-indicator/discussions)
+### Discussions
+- [GitHub Discussions](https://github.com/wurstgulasch/tradpal/discussions)
 - [Discord Community](https://discord.gg/tradpal)
 
-## 📈 Beliebte Inhalte
+## 📈 Popular Content
 
 ### Tutorials
-- [BTC/USDT Strategie entwickeln](wiki/tutorials/btc-usdt-strategy.md)
-- [ML-Modell trainieren](wiki/tutorials/ml-training.md)
+- [Developing BTC/USDT Strategy](wiki/tutorials/btc-usdt-strategy.md)
+- [Training ML Model](wiki/tutorials/ml-training.md)
 - [Walk-Forward Validation](wiki/tutorials/walk-forward-validation.md)
 
-### Beispiele
-- [Backtest Skripte](examples/)
+### Examples
+- [Backtest Scripts](examples/)
 - [Jupyter Notebooks](examples/)
-- [Konfigurationen](config/)
+- [Configurations](config/)
 
-## 🔄 Letzte Aktualisierungen
+## 🔄 Recent Updates
 
-- **v2.5.1**: Adaptive Optimierung, Ensemble-Methoden, Walk-Forward-Analyse
-- **v3.0.0**: Automatisierte Deployment-Pipelines, erweiterte Community-Features
+- **v3.0.0**: Alternative data sources (Sentiment, On-Chain Metrics), enhanced fallback system, comprehensive testing
 
-## 📞 Kontakt
+## 📞 Contact
 
 - **Email**: support@tradpal-indicator.com
 - **Twitter**: [@tradpal_indicator](https://twitter.com/tradpal_indicator)
@@ -96,4 +95,4 @@ print(f"P&L: {results['total_pnl']}%")
 
 ---
 
-*Dieses Wiki wird von der Community gepflegt. [Beitragen](wiki/contributing.md)?*
+*This wiki is maintained by the community. [Contribute](wiki/contributing.md)?*

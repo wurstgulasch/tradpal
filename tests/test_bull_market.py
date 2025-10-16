@@ -7,6 +7,7 @@ Tests the backtesting system with a simulated bull market (2020-2021 Bitcoin ral
 import asyncio
 import sys
 import os
+import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.backtesting_service.service import AsyncBacktester
@@ -91,6 +92,7 @@ async def create_bull_market_data():
 
     return df
 
+@pytest.mark.asyncio
 async def test_bull_market_strategy():
     """Test strategy in bull market conditions."""
     print("🚀 Testing bull market strategy...")
