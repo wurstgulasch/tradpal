@@ -22,15 +22,24 @@ class WalkForwardOptimizer:
     """Walk-forward optimization for trading strategies."""
 
     def __init__(self,
-                 data: pd.DataFrame,
+                 symbol: str = SYMBOL,
+                 timeframe: str = TIMEFRAME,
+                 data: Optional[pd.DataFrame] = None,
                  window_size: int = 252,  # Trading days
                  step_size: int = 21,     # 1 month
                  min_samples: int = 100):
+        self.symbol = symbol
+        self.timeframe = timeframe
         self.data = data
         self.window_size = window_size
         self.step_size = step_size
         self.min_samples = min_samples
         self.optimization_results = []
+
+        # Bias-variance thresholds
+        self.bias_threshold = 0.1
+        self.variance_threshold = 0.15
+        self.max_bias_variance_ratio = 2.0
 
     def optimize_parameters(self,
                           parameter_ranges: Dict[str, Tuple[float, float]],
@@ -155,6 +164,58 @@ class WalkForwardOptimizer:
         except Exception as e:
             logger.error(f"Parameter validation failed: {e}")
             return {'error': str(e)}
+
+    def _calculate_bias_variance(self, in_sample: List[float], out_of_sample: List[float]) -> Dict[str, Any]:
+        """Calculate bias-variance decomposition."""
+        if len(in_sample) == 0 or len(out_of_sample) == 0:
+            return {
+                "bias": 0.0,
+                "variance": 0.0,
+                "total_error": 0.0,
+                "bias_variance_ratio": 0.0,
+                "interpretation": "Insufficient data"
+            }
+
+        # Convert to numpy arrays
+        in_sample = np.array(in_sample)
+        out_of_sample = np.array(out_of_sample)
+
+        # Calculate means
+        in_sample_mean = np.mean(in_sample)
+        out_of_sample_mean = np.mean(out_of_sample)
+
+        # Calculate bias (difference between in-sample and out-of-sample performance)
+        bias = abs(in_sample_mean - out_of_sample_mean)
+
+        # Calculate variance (variability in out-of-sample performance)
+        variance = np.var(out_of_sample)
+
+        # Total error
+        total_error = bias + variance
+
+        # Bias-variance ratio
+        bias_variance_ratio = bias / variance if variance > 0 else float('inf')
+
+        # Interpretation
+        if bias < self.bias_threshold and variance < self.variance_threshold:
+            interpretation = "Well-balanced model"
+        elif bias > self.bias_threshold and variance < self.variance_threshold:
+            interpretation = "High bias (underfitting)"
+        elif bias < self.bias_threshold and variance > self.variance_threshold:
+            interpretation = "High variance (overfitting)"
+        else:
+            interpretation = "Poor balance (high bias and variance)"
+
+        if bias_variance_ratio > self.max_bias_variance_ratio:
+            interpretation += " - Consider regularization"
+
+        return {
+            "bias": float(bias),
+            "variance": float(variance),
+            "total_error": float(total_error),
+            "bias_variance_ratio": float(bias_variance_ratio),
+            "interpretation": interpretation
+        }
 
 
 def run_walk_forward_optimization(data: pd.DataFrame,

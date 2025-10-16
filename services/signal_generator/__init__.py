@@ -28,8 +28,9 @@ def generate_traditional_signals(data: pd.DataFrame) -> pd.DataFrame:
     df['EMA_long'] = ema(df['close'], EMA_LONG)
     df['RSI'] = rsi(df['close'], RSI_PERIOD)
     bb_result = bb(df['close'], BB_PERIOD, BB_STD_DEV)
-    df['BB_upper'] = bb_result['upper']
-    df['BB_lower'] = bb_result['lower']
+    df['BB_upper'] = bb_result[0]  # upper band
+    df['BB_middle'] = bb_result[1]  # middle band (SMA)
+    df['BB_lower'] = bb_result[2]  # lower band
     df['ATR'] = atr(df['high'], df['low'], df['close'], ATR_PERIOD)
 
     # Generate signals
@@ -90,3 +91,8 @@ def combine_signals(data: pd.DataFrame,
         df = apply_funding_rate_signal_enhancement(df)
 
     return df
+
+
+def generate_signals(data: pd.DataFrame, use_ml: bool = True) -> pd.DataFrame:
+    """Generate trading signals (alias for combine_signals for backward compatibility)."""
+    return combine_signals(data, use_ml=use_ml)

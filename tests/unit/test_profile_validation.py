@@ -10,11 +10,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add services to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'services'))
 
 # Import main module functions
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from main import validate_profile_config, load_profile
 
 

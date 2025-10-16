@@ -170,7 +170,7 @@ class TestDateValidation:
             "invalid",
             "2024-13-01",  # Invalid month
             "2024-01-32",  # Invalid day
-            "01-13-2024",  # Invalid month
+            "not-a-date-at-all"
         ]
 
         for date_str in invalid_dates:

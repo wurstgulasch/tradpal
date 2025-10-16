@@ -95,6 +95,25 @@ class MLPredictor:
             (enhanced_data.get('ml_sell_signal', 0) == 1)
         ).astype(int)
 
+        # Add Signal_Source column to indicate signal origin
+        def determine_signal_source(row):
+            traditional_buy = row.get('Buy_Signal', 0) == 1
+            traditional_sell = row.get('Sell_Signal', 0) == 1
+            ml_buy = row.get('ml_buy_signal', 0) == 1
+            ml_sell = row.get('ml_sell_signal', 0) == 1
+
+            has_traditional = traditional_buy or traditional_sell
+            has_ml = ml_buy or ml_sell
+
+            if has_traditional and has_ml:
+                return 'COMBINED'
+            elif has_ml:
+                return 'ML'
+            else:
+                return 'TRADITIONAL'
+
+        enhanced_data['Signal_Source'] = enhanced_data.apply(determine_signal_source, axis=1)
+
         return enhanced_data
 
 
@@ -108,6 +127,18 @@ def get_ml_predictor() -> Optional[MLPredictor]:
     return predictor
 
 
+def get_lstm_predictor() -> Optional[MLPredictor]:
+    """Get LSTM predictor instance (placeholder for future LSTM implementation)."""
+    # LSTM implementation would go here
+    # For now, return None to indicate LSTM is not available
+    return None
+
+
+def is_lstm_available() -> bool:
+    """Check if LSTM functionality is available."""
+    return False  # LSTM not yet implemented
+
+
 def is_ml_available() -> bool:
     """Check if ML functionality is available."""
-    return ML_ENABLED and get_ml_predictor() is not None
+    return ML_ENABLED

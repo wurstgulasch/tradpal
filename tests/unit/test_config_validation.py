@@ -53,6 +53,8 @@ class TestConfiguration:
             assert callable(is_ml_available)
             assert callable(get_ml_predictor)
             assert hasattr(audit_logger, 'log_system_event')
+            assert hasattr(audit_logger, 'log_signal')
+            assert hasattr(audit_logger, 'log_trade')
         except ImportError as e:
             pytest.fail(f"Import failed: {e}")
 
@@ -66,6 +68,6 @@ class TestConfiguration:
         """Test that audit logger is available."""
         from services.audit_logger import audit_logger
         assert hasattr(audit_logger, 'log_system_event')
-        assert hasattr(audit_logger, 'log_signal_decision')
-        assert hasattr(audit_logger, 'log_trade_execution')
+        assert hasattr(audit_logger, 'log_signal')
+        assert hasattr(audit_logger, 'log_trade')
         assert hasattr(audit_logger, 'log_risk_assessment')

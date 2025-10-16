@@ -10,7 +10,13 @@ Tests the SHAP explainability functionality for PyTorch models including:
 
 import pytest
 import numpy as np
+import sys
+import os
 from unittest.mock import Mock, patch, MagicMock
+
+# Add services to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'services'))
+
 from services.shap_explainer import (
     PyTorchSHAPExplainer,
     SHAPManager
@@ -25,8 +31,8 @@ class TestPyTorchSHAPExplainer:
         self.cache_manager = Mock()
         # Don't create explainer here - create in individual tests with proper patches
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_initialization(self):
         """Test SHAP explainer initialization."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -34,9 +40,9 @@ class TestPyTorchSHAPExplainer:
         assert explainer.model is None
         assert explainer.explainer is None
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
-    @patch('src.shap_explainer.shap.DeepExplainer')
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.shap.DeepExplainer')
     def test_initialize_explainer_success(self, mock_shap_explainer):
         """Test successful explainer initialization."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -64,23 +70,23 @@ class TestPyTorchSHAPExplainer:
         assert explainer.model == mock_model
         assert explainer.feature_names == feature_names
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', False)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', False)
     def test_shap_not_available(self):
         """Test behavior when SHAP is not available."""
         with pytest.raises(ImportError):
             PyTorchSHAPExplainer()
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', False)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', False)
     def test_pytorch_not_available(self):
         """Test behavior when PyTorch is not available."""
         with pytest.raises(ImportError):
             PyTorchSHAPExplainer()
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
-    @patch('src.shap_explainer.torch')
-    @patch('src.shap_explainer.shap')
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.torch')
+    @patch('services.shap_explainer.shap')
     def test_explain_prediction(self, mock_shap, mock_torch):
         """Test prediction explanation."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -112,8 +118,8 @@ class TestPyTorchSHAPExplainer:
         assert 'feature_names' in explanation
         assert 'expected_value' in explanation
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_explain_feature_importance(self):
         """Test feature importance calculation."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -139,8 +145,8 @@ class TestPyTorchSHAPExplainer:
             assert 'samples_used' in importance
             assert len(importance['feature_importance']) == 5
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_explain_trading_signal(self):
         """Test trading signal explanation."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -167,8 +173,8 @@ class TestPyTorchSHAPExplainer:
             assert 'top_negative_features' in signal_exp
             assert signal_exp['signal_type'] == "BUY"
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_not_initialized_error(self):
         """Test error when explainer not initialized."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -179,8 +185,8 @@ class TestPyTorchSHAPExplainer:
         with pytest.raises(ValueError):
             explainer.explain_feature_importance(np.random.randn(10, 5))
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_cache_functionality(self):
         """Test explanation caching."""
         explainer = PyTorchSHAPExplainer(cache_manager=self.cache_manager)
@@ -212,15 +218,15 @@ class TestSHAPManager:
         self.cache_manager = Mock()
         self.manager = SHAPManager(cache_manager=self.cache_manager)
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_manager_initialization(self):
         """Test SHAP manager initialization."""
         assert self.manager.explainers == {}
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
-    @patch('src.shap_explainer.PyTorchSHAPExplainer')
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.PyTorchSHAPExplainer')
     def test_register_model(self, mock_explainer_class):
         """Test model registration."""
         manager = SHAPManager(cache_manager=self.cache_manager)
@@ -245,8 +251,8 @@ class TestSHAPManager:
         assert "test_model" in manager.explainers
         mock_explainer.initialize_explainer.assert_called_once()
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_explain_model_prediction(self):
         """Test model prediction explanation through manager."""
         manager = SHAPManager(cache_manager=self.cache_manager)
@@ -293,8 +299,8 @@ class TestSHAPIntegration:
         """Set up test fixtures."""
         self.cache_manager = Mock()
 
-    @patch('src.shap_explainer.SHAP_AVAILABLE', True)
-    @patch('src.shap_explainer.PYTORCH_AVAILABLE', True)
+    @patch('services.shap_explainer.SHAP_AVAILABLE', True)
+    @patch('services.shap_explainer.PYTORCH_AVAILABLE', True)
     def test_complete_workflow(self):
         """Test complete SHAP workflow."""
         # This would be an integration test with actual model

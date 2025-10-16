@@ -19,6 +19,72 @@ from services.signal_generator import generate_traditional_signals
 logger = logging.getLogger(__name__)
 
 
+class Backtester:
+    """Backtester class for running trading strategy backtests."""
+
+    def __init__(self, symbol: str = SYMBOL, exchange: str = 'kraken',
+                 timeframe: str = TIMEFRAME, start_date: str = None,
+                 end_date: str = None):
+        self.symbol = symbol
+        self.exchange = exchange
+        self.timeframe = timeframe
+        self.start_date = start_date
+        self.end_date = end_date
+
+    def run_backtest(self, df: pd.DataFrame, strategy: str = 'traditional') -> Dict[str, Any]:
+        """Run backtest with specified strategy."""
+        try:
+            # Generate signals based on strategy
+            if strategy == 'traditional':
+                signal_data = generate_traditional_signals(df)
+            elif strategy == 'lstm_enhanced':
+                # LSTM enhancement would go here
+                # For now, fall back to traditional signals
+                signal_data = generate_traditional_signals(df)
+                # Add LSTM enhancement if available
+                try:
+                    from services.ml_predictor import get_lstm_predictor
+                    lstm_predictor = get_lstm_predictor()
+                    if lstm_predictor:
+                        signal_data = lstm_predictor.enhance_signals(signal_data)
+                except ImportError:
+                    pass  # LSTM not available, use traditional signals
+            elif strategy == 'ml_enhanced':
+                # ML enhancement
+                signal_data = generate_traditional_signals(df)
+                try:
+                    from services.ml_predictor import get_ml_predictor
+                    ml_predictor = get_ml_predictor()
+                    if ml_predictor:
+                        signal_data = ml_predictor.enhance_signals(signal_data)
+                except ImportError:
+                    pass  # ML not available, use traditional signals
+            else:
+                signal_data = df.copy()
+
+            # Simulate trades
+            trades = simulate_trades(signal_data, INITIAL_CAPITAL, RISK_PER_TRADE)
+
+            # Calculate performance metrics
+            metrics = calculate_performance_metrics(trades, INITIAL_CAPITAL)
+
+            return {
+                'success': True,
+                'trades': trades.to_dict('records') if not trades.empty else [],
+                'metrics': metrics,
+                'strategy': strategy,
+                'symbol': self.symbol,
+                'timeframe': self.timeframe
+            }
+        except Exception as e:
+            logger.error(f"Backtest failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'strategy': strategy
+            }
+
+
 def run_backtest(data: pd.DataFrame,
                 strategy: str = 'traditional',
                 initial_capital: float = INITIAL_CAPITAL,
@@ -62,19 +128,39 @@ def simulate_trades(data: pd.DataFrame,
                    initial_capital: float,
                    risk_per_trade: float) -> pd.DataFrame:
     """Simulate trades based on signals."""
+    if data.empty:
+        return pd.DataFrame()
+
     trades = []
     capital = initial_capital
     position = 0  # 0 = no position, 1 = long, -1 = short
 
-    for idx, row in data.iterrows():
-        try:
-            price = row['close']
+    try:
+        # Ensure we have required columns
+        required_cols = ['close']
+        if not all(col in data.columns for col in required_cols):
+            logger.error(f"Missing required columns: {required_cols}")
+            return pd.DataFrame()
+
+        for idx in data.index:
+            try:
+                row = data.loc[idx]
+                logger.debug(f"Row type: {type(row)}, idx: {idx}")
+                logger.debug(f"Row: {row}")
+            except Exception as e:
+                logger.error(f"Error accessing row at {idx}: {e}")
+                continue
+
+            price = float(row['close'])
 
             # Check for buy signal
-            if row.get('Buy_Signal', 0) == 1 and position == 0:
+            buy_signal = int(row.get('Buy_Signal', 0)) == 1
+            sell_signal = int(row.get('Sell_Signal', 0)) == 1
+
+            if buy_signal and position == 0:
                 # Calculate position size based on risk
                 risk_amount = capital * risk_per_trade
-                atr_value = row.get('ATR', price * 0.02)  # Default ATR if not available
+                atr_value = float(row.get('ATR', price * 0.02))  # Default ATR if not available
                 stop_loss_distance = atr_value * 2  # 2 ATR stop loss
                 position_size = risk_amount / stop_loss_distance
 
@@ -93,15 +179,15 @@ def simulate_trades(data: pd.DataFrame,
                         'take_profit': take_profit,
                         'exit_time': None,
                         'exit_price': None,
-                        'pnl': 0,
+                        'pnl': 0.0,
                         'status': 'open'
                     })
 
             # Check for sell signal
-            elif row.get('Sell_Signal', 0) == 1 and position == 0:
+            elif sell_signal and position == 0:
                 # Calculate position size based on risk
                 risk_amount = capital * risk_per_trade
-                atr_value = row.get('ATR', price * 0.02)
+                atr_value = float(row.get('ATR', price * 0.02))
                 stop_loss_distance = atr_value * 2
                 position_size = risk_amount / stop_loss_distance
 
@@ -120,7 +206,7 @@ def simulate_trades(data: pd.DataFrame,
                         'take_profit': take_profit,
                         'exit_time': None,
                         'exit_price': None,
-                        'pnl': 0,
+                        'pnl': 0.0,
                         'status': 'open'
                     })
 
@@ -167,9 +253,9 @@ def simulate_trades(data: pd.DataFrame,
                     current_trade['pnl'] = pnl
                     current_trade['status'] = 'closed'
 
-        except Exception as e:
-            logger.error(f"Error simulating trade at {idx}: {e}")
-            continue
+    except Exception as e:
+        logger.error(f"Error in simulate_trades: {e}")
+        return pd.DataFrame()
 
     return pd.DataFrame(trades)
 

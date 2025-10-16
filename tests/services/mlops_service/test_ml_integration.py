@@ -17,7 +17,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 # Try to import ML components
 try:
-    from signal_generator import apply_ml_signal_enhancement
+    from services.signal_generator import apply_ml_signal_enhancement
     from config.settings import SYMBOL, TIMEFRAME
     ML_AVAILABLE = True
 except ImportError:

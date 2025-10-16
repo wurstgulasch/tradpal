@@ -132,6 +132,73 @@ class EnsemblePredictor:
 
         return weights
 
+    def predict(self, ml_prediction: Dict[str, Any], ga_prediction: Dict[str, Any]) -> Dict[str, Any]:
+        """Make ensemble prediction from ML and GA predictions."""
+        # Simple voting mechanism
+        ml_signal = ml_prediction.get('signal', 'HOLD')
+        ga_signal = ga_prediction.get('signal', 'HOLD')
+        ml_confidence = ml_prediction.get('confidence', 0.5)
+        ga_confidence = ga_prediction.get('confidence', 0.5)
+
+        # Determine ensemble signal
+        if ml_signal == ga_signal:
+            signal = ml_signal
+            confidence = (ml_confidence + ga_confidence) / 2
+            method = "unanimous"
+        elif ml_confidence > ga_confidence:
+            signal = ml_signal
+            confidence = ml_confidence
+            method = "ml_dominant"
+        else:
+            signal = ga_signal
+            confidence = ga_confidence
+            method = "ga_dominant"
+
+        return {
+            'signal': signal,
+            'confidence': confidence,
+            'method': method
+        }
+
+    def update_performance(self, actual_return: float, ml_prediction: Dict[str, Any],
+                          ga_prediction: Dict[str, Any], ensemble_result: Dict[str, Any]):
+        """Update performance tracking."""
+        # Simple performance tracking (placeholder)
+        if not hasattr(self, 'performance_history'):
+            self.performance_history = []
+
+        self.performance_history.append({
+            'actual_return': actual_return,
+            'ml_prediction': ml_prediction,
+            'ga_prediction': ga_prediction,
+            'ensemble_result': ensemble_result,
+            'timestamp': pd.Timestamp.now()
+        })
+
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Get performance statistics."""
+        if not hasattr(self, 'performance_history') or not self.performance_history:
+            return {
+                'total_predictions': 0,
+                'accuracy': 0.0,
+                'avg_confidence': 0.0,
+                'current_weights': {'ml': 0.5, 'ga': 0.5}
+            }
+
+        total = len(self.performance_history)
+        correct = sum(1 for p in self.performance_history
+                     if (p['ensemble_result']['signal'] == 'BUY' and p['actual_return'] > 0) or
+                        (p['ensemble_result']['signal'] == 'SELL' and p['actual_return'] < 0))
+
+        avg_confidence = np.mean([p['ensemble_result']['confidence'] for p in self.performance_history])
+
+        return {
+            'total_predictions': total,
+            'accuracy': correct / total if total > 0 else 0.0,
+            'avg_confidence': float(avg_confidence),
+            'current_weights': {'ml': 0.5, 'ga': 0.5}  # Placeholder weights
+        }
+
 
 def create_ensemble_signal_generation(data: pd.DataFrame,
                                     feature_columns: List[str] = None) -> pd.DataFrame:
@@ -200,3 +267,17 @@ def run_ensemble_backtest(data: pd.DataFrame) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Ensemble backtest failed: {e}")
         return {'error': str(e)}
+
+
+def get_ensemble_predictor(symbol: str = "BTC/USD", timeframe: str = "1h") -> Optional[EnsemblePredictor]:
+    """Get ensemble predictor instance."""
+    if not ML_ENABLED:
+        return None
+
+    try:
+        predictor = EnsemblePredictor()
+        predictor.load_models()  # Try to load existing models
+        return predictor
+    except Exception as e:
+        logger.error(f"Failed to get ensemble predictor: {e}")
+        return None

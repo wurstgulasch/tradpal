@@ -559,7 +559,7 @@ async def main():
     return 0
 
 
-def load_profile(profile_name: str) -> None:
+def load_profile(profile_name: str) -> bool:
     """Load environment profile"""
     from dotenv import load_dotenv
 
@@ -573,12 +573,35 @@ def load_profile(profile_name: str) -> None:
         if os.path.exists(env_file):
             print(f"🔧 Loading profile: {profile_name} ({env_file})")
             load_dotenv(env_file)
+            return True
         else:
             print("⚠️  Profile not found, using default .env")
             load_dotenv()
+            return False
     else:
         print("⚠️  Unknown profile, using default .env")
         load_dotenv()
+        return False
+
+
+def validate_profile_config(profile_name: str) -> bool:
+    """Validate profile configuration against requirements"""
+    from config.settings import (
+        ML_ENABLED, ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
+        MONITORING_STACK_ENABLED, PERFORMANCE_MONITORING_ENABLED
+    )
+
+    if profile_name == 'light':
+        # Light profile requirements: minimal features
+        if ML_ENABLED or ADAPTIVE_OPTIMIZATION_ENABLED_LIVE or MONITORING_STACK_ENABLED or PERFORMANCE_MONITORING_ENABLED:
+            return False
+        return True
+    elif profile_name == 'heavy':
+        # Heavy profile: no restrictions, all features allowed
+        return True
+    else:
+        # Unknown profiles are allowed (no validation)
+        return True
 
 
 if __name__ == "__main__":

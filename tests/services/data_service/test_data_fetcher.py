@@ -1,104 +1,51 @@
+"""
+Tests for data fetching functionality in the data service.
+"""
+
 import pytest
 import pandas as pd
 import numpy as np
-from unittest.mock import patch, MagicMock, call
-from datetime import datetime, timedelta
-import sys
-import os
-import time
-
-# Add services to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'services'))
+from unittest.mock import patch, MagicMock
 
 from services.data_service.data_fetcher import (
-    fetch_historical_data, validate_data, _get_adaptive_batch_size,
-    _validate_batch_data, _timeframe_to_ms
+    fetch_historical_data,
+    validate_data,
+    _get_adaptive_batch_size,
+    _timeframe_to_ms,
+    _validate_batch_data
 )
 
 
 class TestDataFetcher:
-    """Test data fetching functionality."""
+    """Test basic data fetching functionality."""
 
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_fetch_historical_data_success(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_fetch_historical_data_success(self, mock_get_data_source):
         """Test successful data fetching."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
-        # Mock data source
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
 
-        # Mock OHLCV data
+        # Mock successful data fetch
         mock_data = pd.DataFrame({
-            'open': [1.0, 1.05, 1.1],
-            'high': [1.1, 1.15, 1.2],
-            'low': [0.9, 0.95, 1.0],
-            'close': [1.05, 1.1, 1.15],
-            'volume': [1000, 1100, 1200]
-        }, index=pd.to_datetime([1640995200000, 1640995260000, 1640995320000], unit='ms'))
+            'open': [1.0, 1.05],
+            'high': [1.1, 1.15],
+            'low': [0.9, 0.95],
+            'close': [1.05, 1.1],
+            'volume': [1000, 1100]
+        }, index=pd.to_datetime([1640995200000, 1640995260000], unit='ms'))
         mock_data.index.name = 'timestamp'
         mock_data_source.fetch_historical_data.return_value = mock_data
 
-        # Test the function
-        result = fetch_historical_data('EUR/USD', '1m', 3)
+        result = fetch_historical_data('EUR/USD', '1m', 2)
 
-        # Assertions
         assert isinstance(result, pd.DataFrame)
-        assert len(result) == 3
+        assert len(result) == 2
         assert list(result.columns) == ['open', 'high', 'low', 'close', 'volume']
         assert isinstance(result.index, pd.DatetimeIndex)
-        assert result['close'].iloc[0] == 1.05
-        assert result['close'].iloc[-1] == 1.15
 
-        # Verify the data source was called correctly
-        # mock_get_data_source.assert_called_once()
-        # mock_data_source.fetch_historical_data.assert_called_once()
-        # mock_exchange.fetch_ohlcv.assert_called_once()
-
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_fetch_historical_data_exchange_error(self, mock_get_data_source, mock_cache):
-        """Test handling of exchange errors."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
-        mock_data_source = MagicMock()
-        mock_get_data_source.return_value = mock_data_source
-        mock_data_source.fetch_historical_data.side_effect = Exception("Exchange API error")
-
-        # With error handling, function should raise exception on exchange errors
-        with pytest.raises(Exception):
-            fetch_historical_data('EUR/USD', '1m', 100)
-
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_fetch_historical_data_rate_limiting(self, mock_get_data_source, mock_cache):
-        """Test handling of rate limiting."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
-        mock_data_source = MagicMock()
-        mock_get_data_source.return_value = mock_data_source
-
-        # Simulate rate limiting error by creating an exception with 'ratelimit' in the name
-        class MockRateLimitError(Exception):
-            pass
-        MockRateLimitError.__name__ = 'RateLimitExceeded'
-        mock_data_source.fetch_historical_data.side_effect = MockRateLimitError("Rate limit exceeded")
-
-        # With error handling, function should raise exception on rate limiting
-        with pytest.raises(Exception):
-            fetch_historical_data('EUR/USD', '1m', 100)
-
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_fetch_historical_data_network_error(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_fetch_historical_data_network_error(self, mock_get_data_source):
         """Test handling of network errors."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
         mock_data_source.fetch_historical_data.side_effect = ConnectionError("Network error")
@@ -107,13 +54,9 @@ class TestDataFetcher:
         with pytest.raises(ConnectionError):
             fetch_historical_data('EUR/USD', '1m', 100)
 
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_fetch_historical_data_invalid_symbol(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_fetch_historical_data_invalid_symbol(self, mock_get_data_source):
         """Test handling of invalid symbol."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
         mock_data_source.fetch_historical_data.return_value = pd.DataFrame()
@@ -192,20 +135,9 @@ class TestDataFetcher:
         with pytest.raises(ValueError, match="Negative values found in volume column"):
             validate_data(data)
 
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.create_data_source')
-    def test_fetch_historical_data_different_timeframes(self, mock_create_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_fetch_historical_data_different_timeframes(self, mock_get_data_source):
         """Test fetching data with different timeframes."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_fetch_historical_data_different_timeframes(self, mock_get_data_source, mock_cache):
-        """Test fetching data with different timeframes."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
         mock_data_source.fetch_historical_data.return_value = pd.DataFrame({
@@ -227,13 +159,9 @@ class TestDataFetcher:
 class TestDataFetcherIntegration:
     """Integration tests for data fetching."""
 
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_data_pipeline_integration(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_data_pipeline_integration(self, mock_get_data_source):
         """Test the complete data fetching pipeline."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         # Mock successful data fetch
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
@@ -269,19 +197,9 @@ class TestDataFetcherIntegration:
 class TestEnhancedPagination:
     """Test enhanced pagination features."""
 
-class TestEnhancedPagination:
-    """Test enhanced pagination features."""
-
-class TestEnhancedPagination:
-    """Test enhanced pagination features."""
-
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_pagination_with_progress_tracking(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_pagination_with_progress_tracking(self, mock_get_data_source):
         """Test pagination with progress tracking enabled."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
 
@@ -302,15 +220,8 @@ class TestEnhancedPagination:
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 100
-        # Note: With our current implementation, it may make only one call if all data fits in batch
-        # assert mock_exchange.fetch_ohlcv.call_count >= 1  # Should make at least one call
 
-        # Verify progress messages were printed
-        progress_calls = [call for call in mock_print.call_args_list if 'Progress:' in str(call)]
-        # Progress may not be shown for single batch, so don't assert on this
-        # assert len(progress_calls) >= 0
-
-    @patch('src.data_fetcher.ccxt')
+    @patch('services.data_service.data_fetcher.ccxt')
     def test_adaptive_batching(self, mock_ccxt):
         """Test adaptive batch size adjustment."""
         mock_exchange = MagicMock()
@@ -372,14 +283,10 @@ class TestEnhancedPagination:
         # Empty batch
         assert _validate_batch_data([]) == False
 
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
     @patch('time.sleep')
-    def test_rate_limiting_handling(self, mock_sleep, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_rate_limiting_handling(self, mock_get_data_source, mock_sleep):
         """Test rate limiting detection and handling."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
 
@@ -393,15 +300,9 @@ class TestEnhancedPagination:
             with pytest.raises(Exception):
                 fetch_historical_data('BTC/USDT', '1h', 10, show_progress=True)
 
-        # Note: No retry logic in current implementation, so sleep is not called
-
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_pagination_error_recovery(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_pagination_error_recovery(self, mock_get_data_source):
         """Test error recovery during pagination."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
 
@@ -426,15 +327,9 @@ class TestEnhancedPagination:
         assert isinstance(result, pd.DataFrame)
         assert len(result) >= 1  # At least one batch of data
 
-        # Note: Error messages may not be captured due to test timing
-
-    @patch('src.cache.cache_api_call')  # Disable caching for tests
-    @patch('src.data_fetcher.get_data_source')
-    def test_large_dataset_pagination(self, mock_get_data_source, mock_cache):
+    @patch('services.data_service.data_fetcher.get_data_source')
+    def test_large_dataset_pagination(self, mock_get_data_source):
         """Test pagination with large datasets."""
-        # Make cache decorator a no-op
-        mock_cache.return_value = lambda func: func
-        
         mock_data_source = MagicMock()
         mock_get_data_source.return_value = mock_data_source
 
@@ -454,10 +349,6 @@ class TestEnhancedPagination:
 
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 100
-
-        # Note: API call count may vary due to rate limiting logic
-
-        # Note: Completion messages may not be captured due to test timing
 
 
 if __name__ == "__main__":

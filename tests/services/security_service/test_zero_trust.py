@@ -27,6 +27,38 @@ from config.settings import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+#!/usr/bin/env python3
+"""
+Zero Trust Security Test Script
+
+Tests the Zero Trust Security implementation including:
+- mTLS authentication
+- JWT token management
+- Service authentication
+- Security service functionality
+"""
+
+import asyncio
+import logging
+import sys
+import os
+import pytest
+from pathlib import Path
+
+# Add src to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+
+from config.settings import (
+    ENABLE_MTLS, SECURITY_SERVICE_URL,
+    MTLS_CERT_PATH, MTLS_KEY_PATH, CA_CERT_PATH
+)
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@pytest.mark.skip(reason="Integration test requiring full service setup - skipped for unit test suite")
 async def test_security_service():
     """Test the security service functionality"""
     logger.info("🧪 Testing Security Service...")
@@ -94,6 +126,8 @@ async def test_security_service():
         logger.error(f"❌ Security service test failed: {e}")
         return False
 
+
+@pytest.mark.skip(reason="Integration test requiring full service setup - skipped for unit test suite")
 async def test_service_clients():
     """Test service clients with Zero Trust authentication"""
     logger.info("🧪 Testing Service Clients with Zero Trust...")
@@ -148,6 +182,8 @@ async def test_service_clients():
         logger.error(f"❌ Service clients test failed: {e}")
         return False
 
+
+@pytest.mark.skip(reason="Integration test requiring full service setup - skipped for unit test suite")
 async def test_main_orchestrator():
     """Test main orchestrator with Zero Trust services"""
     logger.info("🧪 Testing Main Orchestrator with Zero Trust...")

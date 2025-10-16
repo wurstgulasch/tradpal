@@ -84,43 +84,6 @@ class TestRunIntegratedScript:
             assert script.running == False
 
 
-class TestTestIntegrationsScript:
-    """Test the test_integrations.py script."""
-
-    @patch('tests.scripts.test_integrations.integration_manager')
-    @patch('tests.scripts.test_integrations.print')
-    @patch('tests.scripts.test_integrations.setup_test_integrations')
-    def test_script_test_integrations_basic(self, mock_setup, mock_print, mock_integration_manager):
-        """Test basic test_integrations execution."""
-        mock_setup.return_value = True
-        mock_integration_manager.initialize_all.return_value = {'telegram': True}
-        mock_integration_manager.send_signal_to_all.return_value = {'telegram': True}
-        mock_integration_manager.shutdown_all.return_value = None
-
-        with patch('sys.argv', ['test_integrations.py']):
-            import tests.scripts.test_integrations as script
-
-            # The script should be importable and have the main function
-            assert hasattr(script, 'test_integrations')
-            assert hasattr(script, 'create_sample_signal')
-            assert hasattr(script, 'setup_test_integrations')
-
-    def test_create_sample_signal(self):
-        """Test sample signal creation."""
-        import tests.scripts.test_integrations as script
-
-        signal = script.create_sample_signal()
-
-        required_keys = ['timestamp', 'symbol', 'timeframe', 'signal', 'price', 'indicators', 'risk_management', 'confidence', 'reason']
-        for key in required_keys:
-            assert key in signal
-
-        assert signal['signal'] == 'BUY'
-        assert signal['symbol'] == 'EUR/USD'
-        assert 'ema_short' in signal['indicators']
-        assert 'position_size' in signal['risk_management']
-
-
 class TestScriptIntegration:
     """Integration tests for scripts."""
 
@@ -149,17 +112,12 @@ class TestScriptIntegration:
         import scripts.run_integrated
         assert scripts.run_integrated is not None
 
-        # Test test_integrations.py
-        import tests.scripts.test_integrations
-        assert tests.scripts.test_integrations is not None
-
     @patch('sys.argv', ['test'])
     def test_script_main_execution(self):
         """Test that scripts have proper main execution guards."""
         # This is a basic test to ensure scripts don't execute main code on import
         import scripts.manage_integrations
         import scripts.run_integrated
-        import tests.scripts.test_integrations
 
         # If we get here without errors, the imports work
         assert True
@@ -183,14 +141,14 @@ class TestScriptErrorHandling:
         # The script should handle environment errors gracefully
         assert callable(script.setup_integrations)
 
-    @patch('tests.scripts.test_integrations.print')
-    @patch('tests.scripts.test_integrations.os.getenv', side_effect=Exception("Environment error"))
-    def test_test_integrations_error_handling(self, mock_getenv, mock_print):
+    @patch('builtins.print')
+    @patch('scripts.manage_integrations.setup_integrations', side_effect=Exception("Environment error"))
+    def test_test_integrations_error_handling(self, mock_setup, mock_print):
         """Test error handling in test_integrations script."""
-        import tests.scripts.test_integrations as script
+        import scripts.manage_integrations as script
 
         # The script should handle environment errors gracefully
-        assert callable(script.setup_test_integrations)
+        assert callable(script.setup_integrations)
 
 
 if __name__ == "__main__":
