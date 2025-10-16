@@ -1294,7 +1294,7 @@ class DataService:
             logger.error(error_msg)
             return {
                 "success": False,
-                "error": error_msg
+                "error": "An internal error has occurred. Please contact support."
             }
 
     async def get_quality_report(self, user: str, resource_name: Optional[str] = None,
