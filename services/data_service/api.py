@@ -361,7 +361,8 @@ async def register_data_product(request: DataProductRegistration):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
+            logger.error(f"Data product registration failed: {result.get('error')}")
+            raise HTTPException(status_code=400, detail="Data product registration failed. Please check your request and try again.")
 
         return result
 
@@ -390,7 +391,8 @@ async def store_market_data(request: MarketDataStorage):
         )
 
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result["error"])
+            logger.error(f"Market data storage failed: {result.get('error')}")
+            raise HTTPException(status_code=400, detail="Market data storage failed. Please check your request and try again.")
 
         return result
 
