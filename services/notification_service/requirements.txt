@@ -6,7 +6,7 @@ pydantic-settings==2.1.0
 
 # Async and concurrency
 asyncio-mqtt==0.13.1
-aiohttp==3.9.1
+aiohttp==3.12.14
 
 # HTTP client for webhooks
 httpx==0.25.2
@@ -32,7 +32,7 @@ pytest-mock==3.12.0
 httpx==0.25.2  # For testing FastAPI
 
 # Development
-black==23.11.0
+black==24.3.0
 isort==5.12.0
 mypy==1.7.1
 flake8==6.1.0
@@ -45,4 +45,4 @@ discord.py==2.3.2
 python-telegram-bot==20.7
 
 # Health checks
-curl-cffi==0.5.10  # For health check in Docker
+curl-cffi==0.7.0b4  # For health check in Docker
