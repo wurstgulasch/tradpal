@@ -1251,7 +1251,7 @@ class DataService:
             logger.error(error_msg)
             return {
                 "success": False,
-                "error": error_msg
+                "error": "An internal error has occurred. Please contact support."
             }
 
     async def get_user_permissions(self, requesting_user: str, target_user: str,
