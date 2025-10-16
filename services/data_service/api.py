@@ -574,7 +574,13 @@ async def validate_and_store_data(request: DataValidationRequest):
             logger.error(f"Data validation API error detail: {result.get('error')}")
             raise HTTPException(status_code=400, detail="Validation failed")
 
-        return result
+        # Only return sanitized result fields to the user
+        sanitized = {
+            "success": True,
+            "quality_check": result.get("quality_check", {}),
+            "message": "Data validated and stored successfully."
+        }
+        return sanitized
 
     except Exception as e:
         logger.error(f"Data validation failed: {e}")
