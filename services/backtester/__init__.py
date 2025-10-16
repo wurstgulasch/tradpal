@@ -19,6 +19,47 @@ from services.signal_generator import generate_traditional_signals
 logger = logging.getLogger(__name__)
 
 
+def _get_adaptive_risk_per_trade(row: pd.Series) -> float:
+    """Get adaptive risk per trade based on market regime."""
+    regime = row.get('Market_Regime', 'unknown')
+    risk_level = row.get('Risk_Level', 'moderate')
+
+    # Base risk per trade
+    base_risk = 0.02  # 2% default
+
+    # Adjust based on regime
+    if regime == 'bull':
+        return base_risk * 1.5  # Higher risk in bull markets
+    elif regime == 'bear':
+        return base_risk * 0.7  # Lower risk in bear markets
+    else:  # sideways
+        return base_risk * 1.0  # Standard risk in sideways markets
+
+
+def _get_adaptive_atr_multiplier(row: pd.Series, direction: str) -> float:
+    """Get adaptive ATR multiplier for stop loss based on market regime."""
+    regime = row.get('Market_Regime', 'unknown')
+
+    if regime == 'bull':
+        return 2.5 if direction == 'buy' else 2.5  # Wider stops in bull markets
+    elif regime == 'bear':
+        return 1.2 if direction == 'buy' else 1.2  # Tighter stops in bear markets
+    else:  # sideways
+        return 2.0 if direction == 'buy' else 2.0  # Standard stops in sideways markets
+
+
+def _get_adaptive_reward_risk_ratio(row: pd.Series) -> float:
+    """Get adaptive reward/risk ratio based on market regime."""
+    regime = row.get('Market_Regime', 'unknown')
+
+    if regime == 'bull':
+        return 3.0  # Higher reward/risk in bull markets (let winners run)
+    elif regime == 'bear':
+        return 1.5  # Lower reward/risk in bear markets (quick profits)
+    else:  # sideways
+        return 2.0  # Standard reward/risk in sideways markets
+
+
 class Backtester:
     """Backtester class for running trading strategy backtests."""
 
@@ -158,17 +199,19 @@ def simulate_trades(data: pd.DataFrame,
             sell_signal = int(row.get('Sell_Signal', 0)) == 1
 
             if buy_signal and position == 0:
-                # Calculate position size based on risk
-                risk_amount = capital * risk_per_trade
+                # Calculate position size based on risk (adaptive based on market regime)
+                risk_amount = capital * _get_adaptive_risk_per_trade(row)
                 atr_value = float(row.get('ATR', price * 0.02))  # Default ATR if not available
-                stop_loss_distance = atr_value * 2  # 2 ATR stop loss
+                atr_multiplier = _get_adaptive_atr_multiplier(row, 'buy')
+                stop_loss_distance = atr_value * atr_multiplier
                 position_size = risk_amount / stop_loss_distance
 
                 if position_size * price <= capital:
                     position = 1
                     entry_price = price
                     stop_loss = entry_price - stop_loss_distance
-                    take_profit = entry_price + (stop_loss_distance * 2)  # 2:1 reward/risk
+                    reward_risk_ratio = _get_adaptive_reward_risk_ratio(row)
+                    take_profit = entry_price + (stop_loss_distance * reward_risk_ratio)
 
                     trades.append({
                         'entry_time': idx,
@@ -180,22 +223,26 @@ def simulate_trades(data: pd.DataFrame,
                         'exit_time': None,
                         'exit_price': None,
                         'pnl': 0.0,
-                        'status': 'open'
+                        'status': 'open',
+                        'market_regime': row.get('Market_Regime', 'unknown'),
+                        'risk_level': row.get('Risk_Level', 'moderate')
                     })
 
             # Check for sell signal
             elif sell_signal and position == 0:
-                # Calculate position size based on risk
-                risk_amount = capital * risk_per_trade
+                # Calculate position size based on risk (adaptive based on market regime)
+                risk_amount = capital * _get_adaptive_risk_per_trade(row)
                 atr_value = float(row.get('ATR', price * 0.02))
-                stop_loss_distance = atr_value * 2
+                atr_multiplier = _get_adaptive_atr_multiplier(row, 'sell')
+                stop_loss_distance = atr_value * atr_multiplier
                 position_size = risk_amount / stop_loss_distance
 
                 if position_size * price <= capital:
                     position = -1
                     entry_price = price
                     stop_loss = entry_price + stop_loss_distance
-                    take_profit = entry_price - (stop_loss_distance * 2)
+                    reward_risk_ratio = _get_adaptive_reward_risk_ratio(row)
+                    take_profit = entry_price - (stop_loss_distance * reward_risk_ratio)
 
                     trades.append({
                         'entry_time': idx,
@@ -207,7 +254,9 @@ def simulate_trades(data: pd.DataFrame,
                         'exit_time': None,
                         'exit_price': None,
                         'pnl': 0.0,
-                        'status': 'open'
+                        'status': 'open',
+                        'market_regime': row.get('Market_Regime', 'unknown'),
+                        'risk_level': row.get('Risk_Level', 'moderate')
                     })
 
             # Check for exit conditions on open positions

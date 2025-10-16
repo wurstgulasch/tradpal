@@ -132,14 +132,16 @@ class BacktestingServiceClient:
     async def run_backtest(self, symbol: str, timeframe: str, start_date: str,
                           end_date: Optional[str] = None, initial_capital: float = 10000,
                           strategy_config: Optional[Dict[str, Any]] = None,
-                          risk_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                          risk_config: Optional[Dict[str, Any]] = None,
+                          data_source: str = 'kaggle') -> Dict[str, Any]:
         """Run a single backtest"""
         try:
             payload = {
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'start_date': start_date,
-                'initial_capital': initial_capital
+                'initial_capital': initial_capital,
+                'data_source': data_source
             }
 
             if end_date:

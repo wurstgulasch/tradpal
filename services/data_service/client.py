@@ -150,14 +150,15 @@ class DataServiceClient:
             raise
 
     async def fetch_historical_data(self, symbol: str, timeframe: str, start_date: str, end_date: Optional[str] = None,
-                                   exchange: str = "binance") -> Dict[str, Any]:
+                                   exchange: str = "binance", data_source: str = "kaggle") -> Dict[str, Any]:
         """Fetch historical market data"""
         try:
             params = {
                 'symbol': symbol,
                 'timeframe': timeframe,
                 'exchange': exchange,
-                'start_date': start_date
+                'start_date': start_date,
+                'data_source': data_source
             }
 
             if end_date:

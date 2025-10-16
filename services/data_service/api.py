@@ -19,7 +19,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .service import DataService, DataRequest, DataResponse, EventSystem
+from .service import DataService, DataRequest, DataResponse, DataInfoResponse, EventSystem
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -80,7 +80,7 @@ class DataProductRegistration(BaseModel):
     name: str = Field(..., description="Data product name")
     domain: str = Field(..., description="Data domain (market_data, trading_signals, etc.)")
     description: str = Field(..., description="Product description")
-    schema: Dict[str, Any] = Field(..., description="Data schema definition")
+    data_schema: Dict[str, Any] = Field(..., alias="schema", description="Data schema definition")
     owners: list = Field(..., description="List of data product owners")
 
 

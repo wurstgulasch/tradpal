@@ -47,7 +47,26 @@ class EventSystem:
                 except Exception as e:
                     print(f"Error in event handler: {e}")
 
-from src.cache import Cache
+# Local cache implementation for service
+class SimpleCache:
+    """Simple in-memory cache for the backtesting service."""
+    
+    def __init__(self):
+        self.data = {}
+    
+    def get(self, key: str, default=None):
+        return self.data.get(key, default)
+    
+    def set(self, key: str, value, ttl: int = None):
+        self.data[key] = value
+    
+    def delete(self, key: str):
+        self.data.pop(key, None)
+    
+    def clear(self):
+        self.data.clear()
+
+# from src.cache import Cache
 
 
 # Pydantic models for request/response validation
@@ -60,6 +79,7 @@ class BacktestRequest(BaseModel):
     strategy: str = Field(default="traditional", description="Strategy type")
     initial_capital: float = Field(default=10000.0, description="Initial capital")
     config: Optional[Dict] = Field(None, description="Configuration overrides")
+    data_source: str = Field(default="kaggle", description="Data source (kaggle, ccxt, yahoo)")
 
 
 class MultiSymbolRequest(BaseModel):
@@ -164,7 +184,8 @@ class BacktestingAPI:
                     request.end_date,
                     request.strategy,
                     request.initial_capital,
-                    request.config
+                    request.config,
+                    request.data_source
                 )
 
                 return BacktestResponse(
@@ -306,7 +327,8 @@ class BacktestingAPI:
 
     async def _run_backtest_background(self, backtest_id: str, symbol: str, timeframe: str,
                                      start_date: Optional[str], end_date: Optional[str],
-                                     strategy: str, initial_capital: float, config: Optional[Dict]):
+                                     strategy: str, initial_capital: float, config: Optional[Dict],
+                                     data_source: str = 'kaggle'):
         """Background task for running single backtest."""
         try:
             result = await self.service.run_backtest_async(
@@ -317,7 +339,8 @@ class BacktestingAPI:
                 strategy=strategy,
                 initial_capital=initial_capital,
                 config=config,
-                backtest_id=backtest_id
+                backtest_id=backtest_id,
+                data_source=data_source
             )
             # Result is automatically stored in service
         except Exception as e:
@@ -395,7 +418,7 @@ async def run_backtesting_service(host: str = "0.0.0.0", port: int = 8001):
     """
     # Initialize service components
     event_system = EventSystem()
-    cache = Cache()
+    cache = SimpleCache()
     service = BacktestingService(event_system=event_system, cache=cache)
 
     # Create API

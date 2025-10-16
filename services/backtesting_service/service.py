@@ -25,10 +25,165 @@ from config.settings import (
     SYMBOL, TIMEFRAME, EXCHANGE, CAPITAL,
     OUTPUT_FILE, ML_ENABLED, ML_CONFIDENCE_THRESHOLD
 )
-from src.data_fetcher import fetch_historical_data
-from src.indicators import calculate_indicators
-from src.signal_generator import generate_signals
-from src.risk_manager import RiskManager
+# Import data service instead of legacy src modules
+try:
+    from services.data_service.client import DataServiceClient
+    DATA_SERVICE_AVAILABLE = True
+except ImportError:
+    DATA_SERVICE_AVAILABLE = False
+    # Fallback to legacy imports if data service not available
+# Try to import legacy modules, fallback to service-based approach
+try:
+    from src.data_fetcher import fetch_historical_data
+    from src.indicators import calculate_indicators
+    from src.signal_generator import generate_signals
+    from src.risk_manager import RiskManager
+    LEGACY_IMPORTS_AVAILABLE = True
+except ImportError:
+    LEGACY_IMPORTS_AVAILABLE = False
+    # Fallback implementations will be used
+
+# Local fallback implementations
+def calculate_indicators(data, config=None):
+    """Improved fallback indicator calculation."""
+    if 'close' in data.columns:
+        # Moving averages
+        data['SMA_20'] = data['close'].rolling(20).mean()
+        data['SMA_50'] = data['close'].rolling(50).mean()
+        data['EMA_12'] = data['close'].ewm(span=12).mean()
+        data['EMA_26'] = data['close'].ewm(span=26).mean()
+
+        # RSI calculation
+        delta = data['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rs = gain / loss
+        data['RSI'] = 100 - (100 / (1 + rs))
+
+        # MACD
+        data['MACD'] = data['EMA_12'] - data['EMA_26']
+        data['MACD_Signal'] = data['MACD'].ewm(span=9).mean()
+        data['MACD_Histogram'] = data['MACD'] - data['MACD_Signal']
+
+        # Bollinger Bands
+        data['BB_Middle'] = data['close'].rolling(20).mean()
+        data['BB_Upper'] = data['BB_Middle'] + 2 * data['close'].rolling(20).std()
+        data['BB_Lower'] = data['BB_Middle'] - 2 * data['close'].rolling(20).std()
+
+        # ATR (Average True Range)
+        high_low = data['high'] - data['low']
+        high_close = (data['high'] - data['close'].shift(1)).abs()
+        low_close = (data['low'] - data['close'].shift(1)).abs()
+        tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        data['ATR'] = tr.rolling(14).mean()
+
+        # Stochastic Oscillator
+        lowest_low = data['low'].rolling(14).min()
+        highest_high = data['high'].rolling(14).max()
+        data['Stochastic_K'] = 100 * ((data['close'] - lowest_low) / (highest_high - lowest_low))
+        data['Stochastic_D'] = data['Stochastic_K'].rolling(3).mean()
+
+        # Volume indicators (if volume exists)
+        if 'volume' in data.columns:
+            data['Volume_SMA'] = data['volume'].rolling(20).mean()
+            data['Volume_Ratio'] = data['volume'] / data['Volume_SMA']
+
+    return data
+
+def generate_signals(data, config=None):
+    """Adaptive market regime strategy with regime detection."""
+    data['Buy_Signal'] = 0
+    data['Sell_Signal'] = 0
+
+    if not all(col in data.columns for col in ['SMA_20', 'SMA_50', 'RSI', 'BB_Upper', 'BB_Lower']):
+        return data
+
+    # Market regime detection
+    data['Trend_Strength'] = abs(data['SMA_20'] - data['SMA_50']) / data['SMA_50']
+    data['Bull_Market'] = data['SMA_20'] > data['SMA_50']
+
+    # Enhanced regime detection for adaptive risk management
+    sma_20 = data['SMA_20']
+    sma_50 = data['SMA_50']
+    rsi = data['RSI']
+    close = data['close']
+    price_change_pct = close.pct_change(5)  # 5-day change
+
+    # Determine market regime for each row
+    bull_market = (
+        (sma_20 > sma_50) &  # Uptrend
+        (rsi > 50) &  # Bullish momentum
+        (price_change_pct > 0.02)  # Strong upward momentum
+    )
+
+    bear_market = (
+        (sma_20 < sma_50) &  # Downtrend
+        (rsi < 50) &  # Bearish momentum
+        (price_change_pct < -0.02)  # Strong downward momentum
+    )
+
+    # Sideways when neither bull nor bear conditions are strongly met
+    sideways_market = ~(bull_market | bear_market)
+
+    # Store regime information for adaptive risk management
+    data['Market_Regime'] = 'unknown'
+    data.loc[bull_market, 'Market_Regime'] = 'bull'
+    data.loc[bear_market, 'Market_Regime'] = 'bear'
+    data.loc[sideways_market, 'Market_Regime'] = 'sideways'
+
+    # Define regimes for signal generation
+    strong_trend = data['Trend_Strength'] > 0.03
+    bull_market_signal = data['Bull_Market'] & strong_trend
+    bear_market_signal = (~data['Bull_Market']) & strong_trend
+    sideways_market_signal = ~strong_trend
+
+    # Strategy by regime:
+
+    # 1. Bull markets: Buy and hold
+    if bull_market_signal.any():
+        # Buy at start of bull market, hold
+        bull_starts = bull_market_signal & (~bull_market_signal.shift(1).fillna(False))
+        data.loc[bull_starts, 'Buy_Signal'] = 1
+        # Sell at end of bull market
+        bull_ends = bull_market_signal & (~bull_market_signal.shift(-1).fillna(False))
+        data.loc[bull_ends, 'Sell_Signal'] = 1
+
+    # 2. Bear markets: Short and hold (Trendfolge nach unten)
+    if bear_market_signal.any():
+        # Short at start of bear market, hold
+        bear_starts = bear_market_signal & (~bear_market_signal.shift(1).fillna(False))
+        data.loc[bear_starts, 'Sell_Signal'] = 1
+        # Cover at end of bear market
+        bear_ends = bear_market_signal & (~bear_market_signal.shift(-1).fillna(False))
+        data.loc[bear_ends, 'Buy_Signal'] = 1
+
+    # 3. Sideways markets: Mean reversion
+    if sideways_market_signal.any():
+        rsi_oversold = data['RSI'] < 35
+        rsi_overbought = data['RSI'] > 65
+        bb_lower_touch = data['close'] <= data['BB_Lower'] * 0.995
+        bb_upper_touch = data['close'] >= data['BB_Upper'] * 1.005
+
+        buy_condition = sideways_market_signal & rsi_oversold & bb_lower_touch
+        sell_condition = sideways_market_signal & rsi_overbought & bb_upper_touch
+
+        data.loc[buy_condition, 'Buy_Signal'] = 1
+        data.loc[sell_condition, 'Sell_Signal'] = 1
+
+    return data
+
+def fetch_historical_data(symbol, timeframe, limit=1000, start_date=None):
+    """Fallback data fetching - returns empty DataFrame."""
+    import pandas as pd
+    return pd.DataFrame()
+
+class RiskManager:
+    """Fallback risk manager."""
+    def __init__(self, config=None):
+        self.config = config or {}
+    
+    def calculate_position_size(self, capital, risk_per_trade=0.01):
+        return capital * risk_per_trade
 # Event system - using mock implementation for now
 EVENT_SYSTEM_AVAILABLE = False
 
@@ -54,7 +209,26 @@ class EventSystem:
                     await handler(event)
                 except Exception as e:
                     print(f"Event handler error: {e}")
-from src.cache import Cache
+# Local cache implementation
+class SimpleCache:
+    """Simple in-memory cache for the backtesting service."""
+    
+    def __init__(self):
+        self.data = {}
+    
+    def get(self, key: str, default=None):
+        return self.data.get(key, default)
+    
+    def set(self, key: str, value, ttl: int = None):
+        self.data[key] = value
+    
+    def delete(self, key: str):
+        self.data.pop(key, None)
+    
+    def clear(self):
+        self.data.clear()
+
+# from src.cache import Cache
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -72,7 +246,7 @@ class BacktestingService:
     - Multi-symbol and multi-timeframe testing
     """
 
-    def __init__(self, event_system: Optional[EventSystem] = None, cache: Optional[Cache] = None):
+    def __init__(self, event_system: Optional[EventSystem] = None, cache: Optional[SimpleCache] = None):
         """
         Initialize the backtesting service.
 
@@ -81,9 +255,14 @@ class BacktestingService:
             cache: Optional cache system for data persistence
         """
         self.event_system = event_system or EventSystem()
-        self.cache = cache or Cache()
+        self.cache = cache or SimpleCache()
         self.active_backtests = {}  # Track running backtests
         self.backtest_results = {}  # Store completed results
+
+        # Initialize data service client if available
+        self.data_client = None
+        if DATA_SERVICE_AVAILABLE:
+            self.data_client = DataServiceClient()
 
         # Register event handlers
         self._register_event_handlers()
@@ -269,7 +448,8 @@ class BacktestingService:
     async def run_backtest_async(self, symbol: str = SYMBOL, timeframe: str = TIMEFRAME,
                                 start_date: Optional[str] = None, end_date: Optional[str] = None,
                                 strategy: str = 'traditional', initial_capital: float = CAPITAL,
-                                config: Optional[Dict] = None, backtest_id: Optional[str] = None) -> Dict:
+                                config: Optional[Dict] = None, backtest_id: Optional[str] = None,
+                                data_source: str = 'kaggle') -> Dict:
         """
         Run an asynchronous backtest with the specified parameters.
 
@@ -308,7 +488,9 @@ class BacktestingService:
                 start_date=start_date,
                 end_date=end_date,
                 initial_capital=initial_capital,
-                config=config
+                config=config,
+                data_source=data_source,
+                data_client=self.data_client
             )
 
             # Run backtest
@@ -505,7 +687,15 @@ class BacktestingService:
 
         try:
             # Import walk-forward optimizer
-            from src.walk_forward_optimizer import WalkForwardOptimizer
+            try:
+                from src.walk_forward_optimizer import WalkForwardOptimizer
+                optimizer_available = True
+            except ImportError:
+                optimizer_available = False
+                return {"error": "Walk-forward optimizer not available"}
+
+            if not optimizer_available:
+                return {"error": "Walk-forward optimizer not available"}
 
             # Create optimizer instance
             optimizer = WalkForwardOptimizer(symbol=symbol, timeframe=timeframe)
@@ -675,7 +865,8 @@ class AsyncBacktester:
 
     def __init__(self, symbol: str, exchange: str, timeframe: str,
                  start_date: Optional[str] = None, end_date: Optional[str] = None,
-                 initial_capital: float = CAPITAL, config: Optional[Dict] = None):
+                 initial_capital: float = CAPITAL, config: Optional[Dict] = None,
+                 data_source: str = 'kaggle', data_client: Optional['DataServiceClient'] = None):
         """
         Initialize async backtester.
 
@@ -687,6 +878,8 @@ class AsyncBacktester:
             end_date: End date
             initial_capital: Initial capital
             config: Configuration overrides
+            data_source: Data source to use ('kaggle', 'ccxt', 'yahoo')
+            data_client: DataServiceClient instance
         """
         self.symbol = symbol
         self.exchange = exchange
@@ -697,6 +890,8 @@ class AsyncBacktester:
         self.current_capital = initial_capital
         self.config = config or {}
         self.commission = 0.001  # 0.1% commission
+        self.data_source = data_source
+        self.data_client = data_client
 
         # Initialize data and results
         self.data = None
@@ -756,6 +951,50 @@ class AsyncBacktester:
 
     async def _fetch_data_async(self) -> pd.DataFrame:
         """Fetch historical data asynchronously."""
+        try:
+            # Use data service if available
+            if self.data_client:
+                await self.data_client.authenticate()
+                
+                response = await self.data_client.fetch_historical_data(
+                    symbol=self.symbol,
+                    timeframe=self.timeframe,
+                    start_date=self.start_date,
+                    end_date=self.end_date,
+                    data_source=self.data_source
+                )
+                
+                if response.get("success"):
+                    # Convert response data to DataFrame
+                    data_dict = response.get("data", {})
+                    if isinstance(data_dict, dict) and "ohlcv" in data_dict:
+                        # Convert from service format to DataFrame
+                        ohlcv_data = data_dict["ohlcv"]
+                        df = pd.DataFrame.from_dict(ohlcv_data, orient='index')
+                        df.index = pd.to_datetime(df.index)
+                        df = df.sort_index()
+                        return df
+                    else:
+                        logger.warning("Unexpected data format from data service")
+                        return pd.DataFrame()
+                else:
+                    logger.error(f"Data service request failed: {response.get('error')}")
+                    return pd.DataFrame()
+            else:
+                # Fallback to legacy method
+                return await self._fetch_data_legacy_async()
+                
+        except Exception as e:
+            logger.error(f"Error fetching data: {e}")
+            # Try legacy fallback
+            try:
+                return await self._fetch_data_legacy_async()
+            except Exception as e2:
+                logger.error(f"Legacy data fetch also failed: {e2}")
+                return pd.DataFrame()
+
+    async def _fetch_data_legacy_async(self) -> pd.DataFrame:
+        """Legacy data fetching method for fallback."""
         # Calculate limit based on timeframe and date range
         days = (self.end_date - self.start_date).days if self.start_date and self.end_date else 365
         if self.timeframe == '1m':
@@ -828,7 +1067,7 @@ class AsyncBacktester:
                         )
                     else:
                         logger.info("⚠️  ML predictor not available or not trained, using traditional signals")
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"ML enhancement failed: {e}, using traditional signals")
 
         return data
@@ -853,7 +1092,7 @@ class AsyncBacktester:
                         )
                     else:
                         logger.info("⚠️  LSTM predictor not available or not trained, using traditional signals")
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"LSTM enhancement failed: {e}, using traditional signals")
 
         return data
@@ -878,7 +1117,7 @@ class AsyncBacktester:
                         )
                     else:
                         logger.info("⚠️  Transformer predictor not available or not trained, using traditional signals")
-            except Exception as e:
+            except (ImportError, Exception) as e:
                 logger.warning(f"Transformer enhancement failed: {e}, using traditional signals")
 
         return data
@@ -941,7 +1180,7 @@ class AsyncBacktester:
         return trades
 
     def _simulate_trades_sync(self, data: pd.DataFrame) -> List[Dict]:
-        """Synchronous trade simulation (same logic as original)."""
+        """Synchronous trade simulation with corrected signal interpretation."""
         if data.empty:
             return []
 
@@ -953,44 +1192,47 @@ class AsyncBacktester:
         if not all(col in data.columns for col in required_cols):
             raise ValueError(f"Data missing required columns: {required_cols}")
 
-        # Create position signals
-        buy_signals = (data['Buy_Signal'] == 1)
-        sell_signals = (data['Sell_Signal'] == 1)
-
-        position_changes = pd.Series(0, index=data.index)
-        position_changes[buy_signals] = 1
-        position_changes[sell_signals] = 0
-
-        positions = position_changes.cumsum()
+        # Correct signal interpretation:
+        # Buy_Signal = 1 means go long (position = 1)
+        # Sell_Signal = 1 means go short (position = -1)
+        # No signal means maintain current position
 
         trades = []
-        current_position = 0
+        current_position = 0  # 0 = neutral, 1 = long, -1 = short
         entry_idx = None
         entry_price = None
 
-        position_array = positions.values
+        position_array = np.zeros(len(data))
         timestamps = data.index
         close_prices = data['close'].values
 
         slippage_pct = 0.001
         position_sizes = data.get('Position_Size_Absolute', np.full(len(data), 1000))
-        stop_loss_buy = data.get('Stop_Loss_Buy', data['close'] * 0.98).values
-        stop_loss_sell = data.get('Stop_Loss_Sell', data['close'] * 1.02).values
-        take_profit_buy = data.get('Take_Profit_Buy', data['close'] * 1.02).values
-        take_profit_sell = data.get('Take_Profit_Sell', data['close'] * 0.98).values
 
         for idx in range(len(data)):
-            new_position = position_array[idx]
+            buy_signal = data['Buy_Signal'].iloc[idx] == 1
+            sell_signal = data['Sell_Signal'].iloc[idx] == 1
 
-            # Position entry
-            if current_position == 0 and new_position != 0:
+            # Determine desired position
+            if buy_signal and not sell_signal:
+                desired_position = 1  # Go long
+            elif sell_signal and not buy_signal:
+                desired_position = -1  # Go short
+            else:
+                desired_position = current_position  # Maintain position
+
+            position_array[idx] = desired_position
+
+            # Position entry or change
+            if current_position == 0 and desired_position != 0:
+                # Opening new position
                 entry_idx = idx
-                if new_position == 1:
+                if desired_position == 1:
                     entry_price = close_prices[idx] * (1 + slippage_pct)
                 else:
                     entry_price = close_prices[idx] * (1 - slippage_pct)
 
-                current_position = new_position
+                current_position = desired_position
                 position_size = position_sizes[idx]
 
                 entry_commission = entry_price * position_size * self.commission
@@ -1000,8 +1242,8 @@ class AsyncBacktester:
                     'entry_time': timestamps[idx],
                     'entry_price': entry_price,
                     'position_size': position_size,
-                    'stop_loss': stop_loss_buy[idx] if current_position == 1 else stop_loss_sell[idx],
-                    'take_profit': take_profit_buy[idx] if current_position == 1 else take_profit_sell[idx],
+                    'stop_loss': None,  # Will be set if available
+                    'take_profit': None,
                     'exit_time': None,
                     'exit_price': None,
                     'pnl': 0,
@@ -1011,8 +1253,9 @@ class AsyncBacktester:
                 }
                 trades.append(trade)
 
-            # Position exit
-            elif current_position != 0 and new_position != current_position:
+            # Position exit or reversal
+            elif current_position != 0 and desired_position != current_position:
+                # Closing or reversing position
                 if entry_idx is not None:
                     if current_position == 1:
                         exit_price = close_prices[idx] * (1 - slippage_pct)
@@ -1023,9 +1266,9 @@ class AsyncBacktester:
                     exit_commission = exit_price * trades[-1]['position_size'] * self.commission
 
                     if current_position == 1:
-                        gross_pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
+                        gross_pnl = (exit_price - entry_price) * trades[-1]['position_size']
                     else:
-                        gross_pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
+                        gross_pnl = (entry_price - exit_price) * trades[-1]['position_size']
 
                     net_pnl = gross_pnl - trades[-1]['entry_commission'] - exit_commission
 
@@ -1039,10 +1282,40 @@ class AsyncBacktester:
 
                     self.current_capital += net_pnl
 
-                current_position = 0
-                entry_idx = None
+                # Handle position change
+                if desired_position != 0:
+                    # Reversal - close old position and open new one
+                    entry_idx = idx
+                    if desired_position == 1:
+                        entry_price = close_prices[idx] * (1 + slippage_pct)
+                    else:
+                        entry_price = close_prices[idx] * (1 - slippage_pct)
 
-        # Close remaining positions
+                    current_position = desired_position
+                    position_size = position_sizes[idx]
+
+                    entry_commission = entry_price * position_size * self.commission
+
+                    trade = {
+                        'type': 'buy' if current_position == 1 else 'sell',
+                        'entry_time': timestamps[idx],
+                        'entry_price': entry_price,
+                        'position_size': position_size,
+                        'stop_loss': None,
+                        'take_profit': None,
+                        'exit_time': None,
+                        'exit_price': None,
+                        'pnl': 0,
+                        'entry_commission': entry_commission,
+                        'exit_commission': 0,
+                        'status': 'open'
+                    }
+                    trades.append(trade)
+                else:
+                    current_position = 0
+                    entry_idx = None
+
+        # Close remaining positions at the end
         if current_position != 0 and trades and trades[-1]['status'] == 'open':
             final_price = data.iloc[-1]['close']
             final_time = data.index[-1]
@@ -1055,9 +1328,9 @@ class AsyncBacktester:
             exit_commission = exit_price * trades[-1]['position_size'] * self.commission
 
             if current_position == 1:
-                gross_pnl = (exit_price - entry_price) * trades[-1]['position_size'] / entry_price
+                gross_pnl = (exit_price - entry_price) * trades[-1]['position_size']
             else:
-                gross_pnl = (entry_price - exit_price) * trades[-1]['position_size'] / entry_price
+                gross_pnl = (entry_price - exit_price) * trades[-1]['position_size']
 
             net_pnl = gross_pnl - trades[-1]['entry_commission'] - exit_commission
 
@@ -1143,23 +1416,100 @@ class AsyncBacktester:
         }
 
     def _calculate_risk_management(self, data: pd.DataFrame, config: Optional[Dict] = None) -> pd.DataFrame:
-        """Calculate risk management parameters for backtesting."""
-        # Simple risk management calculation
-        # Add position size calculations based on ATR and risk parameters
+        """Calculate adaptive risk management parameters based on market regime."""
+        # For crypto trading, use fixed position size (1 unit of the asset)
+        data['Position_Size_Absolute'] = 1.0  # 1 BTC or 1 unit of the asset
+
+        # Adaptive risk management based on market regime
         if 'ATR' in data.columns:
-            # Risk per trade (1% of capital)
-            risk_per_trade = 0.01
+            # Detect market regime for each row
+            regime_params = self._get_market_regime_risk_params(data)
 
-            # Position size = (Capital * Risk per trade) / (ATR * multiplier)
-            atr_multiplier = 1.5
-            data['Position_Size_Absolute'] = 10000 * risk_per_trade / (data['ATR'] * atr_multiplier)
+            # Apply regime-specific risk parameters
+            data['Stop_Loss_Buy'] = data['close'] - (data['ATR'] * regime_params['stop_loss_atr_buy'])
+            data['Stop_Loss_Sell'] = data['close'] + (data['ATR'] * regime_params['stop_loss_atr_sell'])
+            data['Take_Profit_Buy'] = data['close'] + (data['ATR'] * regime_params['take_profit_atr_buy'])
+            data['Take_Profit_Sell'] = data['close'] - (data['ATR'] * regime_params['take_profit_atr_sell'])
 
-            # Stop loss levels
-            data['Stop_Loss_Buy'] = data['close'] - (data['ATR'] * 1.5)
-            data['Stop_Loss_Sell'] = data['close'] + (data['ATR'] * 1.5)
-
-            # Take profit levels
-            data['Take_Profit_Buy'] = data['close'] + (data['ATR'] * 2.0)
-            data['Take_Profit_Sell'] = data['close'] - (data['ATR'] * 2.0)
+            # Store regime information for analysis
+            data['Market_Regime'] = regime_params['regime']
+            data['Risk_Level'] = regime_params['risk_level']
 
         return data
+
+    def _get_market_regime_risk_params(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Determine market regime and return appropriate risk management parameters.
+
+        Returns regime-specific parameters for:
+        - Bull Markets: Higher risk tolerance, wider take profits
+        - Bear Markets: Conservative risk, tighter stops
+        - Sideways Markets: Moderate risk, balanced parameters
+        """
+        if not all(col in data.columns for col in ['SMA_20', 'SMA_50', 'RSI', 'close']):
+            # Fallback to conservative parameters if indicators not available
+            return {
+                'regime': 'unknown',
+                'risk_level': 'conservative',
+                'stop_loss_atr_buy': 1.5,
+                'stop_loss_atr_sell': 1.5,
+                'take_profit_atr_buy': 2.0,
+                'take_profit_atr_sell': 2.0
+            }
+
+        # Calculate trend indicators
+        sma_20 = data['SMA_20']
+        sma_50 = data['SMA_50']
+        rsi = data['RSI']
+        close = data['close']
+
+        # Trend strength (SMA difference)
+        trend_strength = abs(sma_20 - sma_50) / sma_50
+
+        # Price momentum (recent price change)
+        price_change_pct = close.pct_change(5)  # 5-day change
+
+        # Determine market regime
+        bull_market = (
+            (sma_20 > sma_50) &  # Uptrend
+            (rsi > 50) &  # Bullish momentum
+            (price_change_pct > 0.02)  # Strong upward momentum
+        )
+
+        bear_market = (
+            (sma_20 < sma_50) &  # Downtrend
+            (rsi < 50) &  # Bearish momentum
+            (price_change_pct < -0.02)  # Strong downward momentum
+        )
+
+        # Sideways when neither bull nor bear conditions are strongly met
+        sideways_market = ~(bull_market | bear_market)
+
+        # Apply regime-specific risk parameters
+        if bull_market.any() and bull_market.iloc[-1]:  # Current regime is bull
+            return {
+                'regime': 'bull',
+                'risk_level': 'aggressive',
+                'stop_loss_atr_buy': 2.0,    # Wider stops (more tolerance for volatility)
+                'stop_loss_atr_sell': 2.0,
+                'take_profit_atr_buy': 3.5,  # Much wider take profits (let winners run)
+                'take_profit_atr_sell': 3.5
+            }
+        elif bear_market.any() and bear_market.iloc[-1]:  # Current regime is bear
+            return {
+                'regime': 'bear',
+                'risk_level': 'conservative',
+                'stop_loss_atr_buy': 1.0,    # Tighter stops (quick exits)
+                'stop_loss_atr_sell': 1.0,
+                'take_profit_atr_buy': 1.5,  # Moderate take profits
+                'take_profit_atr_sell': 1.5
+            }
+        else:  # Sideways market
+            return {
+                'regime': 'sideways',
+                'risk_level': 'moderate',
+                'stop_loss_atr_buy': 1.5,    # Balanced parameters
+                'stop_loss_atr_sell': 1.5,
+                'take_profit_atr_buy': 2.5,  # Moderate take profits
+                'take_profit_atr_sell': 2.5
+            }

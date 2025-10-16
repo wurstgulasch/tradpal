@@ -269,7 +269,8 @@ class TradPalOrchestrator:
                     end_date=kwargs.get('end_date'),
                     initial_capital=10000.0,
                     strategy_config={'indicators': ['ema', 'rsi', 'bb']},
-                    risk_config={'risk_per_trade': 0.01}
+                    risk_config={'risk_per_trade': 0.01},
+                    data_source=kwargs.get('data_source', 'kaggle')  # Use Kaggle for better data
                 )
             else:
                 raise RuntimeError("No backtesting service available")
@@ -486,6 +487,7 @@ async def main():
     parser.add_argument("--use-walk-forward", action="store_true", default=True, help="Use walk-forward analysis")
     parser.add_argument("--model-type", default="ensemble", help="ML model type")
     parser.add_argument("--profile", choices=["light", "heavy"], default="heavy", help="Performance profile")
+    parser.add_argument("--data-source", choices=["kaggle", "ccxt", "yahoo"], default="kaggle", help="Data source for backtesting")
 
     args = parser.parse_args()
 
@@ -519,7 +521,8 @@ async def main():
                 symbol=args.symbol,
                 timeframe=args.timeframe,
                 start_date=args.start_date,
-                end_date=args.end_date
+                end_date=args.end_date,
+                data_source=getattr(args, 'data_source', 'kaggle')  # Use Kaggle for better historical data
             )
             print(f"Backtest Results: {results}")
         elif args.mode == "discovery":

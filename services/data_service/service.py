@@ -179,6 +179,15 @@ class DataResponse(BaseModel):
     processing_time: float = 0.0
 
 
+class DataInfoResponse(BaseModel):
+    """Response model for data info requests."""
+    symbol: str
+    timeframe: str
+    available_sources: List[str]
+    cache_enabled: bool
+    quality_thresholds: Dict[str, float]
+
+
 class EventSystem:
     """Simple event system for service communication."""
 

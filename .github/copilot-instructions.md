@@ -25,7 +25,7 @@
 - `docs/`: Dokumentation
 - `main.py`: Hybrid-Orchestrator mit Service-Clients
 
-**WICHTIG:** Keine Dateien im Root-Verzeichnis ablegen! Neue Features immer in entsprechenden Services implementieren (Microservice-Architektur beibehalten). Terminals immer in der conda Umgeung `tradpal-env` ausführen. Dokumentation und Commit Messages immer auf Englisch und immer aktuell halten. Dokumentation und copilot-instructions.md immer mit dem Code synchron halten.
+**WICHTIG:** Keine Dateien im Root-Verzeichnis ablegen! Neue Features immer in entsprechenden Services implementieren (Microservice-Architektur beibehalten). Terminals immer in der conda Umgeung `tradpal-env` ausführen. Dokumentation, README und Commit Messages immer auf Englisch und immer aktuell halten. Dokumentation, README und copilot-instructions.md immer mit dem Code synchronisieren.
 
 ## Architektur-Prinzipien
 - **Microservices-First:** Jede neue Funktionalität als separater Service
@@ -64,6 +64,8 @@
 - **Datenquellen-Architektur:** Verwende modulare Datenquellen (Kaggle, Yahoo Finance, CCXT) für optimale Backtesting-Ergebnisse
 - **Security-by-Design:** Zero-Trust-Prinzipien in allen Services
 - **Dokumentation:** README und docs/ aktuell halten und auf Englisch schreiben
+- **Neue Features:** Immer mit Unit-Tests und Integrationstests absichern und im Ordner tests/ ablegen
+- **Root-Verzeichnis sauber halten:** Keine Code-Dateien im Root, nur config/, services/, tests/, scripts/, docs/, integrations/, examples/
 
 ## Kritische Entwicklungs-Workflows
 - **Environment Setup:** `conda env create -f environment.yml && conda activate tradpal-env`
