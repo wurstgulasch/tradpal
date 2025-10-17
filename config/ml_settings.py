@@ -148,3 +148,7 @@ SENTIMENT_MODEL_CACHE_DIR = os.getenv('SENTIMENT_MODEL_CACHE_DIR', 'cache/sentim
 SENTIMENT_PREPROCESSING_ENABLED = os.getenv('SENTIMENT_PREPROCESSING_ENABLED', 'true').lower() == 'true'  # Enable preprocessing
 SENTIMENT_REMOVE_STOPWORDS = os.getenv('SENTIMENT_REMOVE_STOPWORDS', 'true').lower() == 'true'  # Remove stopwords
 SENTIMENT_LEMMATIZE = os.getenv('SENTIMENT_LEMMATIZE', 'false').lower() == 'true'  # Apply lemmatization
+
+# Advanced Signal Generation Configuration
+ADVANCED_SIGNAL_GENERATION_ENABLED = os.getenv('ADVANCED_SIGNAL_GENERATION_ENABLED', 'true').lower() == 'true'  # Enable advanced ML-based signal generation
+ADVANCED_SIGNAL_GENERATION_MODE = os.getenv('ADVANCED_SIGNAL_GENERATION_MODE', 'hybrid')  # Options: 'legacy', 'advanced', 'hybrid'

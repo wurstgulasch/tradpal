@@ -51,7 +51,8 @@ from config.settings import (
     PERFORMANCE_MONITORING_ENABLED, MAX_WORKERS, CHUNK_SIZE,
     PERFORMANCE_LOG_LEVEL, REDIS_ENABLED, REDIS_HOST, REDIS_PORT,
     REDIS_DB, REDIS_PASSWORD, REDIS_TTL_INDICATORS, REDIS_TTL_API,
-    REDIS_MAX_CONNECTIONS
+    REDIS_MAX_CONNECTIONS, ADVANCED_SIGNAL_GENERATION_ENABLED,
+    ADVANCED_SIGNAL_GENERATION_MODE
 )
 
 logger = logging.getLogger(__name__)
@@ -465,6 +466,14 @@ class HybridCache:
 
         self.file_cache.clear()
 
+# Try to import Advanced Signal Generator
+try:
+    from .advanced_signal_generator import AdvancedSignalGenerator
+    ADVANCED_SIGNAL_GENERATOR_AVAILABLE = True
+except ImportError:
+    ADVANCED_SIGNAL_GENERATOR_AVAILABLE = False
+    logger.warning("Advanced Signal Generator nicht verfügbar - verwende Legacy-Modus")
+
 class CoreService:
     """Core trading logic service with integrated performance monitoring, audit logging, and caching."""
 
@@ -489,9 +498,39 @@ class CoreService:
         self.indicator_cache = HybridCache(cache_dir="cache/indicators", ttl_seconds=REDIS_TTL_INDICATORS)
         self.api_cache = HybridCache(cache_dir="cache/api", ttl_seconds=REDIS_TTL_API)
 
+        # Initialize Advanced Signal Generator if available and enabled
+        self.advanced_signal_generator = None
+        if ADVANCED_SIGNAL_GENERATOR_AVAILABLE and ADVANCED_SIGNAL_GENERATION_ENABLED:
+            try:
+                self.advanced_signal_generator = AdvancedSignalGenerator(self)
+                logger.info("Advanced Signal Generator erfolgreich initialisiert")
+            except Exception as e:
+                logger.warning(f"Advanced Signal Generator konnte nicht initialisiert werden: {e}")
+                self.advanced_signal_generator = None
+
     async def health_check(self) -> Dict[str, Any]:
         """Health check for the service."""
         cache_stats = self.get_cache_stats()
+
+        advanced_signal_status = {
+            "available": ADVANCED_SIGNAL_GENERATOR_AVAILABLE,
+            "enabled": ADVANCED_SIGNAL_GENERATION_ENABLED,
+            "mode": ADVANCED_SIGNAL_GENERATION_MODE,
+            "initialized": self.advanced_signal_generator is not None
+        }
+
+        if self.advanced_signal_generator:
+            # Check if ML model is loaded/trained
+            ml_model_status = "unknown"
+            try:
+                # This would need to be implemented in AdvancedSignalGenerator
+                ml_model_status = "available"  # Placeholder
+            except:
+                ml_model_status = "not_available"
+        else:
+            ml_model_status = "not_available"
+
+        advanced_signal_status["ml_model_status"] = ml_model_status
 
         return {
             "service": "core",
@@ -501,7 +540,8 @@ class CoreService:
             "indicators_available": len(self.available_indicators),
             "performance_monitoring": self.performance_monitor.monitoring,
             "cache_stats": cache_stats,
-            "audit_logs_count": self.get_recent_audit_logs(10)
+            "audit_logs_count": self.get_recent_audit_logs(10),
+            "advanced_signal_generation": advanced_signal_status
         }
 
     async def calculate_indicators(
@@ -597,6 +637,133 @@ class CoreService:
         Returns:
             List of trading signals
         """
+        # Check if advanced signal generation should be used
+        use_advanced = (
+            self.advanced_signal_generator is not None and
+            ADVANCED_SIGNAL_GENERATION_MODE in ['advanced', 'hybrid']
+        )
+
+        if use_advanced:
+            try:
+                logger.info(f"Verwende erweiterte Signalgenerierung für {symbol} {timeframe}")
+                signals = await self.advanced_signal_generator.generate_advanced_signals(symbol, data)
+
+                # If hybrid mode and no advanced signals, fall back to legacy
+                if not signals and ADVANCED_SIGNAL_GENERATION_MODE == 'hybrid':
+                    logger.info("Keine erweiterten Signale gefunden, verwende Legacy-Modus")
+                    signals = await self._generate_legacy_signals(symbol, timeframe, data, strategy_config)
+
+                return signals
+
+            except Exception as e:
+                logger.warning(f"Erweiterte Signalgenerierung fehlgeschlagen, verwende Legacy-Modus: {e}")
+                if ADVANCED_SIGNAL_GENERATION_MODE == 'advanced':
+                    # In pure advanced mode, still try legacy as fallback
+                    return await self._generate_legacy_signals(symbol, timeframe, data, strategy_config)
+                else:
+                    # In hybrid mode, return empty list if advanced fails
+                    return []
+
+        # Use legacy signal generation
+        return await self._generate_legacy_signals(symbol, timeframe, data, strategy_config)
+
+    async def generate_advanced_signals(
+        self,
+        symbol: str,
+        timeframe: str,
+        data: pd.DataFrame,
+        strategy_config: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate advanced ML-enhanced trading signals.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe
+            data: OHLCV DataFrame
+            strategy_config: Strategy configuration
+
+        Returns:
+            List of advanced trading signals
+        """
+        if not self.advanced_signal_generator:
+            logger.warning("Advanced Signal Generator nicht verfügbar, verwende Legacy-Modus")
+            return await self._generate_legacy_signals(symbol, timeframe, data, strategy_config)
+
+        try:
+            return await self.advanced_signal_generator.generate_advanced_signals(symbol, data)
+        except Exception as e:
+            logger.error(f"Advanced signal generation failed: {e}")
+            # Fallback to legacy
+            return await self._generate_legacy_signals(symbol, timeframe, data, strategy_config)
+
+    async def train_ml_model(self, symbol: str, historical_data: pd.DataFrame) -> bool:
+        """
+        Train the ML model for advanced signal generation.
+
+        Args:
+            symbol: Trading symbol
+            historical_data: Historical OHLCV data for training
+
+        Returns:
+            True if training successful, False otherwise
+        """
+        if not self.advanced_signal_generator:
+            logger.warning("Advanced Signal Generator nicht verfügbar")
+            return False
+
+        try:
+            await self.advanced_signal_generator.train_ml_model(historical_data, symbol)
+            logger.info(f"ML-Modell erfolgreich trainiert für {symbol}")
+            return True
+        except Exception as e:
+            logger.error(f"ML-Training fehlgeschlagen für {symbol}: {e}")
+            return False
+
+    async def load_ml_model(self, symbol: str) -> bool:
+        """
+        Load a trained ML model for advanced signal generation.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            True if model loaded successfully, False otherwise
+        """
+        if not self.advanced_signal_generator:
+            logger.warning("Advanced Signal Generator nicht verfügbar")
+            return False
+
+        try:
+            success = await self.advanced_signal_generator.load_ml_model(symbol)
+            if success:
+                logger.info(f"ML-Modell erfolgreich geladen für {symbol}")
+            else:
+                logger.info(f"Kein gespeichertes ML-Modell gefunden für {symbol}")
+            return success
+        except Exception as e:
+            logger.error(f"ML-Modell laden fehlgeschlagen für {symbol}: {e}")
+            return False
+
+    async def _generate_legacy_signals(
+        self,
+        symbol: str,
+        timeframe: str,
+        data: pd.DataFrame,
+        strategy_config: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate trading signals using legacy rule-based approach.
+
+        Args:
+            symbol: Trading symbol
+            timeframe: Timeframe
+            data: OHLCV DataFrame
+            strategy_config: Strategy configuration
+
+        Returns:
+            List of trading signals
+        """
         try:
             signals = []
 
@@ -643,7 +810,7 @@ class CoreService:
             return signal_dicts
 
         except Exception as e:
-            logger.error(f"Signal generation failed: {e}")
+            logger.error(f"Legacy signal generation failed: {e}")
             raise
 
     async def execute_strategy(

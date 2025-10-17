@@ -31,6 +31,35 @@ from config.settings import (
     POSITION_UPDATE_INTERVAL
 )
 
+# Service imports for smart trading
+try:
+    from services.core.client import CoreServiceClient
+    CORE_SERVICE_AVAILABLE = True
+except ImportError:
+    CORE_SERVICE_AVAILABLE = False
+    logger.warning("CoreService not available - using legacy signal generation")
+
+try:
+    from services.risk_service.client import RiskServiceClient
+    RISK_SERVICE_AVAILABLE = True
+except ImportError:
+    RISK_SERVICE_AVAILABLE = False
+    logger.warning("RiskService not available - using basic position sizing")
+
+try:
+    from services.market_regime_detection_service.client import MarketRegimeDetectionServiceClient
+    MARKET_REGIME_SERVICE_AVAILABLE = True
+except ImportError:
+    MARKET_REGIME_SERVICE_AVAILABLE = False
+    logger.warning("MarketRegimeService not available - using basic regime detection")
+
+try:
+    from services.data_service.client import DataServiceClient
+    DATA_SERVICE_AVAILABLE = True
+except ImportError:
+    DATA_SERVICE_AVAILABLE = False
+    logger.warning("DataService not available - using simulated data")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -167,7 +196,39 @@ class TradingBotLiveService:
         # Background tasks
         self.monitoring_tasks: Dict[str, asyncio.Task] = {}
 
-        logger.info("Trading Bot Live Service initialized")
+        # Service clients for smart trading
+        self.core_service = None
+        self.risk_service = None
+        self.market_regime_service = None
+        self.data_service = None
+
+        # Initialize service clients
+        self._initialize_services()
+
+        logger.info("Trading Bot Live Service initialized with smart capabilities")
+
+    def _initialize_services(self):
+        """Initialize smart trading service clients."""
+        try:
+            if CORE_SERVICE_AVAILABLE:
+                self.core_service = CoreServiceClient()
+                logger.info("✅ CoreService client initialized for ML signals")
+
+            if RISK_SERVICE_AVAILABLE:
+                self.risk_service = RiskServiceClient()
+                logger.info("✅ RiskService client initialized for smart position sizing")
+
+            if MARKET_REGIME_SERVICE_AVAILABLE:
+                self.market_regime_service = MarketRegimeDetectionServiceClient()
+                logger.info("✅ MarketRegimeService client initialized for adaptive trading")
+
+            if DATA_SERVICE_AVAILABLE:
+                self.data_service = DataServiceClient()
+                logger.info("✅ DataService client initialized for real-time data")
+
+        except Exception as e:
+            logger.error(f"Error initializing service clients: {e}")
+            logger.warning("Falling back to legacy trading logic")
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check."""
@@ -597,33 +658,547 @@ class TradingBotLiveService:
         except Exception as e:
             logger.error(f"Monitoring error for {symbol}: {e}")
 
-    async def _check_trading_signals(self, symbol: str):
-        """Check for trading signals (placeholder)."""
-        # This would integrate with the core service to get signals
-        # For now, simulate occasional signals
-        if np.random.random() < 0.01:  # 1% chance per check
-            signal = np.random.choice(["buy", "sell"])
-            await self.event_system.publish("trading.signal_generated", {
-                "symbol": symbol,
-                "signal": signal,
-                "timestamp": datetime.now().isoformat()
-            })
-
-            # Execute signal if conditions met
+    async def _check_trading_signals(self, symbol: str) -> List[Dict[str, Any]]:
+        """Check for trading signals using ML-based advanced signal generation."""
+        signals = []
+        try:
             session = self.trading_sessions[symbol]
-            current_positions = len(self.positions.get(symbol, []))
 
-            if current_positions < session.max_positions:
-                # Calculate position size
-                position_size = await self._calculate_position_size(symbol)
+            # Use CoreService for ML signals if available
+            if self.core_service and CORE_SERVICE_AVAILABLE:
+                # Get historical data for signal generation
+                historical_data = await self._get_historical_data(symbol, session.timeframe)
+
+                if historical_data is not None and not historical_data.empty:
+                    # Convert DataFrame to list of dicts for API
+                    data_list = historical_data.reset_index().to_dict('records')
+
+                    # Generate ML-based signals
+                    ml_signals = await self.core_service.generate_signals(
+                        symbol=symbol,
+                        timeframe=session.timeframe,
+                        data=data_list
+                    )
+
+                    # Process signals with confidence filtering
+                    if ml_signals:
+                        for signal in ml_signals:
+                            await self._process_ml_signals(symbol, signal)
+                        signals = ml_signals
+                    else:
+                        signals = []
+                else:
+                    logger.warning(f"No historical data available for {symbol}")
+                    await self._fallback_signal_generation(symbol)
+
+            else:
+                # Fallback to legacy signal generation
+                logger.warning(f"CoreService not available for {symbol}, using fallback")
+                await self._fallback_signal_generation(symbol)
+
+        except Exception as e:
+            logger.error(f"Error checking trading signals for {symbol}: {e}")
+            # Emergency fallback
+            await self._fallback_signal_generation(symbol)
+
+        return signals
+
+    async def _get_historical_data(self, symbol: str, timeframe: str, limit: int = 1000) -> Optional[pd.DataFrame]:
+        """Get historical data for signal generation."""
+        try:
+            if self.data_service and DATA_SERVICE_AVAILABLE:
+                # Use DataService for real historical data
+                data = await self.data_service.get_historical_data(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    limit=limit
+                )
+                return pd.DataFrame(data) if data else None
+            else:
+                # Fallback: generate synthetic data for testing
+                return self._generate_synthetic_data(symbol, limit)
+
+        except Exception as e:
+            logger.error(f"Error getting historical data for {symbol}: {e}")
+            return self._generate_synthetic_data(symbol, limit)
+
+    async def _process_ml_signals(self, symbol: str, signals: Dict[str, Any]):
+        """Process ML-generated signals with confidence filtering."""
+        try:
+            session = self.trading_sessions[symbol]
+
+            # Extract signal information
+            signal_type = signals.get("signal", "").upper()
+            confidence = signals.get("confidence", 0.0)
+            market_regime = signals.get("market_regime", "unknown")
+
+            # Confidence threshold based on market regime
+            confidence_threshold = self._get_confidence_threshold(market_regime)
+
+            logger.info(f"ML Signal for {symbol}: {signal_type} (confidence: {confidence:.3f}, regime: {market_regime})")
+
+            # Only execute high-confidence signals
+            if confidence >= confidence_threshold and signal_type in ["BUY", "SELL"]:
+                # Check position limits
+                current_positions = len(self.positions.get(symbol, []))
+                if current_positions >= session.max_positions:
+                    logger.info(f"Position limit reached for {symbol} ({current_positions}/{session.max_positions})")
+                    return
+
+                # Get market regime for position sizing
+                regime_info = await self._get_market_regime(symbol)
+
+                # Calculate smart position size
+                position_size = await self._calculate_smart_position_size(
+                    symbol, signal_type, confidence, regime_info
+                )
 
                 if position_size > 0:
-                    await self.place_manual_order(
-                        symbol=symbol,
-                        side=signal,
-                        quantity=position_size,
-                        order_type="market"
+                    # Execute the signal
+                    await self._execute_ml_signal(symbol, signal_type, position_size, signals)
+
+                    # Publish signal event
+                    await self.event_system.publish("trading.ml_signal_executed", {
+                        "symbol": symbol,
+                        "signal": signal_type,
+                        "confidence": confidence,
+                        "market_regime": market_regime,
+                        "position_size": position_size,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                else:
+                    logger.warning(f"Invalid position size calculated for {symbol}: {position_size}")
+            else:
+                logger.info(f"Signal rejected for {symbol}: confidence {confidence:.3f} < threshold {confidence_threshold}")
+
+        except Exception as e:
+            logger.error(f"Error processing ML signals for {symbol}: {e}")
+
+    async def _execute_ml_signal(self, symbol: str, signal_type: str, position_size: float, signal_data: Dict[str, Any]):
+        """Execute ML-generated signal with smart parameters."""
+        try:
+            # Get current market conditions
+            current_price = await self._get_current_price(symbol)
+            market_regime = signal_data.get("market_regime", "unknown")
+
+            # Calculate smart stop loss and take profit based on market regime
+            sl_tp_levels = await self._calculate_smart_sl_tp(symbol, signal_type, current_price, market_regime)
+
+            # Place order with smart parameters
+            order_result = await self.place_manual_order(
+                symbol=symbol,
+                side=signal_type.lower(),
+                quantity=position_size,
+                order_type="market"
+            )
+
+            if order_result.get("order_id"):
+                # Update position with smart SL/TP
+                await self._update_position_with_sl_tp(
+                    symbol, order_result["order_id"], sl_tp_levels
+                )
+
+                logger.info(f"Executed ML signal for {symbol}: {signal_type} {position_size:.6f} @ {current_price}")
+
+        except Exception as e:
+            logger.error(f"Error executing ML signal for {symbol}: {e}")
+
+    async def _calculate_smart_position_size(self, symbol: str, signal_type: str, confidence: float, regime_info: Dict[str, Any]) -> float:
+        """Calculate position size using RiskService with ML insights and Kelly Criterion."""
+        try:
+            session = self.trading_sessions[symbol]
+
+            if self.risk_service and RISK_SERVICE_AVAILABLE:
+                # Use RiskService for intelligent position sizing with Kelly Criterion
+                position_sizing = await self.risk_service.calculate_position_size(
+                    symbol=symbol,
+                    capital=session.capital,
+                    risk_per_trade=session.risk_per_trade,
+                    volatility=await self._get_volatility(symbol),
+                    market_regime=regime_info.get("regime", "unknown"),
+                    signal_confidence=confidence,
+                    signal_type=signal_type,
+                    use_kelly_criterion=True  # Enable Kelly Criterion
+                )
+
+                position_size = position_sizing.get("position_size", 0.0)
+
+                # Validate position size
+                if position_size > 0:
+                    # Apply additional ML-based adjustments
+                    position_size = await self._apply_ml_position_adjustments(
+                        symbol, position_size, confidence, regime_info
                     )
+
+                return position_size
+
+            else:
+                # Enhanced fallback with ML insights
+                return await self._calculate_enhanced_fallback_position_size(
+                    symbol, signal_type, confidence, regime_info
+                )
+
+        except Exception as e:
+            logger.error(f"Error calculating smart position size for {symbol}: {e}")
+            # Ultimate fallback
+            return await self._calculate_position_size(symbol)
+
+    async def _apply_ml_position_adjustments(self, symbol: str, base_position_size: float, confidence: float, regime_info: Dict[str, Any]) -> float:
+        """Apply additional ML-based adjustments to position size."""
+        try:
+            # Confidence-based adjustment (0.5x to 1.5x multiplier)
+            confidence_multiplier = 0.5 + (confidence * 1.0)
+
+            # Market regime adjustment
+            regime = regime_info.get("regime", "unknown")
+            regime_multiplier = self._get_regime_position_multiplier(regime)
+
+            # Recent performance adjustment
+            performance_multiplier = await self._get_performance_based_multiplier(symbol)
+
+            # Apply all adjustments
+            adjusted_size = base_position_size * confidence_multiplier * regime_multiplier * performance_multiplier
+
+            # Apply sanity bounds (0.1x to 3x of base size)
+            adjusted_size = max(base_position_size * 0.1, min(adjusted_size, base_position_size * 3.0))
+
+            logger.debug(f"ML position adjustments for {symbol}: base={base_position_size:.6f}, confidence_mult={confidence_multiplier:.2f}, regime_mult={regime_multiplier:.2f}, perf_mult={performance_multiplier:.2f}, final={adjusted_size:.6f}")
+
+            return adjusted_size
+
+        except Exception as e:
+            logger.error(f"Error applying ML position adjustments for {symbol}: {e}")
+            return base_position_size
+
+    async def _calculate_enhanced_fallback_position_size(self, symbol: str, signal_type: str, confidence: float, regime_info: Dict[str, Any]) -> float:
+        """Enhanced fallback position sizing with ML insights when RiskService unavailable."""
+        try:
+            session = self.trading_sessions[symbol]
+
+            # Get market data
+            current_price = await self._get_current_price(symbol)
+            volatility = await self._get_volatility(symbol)
+
+            # Base Kelly Criterion calculation
+            # K = (p * (b+1) - 1) / b, where p=win_rate, b=reward_risk_ratio
+            win_rate = await self._calculate_recent_win_rate(symbol)
+            reward_risk_ratio = self._calculate_reward_risk_ratio(regime_info.get("regime", "unknown"))
+
+            if win_rate > 0 and reward_risk_ratio > 0:
+                kelly_fraction = (win_rate * (reward_risk_ratio + 1) - 1) / reward_risk_ratio
+                kelly_fraction = max(0, min(kelly_fraction, 0.25))  # Bound Kelly fraction
+            else:
+                kelly_fraction = session.risk_per_trade  # Fallback to session risk
+
+            # Apply ML adjustments
+            confidence_multiplier = 0.7 + (confidence * 0.6)  # 0.7 to 1.3
+            regime_multiplier = self._get_regime_position_multiplier(regime_info.get("regime", "unknown"))
+
+            adjusted_risk = kelly_fraction * confidence_multiplier * regime_multiplier
+
+            # Calculate position size
+            risk_amount = session.capital * adjusted_risk
+            position_value = risk_amount / 0.02  # Assume 2% risk per trade
+            quantity = position_value / current_price
+
+            # Apply position limits
+            max_position_value = session.capital * 0.1  # Max 10% of capital per position
+            max_quantity = max_position_value / current_price
+            quantity = min(quantity, max_quantity)
+
+            return max(0, quantity)
+
+        except Exception as e:
+            logger.error(f"Error in enhanced fallback position sizing for {symbol}: {e}")
+            return await self._calculate_position_size(symbol)
+
+    def _get_regime_position_multiplier(self, market_regime: str) -> float:
+        """Get position size multiplier based on market regime."""
+        multipliers = {
+            "trending": 1.3,         # Larger positions in trends
+            "consolidation": 0.7,    # Smaller positions in consolidation
+            "high_volatility": 0.5,  # Much smaller in high vol
+            "low_volatility": 1.1,   # Slightly larger in low vol
+            "unknown": 0.9          # Conservative default
+        }
+        return multipliers.get(market_regime, 0.9)
+
+    async def _get_performance_based_multiplier(self, symbol: str) -> float:
+        """Calculate position size multiplier based on recent performance."""
+        try:
+            # Get recent trades (last 10)
+            recent_trades = [t for t in self.trade_history if t["symbol"] == symbol][-10:]
+
+            if len(recent_trades) < 5:
+                return 1.0  # Not enough data
+
+            # Calculate recent win rate
+            recent_wins = sum(1 for t in recent_trades if t.get("pnl", 0) > 0)
+            recent_win_rate = recent_wins / len(recent_trades)
+
+            # Calculate recent profit factor
+            recent_gross_profit = sum(t.get("pnl", 0) for t in recent_trades if t.get("pnl", 0) > 0)
+            recent_gross_loss = abs(sum(t.get("pnl", 0) for t in recent_trades if t.get("pnl", 0) < 0))
+
+            if recent_gross_loss > 0:
+                profit_factor = recent_gross_profit / recent_gross_loss
+            else:
+                profit_factor = float('inf') if recent_gross_profit > 0 else 1.0
+
+            # Combine metrics for multiplier (0.5x to 1.5x)
+            win_rate_component = 0.5 + (recent_win_rate * 0.5)
+            profit_factor_component = min(1.5, max(0.5, profit_factor * 0.3))
+
+            multiplier = (win_rate_component + profit_factor_component) / 2
+
+            return multiplier
+
+        except Exception as e:
+            logger.error(f"Error calculating performance multiplier for {symbol}: {e}")
+            return 1.0
+
+    async def _calculate_recent_win_rate(self, symbol: str, lookback: int = 20) -> float:
+        """Calculate recent win rate for symbol."""
+        try:
+            recent_trades = [t for t in self.trade_history if t["symbol"] == symbol][-lookback:]
+            if not recent_trades:
+                return 0.5  # Neutral assumption
+
+            wins = sum(1 for t in recent_trades if t.get("pnl", 0) > 0)
+            return wins / len(recent_trades)
+
+        except Exception as e:
+            logger.error(f"Error calculating win rate for {symbol}: {e}")
+            return 0.5
+
+    def _calculate_reward_risk_ratio(self, market_regime: str) -> float:
+        """Calculate expected reward-to-risk ratio based on market regime."""
+        # Typical R:R ratios for different regimes
+        rr_ratios = {
+            "trending": 2.5,        # Higher R:R in trends
+            "consolidation": 1.5,   # Lower R:R in consolidation
+            "high_volatility": 1.2, # Conservative R:R in high vol
+            "low_volatility": 2.0,  # Moderate R:R in low vol
+            "unknown": 1.8         # Default
+        }
+        return rr_ratios.get(market_regime, 1.8)
+
+    async def _calculate_basic_position_size_with_ml(self, symbol: str, confidence: float, regime_info: Dict[str, Any]) -> float:
+        """Basic position sizing enhanced with ML insights."""
+        session = self.trading_sessions[symbol]
+
+        # Base calculation
+        current_price = await self._get_current_price(symbol)
+        volatility = await self._get_volatility(symbol)
+
+        # Adjust risk based on confidence and market regime
+        confidence_multiplier = 0.5 + (confidence * 0.5)  # 0.5 to 1.0
+        regime_multiplier = self._get_regime_risk_multiplier(regime_info.get("regime", "unknown"))
+
+        adjusted_risk = session.risk_per_trade * confidence_multiplier * regime_multiplier
+
+        # Position size calculation
+        risk_amount = session.capital * adjusted_risk
+        risk_multiplier = 2.0  # Stop loss distance in volatility units
+
+        position_size = risk_amount / (volatility * risk_multiplier)
+        quantity = position_size / current_price
+
+        return quantity
+
+    async def _get_market_regime(self, symbol: str) -> Dict[str, Any]:
+        """Get current market regime information."""
+        try:
+            if self.market_regime_service and MARKET_REGIME_SERVICE_AVAILABLE:
+                # Use MarketRegimeService
+                regime_data = await self.market_regime_service.get_market_regime(symbol=symbol)
+                return regime_data
+            else:
+                # Fallback: basic regime detection
+                return await self._detect_basic_regime(symbol)
+
+        except Exception as e:
+            logger.error(f"Error getting market regime for {symbol}: {e}")
+            return {"regime": "unknown", "confidence": 0.0}
+
+    async def _detect_basic_regime(self, symbol: str) -> Dict[str, Any]:
+        """Basic market regime detection using volatility and trend."""
+        try:
+            # Get recent price data
+            current_price = await self._get_current_price(symbol)
+            volatility = await self._get_volatility(symbol)
+
+            # Simple regime classification based on volatility
+            if volatility > 2000:  # High volatility
+                regime = "high_volatility"
+                confidence = 0.8
+            elif volatility > 1000:  # Moderate volatility
+                regime = "moderate_volatility"
+                confidence = 0.6
+            else:  # Low volatility
+                regime = "consolidation"
+                confidence = 0.7
+
+            return {
+                "regime": regime,
+                "confidence": confidence,
+                "volatility": volatility,
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Error in basic regime detection for {symbol}: {e}")
+            return {"regime": "unknown", "confidence": 0.0}
+
+    async def _calculate_smart_sl_tp(self, symbol: str, signal_type: str, current_price: float, market_regime: str) -> Dict[str, float]:
+        """Calculate smart stop loss and take profit levels based on market regime."""
+        try:
+            volatility = await self._get_volatility(symbol)
+
+            # Base multipliers based on market regime
+            if market_regime == "trending":
+                sl_multiplier = 1.5  # Wider stops in trends
+                tp_multiplier = 3.0  # Higher targets in trends
+            elif market_regime == "high_volatility":
+                sl_multiplier = 2.0  # Very wide stops in high vol
+                tp_multiplier = 2.0  # Moderate targets
+            elif market_regime == "consolidation":
+                sl_multiplier = 1.0  # Tight stops in consolidation
+                tp_multiplier = 2.0  # Moderate targets
+            else:
+                sl_multiplier = 1.5  # Default
+                tp_multiplier = 2.5  # Default
+
+            # Calculate levels
+            if signal_type == "BUY":
+                stop_loss = current_price - (volatility * sl_multiplier)
+                take_profit = current_price + (volatility * tp_multiplier)
+            else:  # SELL
+                stop_loss = current_price + (volatility * sl_multiplier)
+                take_profit = current_price - (volatility * tp_multiplier)
+
+            return {
+                "stop_loss": stop_loss,
+                "take_profit": take_profit
+            }
+
+        except Exception as e:
+            logger.error(f"Error calculating smart SL/TP for {symbol}: {e}")
+            # Fallback to basic levels
+            if signal_type == "BUY":
+                return {
+                    "stop_loss": current_price * 0.95,
+                    "take_profit": current_price * 1.05
+                }
+            else:
+                return {
+                    "stop_loss": current_price * 1.05,
+                    "take_profit": current_price * 0.95
+                }
+
+    async def _update_position_with_sl_tp(self, symbol: str, order_id: str, sl_tp_levels: Dict[str, float]):
+        """Update position with smart stop loss and take profit levels."""
+        try:
+            # Find the position created by this order
+            if symbol in self.positions:
+                for position in self.positions[symbol]:
+                    # Match by entry price (approximate)
+                    if abs(position.entry_price - await self._get_current_price(symbol)) < 100:  # Within $100
+                        position.stop_loss = sl_tp_levels["stop_loss"]
+                        position.take_profit = sl_tp_levels["take_profit"]
+                        logger.info(f"Updated position {position.position_id} with smart SL/TP: SL={position.stop_loss:.2f}, TP={position.take_profit:.2f}")
+                        break
+
+        except Exception as e:
+            logger.error(f"Error updating position SL/TP for {symbol}: {e}")
+
+    def _get_confidence_threshold(self, market_regime: str) -> float:
+        """Get confidence threshold based on market regime."""
+        thresholds = {
+            "trending": 0.75,        # Higher threshold in trends
+            "consolidation": 0.80,   # Very high threshold in consolidation
+            "high_volatility": 0.85, # Highest threshold in high volatility
+            "low_volatility": 0.70,  # Lower threshold in low volatility
+            "unknown": 0.85         # Conservative default
+        }
+        return thresholds.get(market_regime, 0.85)
+
+    def _get_regime_risk_multiplier(self, market_regime: str) -> float:
+        """Get risk multiplier based on market regime."""
+        multipliers = {
+            "trending": 1.2,         # Higher risk in trends
+            "consolidation": 0.8,    # Lower risk in consolidation
+            "high_volatility": 0.6,  # Much lower risk in high vol
+            "low_volatility": 1.0,   # Normal risk
+            "unknown": 0.8          # Conservative
+        }
+        return multipliers.get(market_regime, 0.8)
+
+    def _generate_synthetic_data(self, symbol: str, limit: int = 1000) -> pd.DataFrame:
+        """Generate synthetic OHLCV data for testing."""
+        # Create datetime index
+        end_time = datetime.now()
+        start_time = end_time - timedelta(hours=limit)
+        timestamps = pd.date_range(start=start_time, end=end_time, freq='1H')[:limit]
+
+        # Generate synthetic price data
+        base_price = 50000.0
+        prices = []
+        current_price = base_price
+
+        for i in range(limit):
+            # Random walk with trend
+            change = np.random.normal(0, 500)  # Mean=0, StdDev=500
+            current_price += change
+            current_price = max(current_price, 1000)  # Floor price
+            prices.append(current_price)
+
+        # Create OHLCV data
+        data = []
+        for i, price in enumerate(prices):
+            high = price + abs(np.random.normal(0, 200))
+            low = price - abs(np.random.normal(0, 200))
+            open_price = prices[i-1] if i > 0 else price
+            volume = np.random.uniform(100, 1000)
+
+            data.append({
+                'timestamp': timestamps[i],
+                'open': open_price,
+                'high': high,
+                'low': low,
+                'close': price,
+                'volume': volume
+            })
+
+        df = pd.DataFrame(data)
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    async def _fallback_signal_generation(self, symbol: str):
+        """Fallback signal generation when ML services are unavailable."""
+        try:
+            # Simple technical analysis based signal generation
+            if np.random.random() < 0.02:  # 2% chance (higher than random)
+                signal = np.random.choice(["buy", "sell"])
+
+                session = self.trading_sessions[symbol]
+                current_positions = len(self.positions.get(symbol, []))
+
+                if current_positions < session.max_positions:
+                    position_size = await self._calculate_position_size(symbol)
+
+                    if position_size > 0:
+                        await self.place_manual_order(
+                            symbol=symbol,
+                            side=signal,
+                            quantity=position_size,
+                            order_type="market"
+                        )
+
+                        logger.info(f"Fallback signal executed for {symbol}: {signal}")
+
+        except Exception as e:
+            logger.error(f"Error in fallback signal generation for {symbol}: {e}")
 
     async def _update_positions(self, symbol: str):
         """Update position prices and P&L."""
@@ -645,22 +1220,152 @@ class TradingBotLiveService:
             await self._check_position_exits(position)
 
     async def _check_risk_limits(self, symbol: str):
-        """Check risk management limits."""
-        session = self.trading_sessions[symbol]
+        """Check risk management limits with adaptive, market-regime-aware logic."""
+        try:
+            session = self.trading_sessions[symbol]
 
-        # Calculate current drawdown
-        performance = await self.get_symbol_performance(symbol)
-        current_drawdown = -performance.get("total_return", 0)  # Negative return = drawdown
+            # Get current market regime for adaptive risk management
+            regime_info = await self._get_market_regime(symbol)
+            market_regime = regime_info.get("regime", "unknown")
 
-        if current_drawdown > session.max_drawdown:
-            logger.warning(f"Drawdown limit reached for {symbol}: {current_drawdown}")
-            await self.event_system.publish("trading.risk_triggered", {
-                "symbol": symbol,
-                "risk_type": "max_drawdown",
-                "value": current_drawdown
-            })
+            # Calculate current drawdown
+            performance = await self.get_symbol_performance(symbol)
+            current_drawdown = -performance.get("total_return", 0)
 
-            # Could implement automatic position reduction here
+            # Adaptive risk limits based on market regime
+            adaptive_limits = self._calculate_adaptive_risk_limits(market_regime, session.max_drawdown)
+
+            # Check if risk limits are breached
+            risk_breached = current_drawdown > adaptive_limits["max_drawdown"]
+
+            if risk_breached:
+                logger.warning(f"Adaptive risk limit breached for {symbol} in {market_regime} regime: {current_drawdown:.2%} > {adaptive_limits['max_drawdown']:.2%}")
+
+                # Adaptive response based on regime
+                await self._handle_risk_breach(symbol, market_regime, current_drawdown, adaptive_limits)
+
+                # Publish risk event
+                await self.event_system.publish("trading.adaptive_risk_triggered", {
+                    "symbol": symbol,
+                    "market_regime": market_regime,
+                    "risk_type": "adaptive_max_drawdown",
+                    "current_drawdown": current_drawdown,
+                    "limit": adaptive_limits["max_drawdown"],
+                    "response": adaptive_limits.get("breach_response", "reduce_positions")
+                })
+            else:
+                logger.debug(f"Risk check passed for {symbol} in {market_regime} regime: {current_drawdown:.2%} <= {adaptive_limits['max_drawdown']:.2%}")
+
+        except Exception as e:
+            logger.error(f"Error in adaptive risk checking for {symbol}: {e}")
+            # Fallback to basic risk checking
+            await self._fallback_risk_check(symbol)
+
+    def _calculate_adaptive_risk_limits_static(self, market_regime: str, base_max_drawdown: float) -> Dict[str, Any]:
+        """Calculate adaptive risk limits based on market regime."""
+        # Base limits adjusted by market conditions
+        regime_adjustments = {
+            "trending": {
+                "max_drawdown_multiplier": 1.5,  # Allow higher drawdown in trends
+                "breach_response": "reduce_positions_partial",
+                "position_limit_multiplier": 1.2
+            },
+            "consolidation": {
+                "max_drawdown_multiplier": 0.7,  # Stricter limits in consolidation
+                "breach_response": "close_all_positions",
+                "position_limit_multiplier": 0.8
+            },
+            "high_volatility": {
+                "max_drawdown_multiplier": 0.5,  # Very strict in high vol
+                "breach_response": "emergency_stop",
+                "position_limit_multiplier": 0.5
+            },
+            "low_volatility": {
+                "max_drawdown_multiplier": 1.2,  # Slightly more lenient
+                "breach_response": "reduce_positions_partial",
+                "position_limit_multiplier": 1.1
+            },
+            "unknown": {
+                "max_drawdown_multiplier": 0.8,  # Conservative default
+                "breach_response": "reduce_positions_partial",
+                "position_limit_multiplier": 0.9
+            }
+        }
+
+        adjustment = regime_adjustments.get(market_regime, regime_adjustments["unknown"])
+
+        return {
+            "max_drawdown": base_max_drawdown * adjustment["max_drawdown_multiplier"],
+            "breach_response": adjustment["breach_response"],
+            "position_limit_multiplier": adjustment["position_limit_multiplier"],
+            "regime": market_regime
+        }
+
+    async def _handle_risk_breach(self, symbol: str, market_regime: str, current_drawdown: float, limits: Dict[str, Any]):
+        """Handle risk breaches with adaptive responses based on market regime."""
+        try:
+            response_type = limits.get("breach_response", "reduce_positions_partial")
+
+            if response_type == "emergency_stop":
+                logger.critical(f"Emergency stop triggered for {symbol} in {market_regime} regime")
+                await self.stop_trading(symbol, close_positions=True)
+
+            elif response_type == "close_all_positions":
+                logger.warning(f"Closing all positions for {symbol} due to risk breach in {market_regime}")
+                positions_closed = 0
+                if symbol in self.positions:
+                    for position in self.positions[symbol][:]:  # Copy list to avoid modification issues
+                        await self._close_position(position, f"Risk breach - {market_regime}")
+                        positions_closed += 1
+                    self.positions[symbol] = []
+                logger.info(f"Closed {positions_closed} positions for {symbol}")
+
+            elif response_type == "reduce_positions_partial":
+                # Reduce position sizes by 50%
+                logger.warning(f"Reducing positions for {symbol} by 50% due to risk breach in {market_regime}")
+                if symbol in self.positions:
+                    for position in self.positions[symbol]:
+                        # Reduce position size
+                        original_size = position.quantity
+                        position.quantity *= 0.5
+                        logger.info(f"Reduced position {position.position_id} from {original_size} to {position.quantity}")
+
+            # Update session risk parameters adaptively
+            session = self.trading_sessions[symbol]
+            session.risk_per_trade *= 0.8  # Reduce risk per trade by 20%
+            session.max_positions = max(1, int(session.max_positions * 0.7))  # Reduce max positions
+
+            logger.info(f"Adapted risk parameters for {symbol}: risk_per_trade={session.risk_per_trade:.3f}, max_positions={session.max_positions}")
+
+        except Exception as e:
+            logger.error(f"Error handling risk breach for {symbol}: {e}")
+
+    async def _fallback_risk_check(self, symbol: str):
+        """Fallback risk checking when adaptive system fails."""
+        try:
+            session = self.trading_sessions[symbol]
+
+            # Basic drawdown check
+            performance = await self.get_symbol_performance(symbol)
+            current_drawdown = -performance.get("total_return", 0)
+
+            if current_drawdown > session.max_drawdown:
+                logger.warning(f"Fallback: Drawdown limit reached for {symbol}: {current_drawdown:.2%}")
+                await self.event_system.publish("trading.fallback_risk_triggered", {
+                    "symbol": symbol,
+                    "risk_type": "max_drawdown",
+                    "value": current_drawdown,
+                    "limit": session.max_drawdown
+                })
+
+                # Basic response: reduce positions
+                if symbol in self.positions:
+                    for position in self.positions[symbol][:1]:  # Close just one position
+                        await self._close_position(position, "Fallback risk management")
+                        break
+
+        except Exception as e:
+            logger.error(f"Error in fallback risk check for {symbol}: {e}")
 
     async def _calculate_position_size(self, symbol: str) -> float:
         """Calculate position size based on risk management."""

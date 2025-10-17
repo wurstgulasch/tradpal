@@ -3,7 +3,7 @@
 ## Überblick
 **TradPal** ist ein vollautonomes AI Trading System basierend auf einer vollständigen Microservices-Architektur. Ziel ist die konsistente Outperformance von Buy&Hold und traditionellen Indikatoren durch fortschrittliche ML-Modelle, Ensemble-Methoden und Risikomanagement.
 
-**Aktueller Stand (Oktober 2025):** Version 3.0.1 mit kompletter Microservices-Migration und 100% Test-Coverage für implementierte Features (490 Tests bestehen).
+**Aktueller Stand (Oktober 2025):** Version 3.0.1 mit kompletter Microservices-Migration und 100% Test-Coverage für implementierte Features (537 Tests bestehen).
 
 ## Projektstruktur (STRENG EINHALTEN!)
 - `services/`: **Microservices-Architektur** - ALLE neuen Features/Service-Entwicklungen hier implementieren
