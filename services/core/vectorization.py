@@ -92,12 +92,15 @@ class VectorizedIndicators:
         if TALIB_AVAILABLE:
             try:
                 ema_values = talib.EMA(prices, timeperiod=period)
+                if ema_values is not None:
+                    ema_values[:period-1] = np.nan
                 return ema_values
             except Exception:
                 pass
 
-        # Fallback to pandas implementation
-        return pd.Series(prices).ewm(span=period, adjust=False).mean().values
+        # Fallback to pandas implementation with consistent NaN handling
+        ema_series = pd.Series(prices).ewm(span=period, adjust=False, min_periods=period).mean()
+        return ema_series.values
 
     @staticmethod
     @jit(nopython=True, parallel=True, fastmath=True)

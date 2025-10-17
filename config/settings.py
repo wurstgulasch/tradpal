@@ -599,6 +599,12 @@ ORDER_TIMEOUT = 30  # Order timeout in seconds
 POSITION_UPDATE_INTERVAL = 60  # Position update interval in seconds
 OUTPUT_DIR = 'output'  # Output directory for results
 
+# Alternative Data Service Configuration
+ALTERNATIVE_DATA_UPDATE_INTERVAL = int(os.getenv('ALTERNATIVE_DATA_UPDATE_INTERVAL', '300'))  # 5 minutes
+SENTIMENT_DATA_SOURCES = os.getenv('SENTIMENT_DATA_SOURCES', 'twitter,reddit,news').split(',')  # Sentiment sources
+ONCHAIN_DATA_SOURCES = os.getenv('ONCHAIN_DATA_SOURCES', 'glassnode,blockchain_com').split(',')  # On-chain data sources
+ECONOMIC_DATA_SOURCES = os.getenv('ECONOMIC_DATA_SOURCES', 'fred,bureau_labor,alpha_vantage').split(',')  # Economic data sources
+
 # Validation functions
 def validate_timeframe(timeframe: str) -> bool:
     """

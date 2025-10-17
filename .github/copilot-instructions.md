@@ -3,7 +3,7 @@
 ## Überblick
 **TradPal** ist ein vollautonomes AI Trading System basierend auf einer vollständigen Microservices-Architektur. Ziel ist die konsistente Outperformance von Buy&Hold und traditionellen Indikatoren durch fortschrittliche ML-Modelle, Ensemble-Methoden und Risikomanagement.
 
-**Aktueller Stand (Oktober 2025):** Version 3.0.0 mit kompletter Microservices-Migration. Fokus auf Optimierung der bestehenden Architektur und Weiterentwicklung der Services.
+**Aktueller Stand (Oktober 2025):** Version 3.0.1 mit kompletter Microservices-Migration und 100% Test-Coverage für implementierte Features (490 Tests bestehen).
 
 ## Projektstruktur (STRENG EINHALTEN!)
 - `services/`: **Microservices-Architektur** - ALLE neuen Features/Service-Entwicklungen hier implementieren
@@ -29,12 +29,21 @@
 
 ## Architektur-Prinzipien
 - **Microservices-First:** Jede neue Funktionalität als separater Service
-- **Event-Driven:** Apache Kafka/Redis Streams für Service-Kommunikation
+- **Event-Driven:** Redis Streams für Echtzeit-Kommunikation zwischen Services
+- **API Gateway:** Zentrales Routing, Authentifizierung und Load Balancing
 - **Zero-Trust-Security:** mTLS, OAuth/JWT, Secrets-Management
-- **Observability:** Distributed Tracing, Metrics, Logs
-- **Resilience:** Circuit Breaker, Retry-Patterns, Chaos Engineering
+- **Observability:** Prometheus/Grafana Monitoring, verteilte Tracing, Metriken, Logs
+- **Resilience:** Circuit Breaker, Retry-Patterns, Health Checks, Chaos Engineering
 
 ## Entwicklungsfokus 2025
+
+✅ **Abgeschlossen:**
+- Event-Driven Architecture mit Redis Streams
+- API Gateway mit Service Discovery und Load Balancing
+- Zentralisiertes Monitoring mit Prometheus/Grafana
+- Circuit Breaker und Health Check Resilience Patterns
+
+🔄 **In Arbeit:**
 1. **AI-Outperformance:** ML-Modelle die konsistent Benchmarks übertreffen
 2. **Service-Optimierung:** Performance, Skalierbarkeit, Reliability
 3. **Advanced Features:** Reinforcement Learning, Market Regime Detection, Alternative Data
@@ -85,25 +94,33 @@
 - **Fitness Functions:** Gewichtete Metriken (Sharpe 30%, Calmar 25%, P&L 30%) für Backtesting
 
 ## Integration Points
+- **API Gateway:** Zentrales Service Routing (Port 8000)
+- **Event Service:** Event-Driven Kommunikation (Port 8011)
 - **Broker APIs:** CCXT für Exchanges, mit Testnet-Support
 - **Notifications:** Telegram/Discord/Email via `notification_service`
 - **Data Sources:** CCXT, Yahoo Finance, Funding Rate spezialisiert
 - **ML Frameworks:** scikit-learn, PyTorch (optional), Optuna für Hyperparameter
-- **Monitoring:** Prometheus/Grafana, InfluxDB für TimeSeries
-- **Security:** Vault für Secrets, JWT für Auth
+- **Monitoring:** Prometheus/Grafana/AlertManager für alle Services
+- **Event Streaming:** Redis Streams für Service-Kommunikation
+- **Security:** Vault für Secrets, JWT für Auth, mTLS für Service-to-Service
 
 ## Debugging und Troubleshooting
 - **Logs:** Alle Logs in `logs/tradpal.log`, rotierend mit 10MB Limit
 - **Cache:** ML-Modelle in `cache/ml_models/`, Daten in `cache/`
 - **Output:** Backtest-Results in `output/`, Performance in `output/paper_performance.json`
+- **Event Streams:** Redis Streams für Event-Debugging und Replay
+- **API Gateway:** Zentrales Logging für alle Service-Requests
+- **Monitoring:** Prometheus Metrics für alle Services und Events
 - **Error Handling:** Circuit Breaker Pattern für Service-Ausfälle
 - **Rate Limiting:** Adaptive Rate Limiting für API-Calls
 
 ## Empfehlungen für die Zukunft
-1. **CI/CD-Verbesserungen:** GitHub Actions für automatisierte Tests
-2. **Docker-Organisation:** Multi-stage Builds für Services
-3. **API-Dokumentation:** OpenAPI/Swagger für Service-APIs
-4. **Monitoring-Setup:** Prometheus/Grafana für alle Services
-5. **Security-Scanning:** Automatisierte Security-Tests
+1. **Service Mesh:** Istio-Integration für erweiterte Service-Kommunikation
+2. **Advanced Event Processing:** Complex Event Processing und Event Correlation
+3. **CI/CD-Verbesserungen:** GitHub Actions für automatisierte Tests und Deployments
+4. **Docker-Organisation:** Multi-stage Builds für optimierte Service-Container
+5. **API-Dokumentation:** OpenAPI/Swagger für alle Service-APIs
+6. **Monitoring-Setup:** Erweiterte Alerting-Regeln und Dashboards
+7. **Security-Scanning:** Automatisierte Security-Tests und Vulnerability Scanning
 
-*Letzte Aktualisierung: 16.10.2025*
+*Letzte Aktualisierung: 17.10.2025*

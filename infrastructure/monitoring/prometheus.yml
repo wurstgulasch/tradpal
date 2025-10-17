@@ -1,0 +1,101 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'tradpal_core_service'
+    static_configs:
+      - targets: ['core_service:8000']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_data_service'
+    static_configs:
+      - targets: ['data_service:8001']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_trading_bot_live'
+    static_configs:
+      - targets: ['trading_bot_live:8002']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_backtesting_service'
+    static_configs:
+      - targets: ['backtesting_service:8003']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_discovery_service'
+    static_configs:
+      - targets: ['discovery_service:8004']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_risk_service'
+    static_configs:
+      - targets: ['risk_service:8005']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_notification_service'
+    static_configs:
+      - targets: ['notification_service:8006']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_web_ui'
+    static_configs:
+      - targets: ['web_ui:8007']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_ml_trainer'
+    static_configs:
+      - targets: ['ml_trainer:8008']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_security_service'
+    static_configs:
+      - targets: ['security_service:8009']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_mlop_service'
+    static_configs:
+      - targets: ['mlop_service:8010']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_api_gateway'
+    static_configs:
+      - targets: ['api-gateway:8001']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  - job_name: 'tradpal_event_service'
+    static_configs:
+      - targets: ['event-service:8011']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+
+  # Node Exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Pushgateway for batch jobs (optional)
+  - job_name: 'pushgateway'
+    static_configs:
+      - targets: ['pushgateway:9091']
+    honor_labels: true

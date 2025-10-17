@@ -82,10 +82,10 @@ class TestMemoryOptimizedIndicators:
 
         # Verify result
         assert len(result) == len(data)
-        # EMA starts calculating from the first value, no NaN for initial values
-        assert not np.isnan(result[0])  # First value should be valid
-        assert not np.isnan(result[18])  # 19th value should be valid
-        assert np.isnan(result[:19]).any() == False  # No NaN values in first 19
+        # EMA starts with NaN values for the first period-1 values
+        assert np.isnan(result[0])  # First value should be NaN
+        assert np.isnan(result[18])  # 19th value should be NaN (period=20)
+        assert not np.isnan(result[19])  # 20th value should be valid
 
 
 class TestStandaloneFunctions:
@@ -99,10 +99,10 @@ class TestStandaloneFunctions:
 
         # Verify result
         assert len(result) == len(data)
-        # EMA starts calculating from the first value (no NaN for initial values)
-        assert not np.isnan(result[0])  # First value should be valid
-        assert not np.isnan(result[1])  # Second value should be valid
-        assert not np.isnan(result[2])  # Third value should be valid
+        # EMA starts with NaN values for the first period-1 values
+        assert np.isnan(result[0])  # First value should be NaN
+        assert np.isnan(result[1])  # Second value should be NaN
+        assert not np.isnan(result[2])  # Third value should be valid (period=3)
 
     def test_rsi_memory_optimized_function(self):
         """Test standalone RSI function."""

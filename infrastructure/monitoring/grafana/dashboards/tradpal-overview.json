@@ -1,0 +1,285 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "TradPal System Overview",
+    "tags": ["tradpal", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Resources",
+        "type": "row",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "tradpal_system_cpu_usage_percent",
+            "legendFormat": "CPU Usage %"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 1
+        }
+      },
+      {
+        "id": 3,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "tradpal_system_memory_usage_percent",
+            "legendFormat": "Memory Usage %"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 1
+        }
+      },
+      {
+        "id": 4,
+        "title": "Circuit Breakers",
+        "type": "row",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 9
+        }
+      },
+      {
+        "id": 5,
+        "title": "Circuit Breaker States",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tradpal_circuit_breaker_state",
+            "legendFormat": "{{service_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "CLOSED",
+                    "color": "green"
+                  },
+                  "1": {
+                    "text": "OPEN",
+                    "color": "red"
+                  },
+                  "2": {
+                    "text": "HALF-OPEN",
+                    "color": "yellow"
+                  }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 10
+        }
+      },
+      {
+        "id": 6,
+        "title": "Circuit Breaker Requests",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(tradpal_circuit_breaker_requests_total[5m])",
+            "legendFormat": "{{service_name}} - {{circuit_state}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 10
+        }
+      },
+      {
+        "id": 7,
+        "title": "Circuit Breaker Failures",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(tradpal_circuit_breaker_requests_failed_total[5m])",
+            "legendFormat": "{{service_name}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 10
+        }
+      },
+      {
+        "id": 8,
+        "title": "Health Checks",
+        "type": "row",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 18
+        }
+      },
+      {
+        "id": 9,
+        "title": "Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "tradpal_health_status",
+            "legendFormat": "{{service_name}} - {{check_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "HEALTHY",
+                    "color": "green"
+                  },
+                  "1": {
+                    "text": "DEGRADED",
+                    "color": "yellow"
+                  },
+                  "2": {
+                    "text": "UNHEALTHY",
+                    "color": "red"
+                  }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 19
+        }
+      },
+      {
+        "id": 10,
+        "title": "Health Check Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "tradpal_health_check_duration_seconds",
+            "legendFormat": "{{service_name}} - {{check_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 19
+        }
+      },
+      {
+        "id": 11,
+        "title": "Health Check Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(tradpal_health_checks_total[5m])",
+            "legendFormat": "{{service_name}} - {{check_type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 19
+        }
+      },
+      {
+        "id": 12,
+        "title": "Service Performance",
+        "type": "row",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 27
+        }
+      },
+      {
+        "id": 13,
+        "title": "Service Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(tradpal_service_requests_total[5m])",
+            "legendFormat": "{{service_name}} - {{method}} - {{status}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 28
+        }
+      },
+      {
+        "id": 14,
+        "title": "Service Request Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "tradpal_service_request_duration_seconds",
+            "legendFormat": "{{service_name}} - {{method}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 28
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}

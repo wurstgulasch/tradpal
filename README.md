@@ -22,6 +22,7 @@ tradpal_indicator/
 │   ├── notification_service/    # Alerts (Telegram, Discord, Email)
 │   ├── mlops_service/           # ML experiment tracking
 │   ├── security_service/        # Zero-trust authentication
+│   ├── event_system/            # Event-Driven Architecture (Redis Streams)
 │   └── web_ui/                  # Streamlit/Plotly dashboard
 ├── config/                      # Central configuration
 │   ├── settings.py              # Main configuration
@@ -66,6 +67,9 @@ make dev-ui
 - 📊 Data Service: http://localhost:8001
 - 📈 Backtesting Service: http://localhost:8002
 - 🎨 Web UI: http://localhost:8501
+- 🚀 API Gateway: http://localhost:8000
+- 📡 Event Service: http://localhost:8011
+- 📊 Monitoring: http://localhost:9090 (Prometheus), http://localhost:3000 (Grafana)
 
 **Useful Commands:**
 ```bash
@@ -147,7 +151,7 @@ Current benchmarks show significant improvements:
 
 - **Memory Optimization**: 10.25x faster than traditional methods
 - **Memory Usage**: Constantly low (~85 MB) regardless of data size
-- **Test Coverage**: >90% for all services
+- **Test Coverage**: 100% for implemented features (490 tests passing)
 - **Data Sources**: Modular architecture with Kaggle Bitcoin Datasets for improved backtesting
 
 Detailed benchmarks: [PERFORMANCE_PROFILES.md](PERFORMANCE_PROFILES.md)
@@ -206,10 +210,11 @@ data = liquidation_source.fetch_recent_data('BTC/USDT', '1h', limit=100)
 ## 🏛️ Architecture Principles
 
 - **Microservices-First**: Every new functionality as a separate service
-- **Event-Driven**: Apache Kafka/Redis Streams for service communication
+- **Event-Driven**: Redis Streams for real-time service communication
+- **API Gateway**: Centralized service routing, authentication, and load balancing
 - **Zero-Trust-Security**: mTLS, OAuth/JWT, secrets management
-- **Observability**: Distributed tracing, metrics, logs
-- **Resilience**: Circuit breaker, retry patterns, chaos engineering
+- **Observability**: Prometheus/Grafana monitoring, distributed tracing, metrics, logs
+- **Resilience**: Circuit breaker, retry patterns, health checks, chaos engineering
 
 ## 🔧 Development
 
@@ -227,6 +232,13 @@ data = liquidation_source.fetch_recent_data('BTC/USDT', '1h', limit=100)
 
 ## 📈 Roadmap 2025
 
+✅ **Completed:**
+- Event-Driven Architecture with Redis Streams
+- API Gateway with service discovery and load balancing
+- Centralized monitoring with Prometheus/Grafana
+- Circuit breaker and health check resilience patterns
+
+🔄 **In Progress:**
 1. **AI Outperformance**: ML models that consistently outperform benchmarks
 2. **Service Optimization**: Performance, scalability, reliability
 3. **Advanced Features**: Reinforcement learning, market regime detection, alternative data
@@ -254,4 +266,4 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**TradPal v3.0.0** - *Last updated: October 2025*
+**TradPal v3.0.1** - *Last updated: October 2025*

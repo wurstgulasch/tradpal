@@ -22,7 +22,7 @@ import signal
 import sys
 import os
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 
 # Setup logging
@@ -115,6 +115,24 @@ try:
 except ImportError:
     RISK_SERVICE_AVAILABLE = False
 
+try:
+    from services.alternative_data_service.client import AlternativeDataServiceClient
+    ALTERNATIVE_DATA_SERVICE_AVAILABLE = True
+except ImportError:
+    ALTERNATIVE_DATA_SERVICE_AVAILABLE = False
+
+try:
+    from services.market_regime_detection_service.client import MarketRegimeDetectionServiceClient
+    MARKET_REGIME_SERVICE_AVAILABLE = True
+except ImportError:
+    MARKET_REGIME_SERVICE_AVAILABLE = False
+
+try:
+    from services.reinforcement_learning_service.client import ReinforcementLearningServiceClient
+    RL_SERVICE_AVAILABLE = True
+except ImportError:
+    RL_SERVICE_AVAILABLE = False
+
 
 class TradPalOrchestrator:
     """Main orchestrator with hybrid architecture"""
@@ -183,6 +201,21 @@ class TradPalOrchestrator:
                 self.services['risk'] = RiskServiceClient()
                 logger.info("✅ Risk service initialized")
 
+            if ALTERNATIVE_DATA_SERVICE_AVAILABLE:
+                self.services['alternative_data'] = AlternativeDataServiceClient()
+                await self.services['alternative_data'].initialize()
+                logger.info("✅ Alternative Data service initialized")
+
+            if MARKET_REGIME_SERVICE_AVAILABLE:
+                self.services['market_regime'] = MarketRegimeDetectionServiceClient()
+                await self.services['market_regime'].initialize()
+                logger.info("✅ Market Regime Detection service initialized")
+
+            if RL_SERVICE_AVAILABLE:
+                self.services['reinforcement_learning'] = ReinforcementLearningServiceClient()
+                await self.services['reinforcement_learning'].initialize()
+                logger.info("✅ Reinforcement Learning service initialized")
+
             logger.info("✅ Services initialized successfully")
             return True
 
@@ -210,6 +243,42 @@ class TradPalOrchestrator:
                         await asyncio.sleep(60)
                         continue
 
+                    # Get alternative data for enhanced decision making
+                    alternative_data = {}
+                    if ALTERNATIVE_DATA_SERVICE_AVAILABLE and 'alternative_data' in self.services:
+                        try:
+                            sentiment_data = await self.services['alternative_data'].get_sentiment_data(
+                                symbol=SYMBOL, timeframe=TIMEFRAME
+                            )
+                            onchain_data = await self.services['alternative_data'].get_onchain_metrics(SYMBOL)
+                            composite_score = await self.services['alternative_data'].get_composite_score(SYMBOL)
+
+                            alternative_data = {
+                                'sentiment': sentiment_data,
+                                'onchain': onchain_data,
+                                'composite_score': composite_score
+                            }
+                            logger.debug(f"Alternative data collected: {len(alternative_data)} sources")
+                        except Exception as e:
+                            logger.warning(f"Failed to get alternative data: {e}")
+
+                    # Get market regime information
+                    market_regime = {}
+                    if MARKET_REGIME_SERVICE_AVAILABLE and 'market_regime' in self.services:
+                        try:
+                            regime_data = await self.services['market_regime'].get_market_regime(SYMBOL)
+                            volatility_regime = await self.services['market_regime'].get_volatility_regime(SYMBOL)
+                            trend_regime = await self.services['market_regime'].get_trend_regime(SYMBOL)
+
+                            market_regime = {
+                                'market_regime': regime_data,
+                                'volatility_regime': volatility_regime,
+                                'trend_regime': trend_regime
+                            }
+                            logger.debug(f"Market regime detected: {regime_data.get('regime', 'unknown')}")
+                        except Exception as e:
+                            logger.warning(f"Failed to get market regime: {e}")
+
                     # Calculate indicators and signals using core service
                     if CORE_SERVICE_AVAILABLE and 'core' in self.services:
                         # Calculate indicators
@@ -229,9 +298,14 @@ class TradPalOrchestrator:
                         )
                         signals = signals_response
 
-                        # Execute strategy if signals found
-                        if signals and signals.get('signals'):
-                            for signal in signals['signals']:
+                        # Enhance signals with AI services
+                        enhanced_signals = await self._enhance_signals_with_ai(
+                            signals, indicators, alternative_data, market_regime, data
+                        )
+
+                        # Execute strategy if enhanced signals found
+                        if enhanced_signals and enhanced_signals.get('signals'):
+                            for signal in enhanced_signals['signals']:
                                 if signal.get('action') in ['BUY', 'SELL']:
                                     strategy_result = await self.services['core'].execute_strategy(
                                         symbol=SYMBOL,
@@ -240,11 +314,11 @@ class TradPalOrchestrator:
                                         capital=10000.0,  # Default capital
                                         risk_config={'risk_per_trade': 0.01}
                                     )
-                                    logger.info(f"Strategy executed: {strategy_result}")
+                                    logger.info(f"AI-enhanced strategy executed: {strategy_result}")
 
                         # Log via notification service if available
                         if NOTIFICATION_SERVICE_AVAILABLE and 'notification' in self.services:
-                            await self.services['notification'].log_signals(signals)
+                            await self.services['notification'].log_signals(enhanced_signals)
 
                     await asyncio.sleep(60)  # 1-minute intervals
 
@@ -254,6 +328,98 @@ class TradPalOrchestrator:
 
         except Exception as e:
             logger.error(f"Live trading failed: {e}")
+
+    async def _enhance_signals_with_ai(self, signals: Dict[str, Any], indicators: Dict[str, Any],
+                                     alternative_data: Dict[str, Any], market_regime: Dict[str, Any],
+                                     market_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Enhance trading signals using AI services.
+
+        Args:
+            signals: Base signals from core service
+            indicators: Technical indicators
+            alternative_data: Alternative data sources
+            market_regime: Market regime information
+            market_data: Raw market data
+
+        Returns:
+            Enhanced signals with AI insights
+        """
+        enhanced_signals = signals.copy()
+
+        try:
+            # Prepare market state for RL agent
+            if market_data and len(market_data) > 0:
+                latest_data = market_data[-1]
+
+                # Build comprehensive market state
+                market_state = {
+                    "symbol": SYMBOL,
+                    "position_size": 0.0,  # Assume neutral position for decision making
+                    "current_price": latest_data.get('close', 0),
+                    "portfolio_value": 10000.0,  # Default portfolio value
+                    "market_regime": market_regime.get('market_regime', {}).get('regime', 'sideways'),
+                    "volatility_regime": market_regime.get('volatility_regime', {}).get('regime', 'normal'),
+                    "trend_strength": market_regime.get('trend_regime', {}).get('strength', 0.0),
+                    "technical_indicators": {
+                        "rsi": indicators.get('rsi', 50.0),
+                        "macd": indicators.get('macd', 0.0),
+                        "bb_position": indicators.get('bb_position', 0.5)
+                    }
+                }
+
+                # Add alternative data if available
+                if alternative_data.get('composite_score'):
+                    market_state["alternative_score"] = alternative_data['composite_score'].get('score', 0.5)
+
+                # Get RL-based action recommendation
+                if RL_SERVICE_AVAILABLE and 'reinforcement_learning' in self.services:
+                    try:
+                        rl_action = await self.services['reinforcement_learning'].get_trading_action(market_state)
+
+                        if rl_action and rl_action.get('action'):
+                            # Enhance signals with RL insights
+                            enhanced_signals['ai_enhanced'] = True
+                            enhanced_signals['rl_action'] = rl_action
+                            enhanced_signals['rl_confidence'] = rl_action.get('confidence', 0.0)
+                            enhanced_signals['rl_reasoning'] = rl_action.get('reasoning', '')
+
+                            # Boost signal confidence if RL agrees with base signal
+                            if signals.get('signals'):
+                                for signal in enhanced_signals['signals']:
+                                    base_action = signal.get('action', '').upper()
+                                    rl_action_name = rl_action['action'].upper()
+
+                                    if base_action == rl_action_name:
+                                        signal['ai_confidence_boost'] = rl_action.get('confidence', 0.0)
+                                        signal['enhanced_reasoning'] = f"Base signal + RL: {rl_action.get('reasoning', '')}"
+                                    elif rl_action.get('confidence', 0.0) > 0.8:
+                                        # Override with high-confidence RL action
+                                        signal['action'] = rl_action_name
+                                        signal['ai_override'] = True
+                                        signal['override_reason'] = f"RL override: {rl_action.get('reasoning', '')}"
+
+                            logger.info(f"RL-enhanced signal: {rl_action.get('action')} (confidence: {rl_action.get('confidence', 0):.2f})")
+
+                    except Exception as e:
+                        logger.warning(f"RL service enhancement failed: {e}")
+
+                # Add market regime context to signals
+                if market_regime:
+                    enhanced_signals['market_context'] = market_regime
+                    logger.debug(f"Added market regime context: {market_regime.get('market_regime', {}).get('regime')}")
+
+                # Add alternative data insights
+                if alternative_data:
+                    enhanced_signals['alternative_data'] = alternative_data
+                    logger.debug(f"Added alternative data: {len(alternative_data)} sources")
+
+        except Exception as e:
+            logger.error(f"AI signal enhancement failed: {e}")
+            # Return original signals if enhancement fails
+            return signals
+
+        return enhanced_signals
 
     async def run_backtesting(self, **kwargs) -> Dict[str, Any]:
         """Run backtesting mode"""
