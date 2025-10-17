@@ -90,6 +90,7 @@
 - **Async Context Managers:** HTTP Sessions mit `@asynccontextmanager` für sichere Verbindungen
 - **Configuration Hierarchy:** `config/settings.py` lädt `.env` basierend auf Profile (light/heavy)
 - **Memory Optimization:** `MemoryMappedData`, `RollingWindowBuffer` für große Datasets
+- **GPU Acceleration:** Automatische GPU-Erkennung und optimale Device-Auswahl
 - **Data Mesh:** Domains wie `market_data`, `trading_signals` mit Governance und Quality Rules
 - **Fitness Functions:** Gewichtete Metriken (Sharpe 30%, Calmar 25%, P&L 30%) für Backtesting
 
@@ -111,6 +112,7 @@
 - **Event Streams:** Redis Streams für Event-Debugging und Replay
 - **API Gateway:** Zentrales Logging für alle Service-Requests
 - **Monitoring:** Prometheus Metrics für alle Services und Events
+- **Performance Monitoring:** CPU, Memory, GPU-Nutzung in Echtzeit
 - **Error Handling:** Circuit Breaker Pattern für Service-Ausfälle
 - **Rate Limiting:** Adaptive Rate Limiting für API-Calls
 
@@ -122,5 +124,6 @@
 5. **API-Dokumentation:** OpenAPI/Swagger für alle Service-APIs
 6. **Monitoring-Setup:** Erweiterte Alerting-Regeln und Dashboards
 7. **Security-Scanning:** Automatisierte Security-Tests und Vulnerability Scanning
+8. **Performance-Optimierung:** Erweiterte GPU-Unterstützung und verteiltes Training
 
 *Letzte Aktualisierung: 17.10.2025*

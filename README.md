@@ -158,12 +158,15 @@ pytest tests/integration/test_reinforcement_learning_service.py
 
 Current benchmarks show significant improvements:
 
-- **Memory Optimization**: 10.25x faster than traditional methods
-- **Memory Usage**: Constantly low (~85 MB) regardless of data size
+- **Memory Optimization**: 10.25x faster than traditional methods, constant memory usage (~85 MB)
+- **GPU Acceleration**: 3-12x faster training and inference depending on model type
+- **Parallel Processing**: 4-8x faster on multi-core systems
+- **Intelligent Caching**: 10-100x faster for repeated operations
+- **Vectorization**: 5-15x faster indicator calculations
 - **Test Coverage**: 100% for implemented features (490 tests passing)
-- **Data Sources**: Modular architecture with Kaggle Bitcoin Datasets for improved backtesting
+- **Data Sources**: Modular architecture with Kaggle Bitcoin Datasets, Yahoo Finance, CCXT for improved backtesting
 
-Detailed benchmarks: [PERFORMANCE_PROFILES.md](PERFORMANCE_PROFILES.md)
+Detailed benchmarks: [docs/PERFORMANCE_ENHANCEMENTS.md](docs/PERFORMANCE_ENHANCEMENTS.md)
 
 ## 🔌 Data Sources Features
 

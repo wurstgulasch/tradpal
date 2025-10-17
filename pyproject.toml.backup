@@ -70,7 +70,7 @@ ml = [
     "xgboost>=1.7.0",
     "mlflow>=2.8.0",
     "lightgbm>=4.0.0"
-]
+],
 sentiment = [
     "tweepy>=4.14.0",
     "textblob>=0.17.1",
@@ -97,7 +97,7 @@ dev = [
     "black>=22.0.0",
     "flake8>=4.0.0",
     "mypy>=0.950",
-    "tomli>=2.0.1; python_version < '3.11'",
+    "tomli>=2.0.1; python_version < '3.11'",  # For TOML parsing on older Python
 ]
 all = [
     "tradpal[webui,ml,sentiment,performance,monitoring,integrations,dev]",
@@ -126,6 +126,96 @@ exclude = ["tests*", "docs*", "examples*", "k8s*", "aws*", "monitoring*", "cache
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml", "*.yml", "*.md"]
+
+[tool.black]
+line-length = 120
+target-version = ['py310']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | venv
+  | env
+  | _build
+  | buck-out
+  | build
+  | dist
+  | cache
+  | output
+  | logs
+)/
+'''
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "ccxt.*",
+    "ccxtpro.*",
+    "talib.*",
+    "sklearn.*",
+    "torch.*",
+    "optuna.*",
+    "shap.*",
+    "xgboost.*",
+    "tweepy.*",
+    "textblob.*",
+    "transformers.*",
+    "newsapi.*",
+    "praw.*",
+    "streamlit.*",
+    "plotly.*",
+    "flask.*",
+    "flask_login.*",
+    "werkzeug.*",
+    "jwt.*",
+    "twilio.*",
+    "prometheus_client.*",
+    "psutil.*",
+    "hvac.*",
+    "boto3.*",
+    "redis.*",
+]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src", "services", "integrations", "scripts"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/conftest.py",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

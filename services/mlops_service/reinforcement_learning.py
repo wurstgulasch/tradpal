@@ -254,6 +254,34 @@ class BaseRLAgent(ABC):
         """Update target network (for DQN)."""
         pass
 
+    def save_model(self, path: str) -> None:
+        """Save model to disk."""
+        if hasattr(self, 'policy_net') and self.policy_net is not None:
+            torch.save(self.policy_net.state_dict(), path)
+            logger.info(f"Policy network saved to {path}")
+        elif hasattr(self, 'actor') and self.actor is not None:
+            # For PPO agents
+            torch.save({
+                'actor': self.actor.state_dict(),
+                'critic': self.critic.state_dict()
+            }, path)
+            logger.info(f"PPO networks saved to {path}")
+
+    def load_model(self, path: str) -> None:
+        """Load model from disk."""
+        if hasattr(self, 'policy_net') and self.policy_net is not None:
+            self.policy_net.load_state_dict(torch.load(path))
+            self.policy_net.eval()
+            logger.info(f"Policy network loaded from {path}")
+        elif hasattr(self, 'actor') and self.actor is not None:
+            # For PPO agents
+            checkpoint = torch.load(path)
+            self.actor.load_state_dict(checkpoint['actor'])
+            self.critic.load_state_dict(checkpoint['critic'])
+            self.actor.eval()
+            self.critic.eval()
+            logger.info(f"PPO networks loaded from {path}")
+
 class DQNAgent(BaseRLAgent):
     """Deep Q-Network agent."""
 
@@ -545,7 +573,7 @@ class RLTrainer:
                 # Save best model
                 if episode_reward > best_reward:
                     best_reward = episode_reward
-                    self.agent.policy_net.save_model(f"best_rl_model_{episode}.pth")
+                    self.agent.save_model(f"best_rl_model_{episode}.pth")
 
         return {
             'episode_rewards': episode_rewards,

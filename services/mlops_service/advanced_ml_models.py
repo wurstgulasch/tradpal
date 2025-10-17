@@ -146,6 +146,17 @@ class LSTMTradingModel(BaseTradingModel):
         self.model.eval()
         with torch.no_grad():
             X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+
+            # Handle different input shapes
+            if X_tensor.dim() == 2:
+                # Single timestep: (batch_size, input_size) -> (batch_size, 1, input_size)
+                X_tensor = X_tensor.unsqueeze(1)
+            elif X_tensor.dim() == 3:
+                # Already in sequence format: (batch_size, seq_len, input_size)
+                pass
+            else:
+                raise ValueError(f"Input tensor must be 2D or 3D, got {X_tensor.dim()}D")
+
             predictions = self.model(X_tensor)
             return predictions.cpu().numpy()
 
@@ -251,6 +262,17 @@ class TransformerTradingModel(BaseTradingModel):
         self.model.eval()
         with torch.no_grad():
             X_tensor = torch.tensor(X, dtype=torch.float32).to(self.device)
+
+            # Handle different input shapes
+            if X_tensor.dim() == 2:
+                # Single timestep: (batch_size, input_size) -> (batch_size, 1, input_size)
+                X_tensor = X_tensor.unsqueeze(1)
+            elif X_tensor.dim() == 3:
+                # Already in sequence format: (batch_size, seq_len, input_size)
+                pass
+            else:
+                raise ValueError(f"Input tensor must be 2D or 3D, got {X_tensor.dim()}D")
+
             predictions = self.model(X_tensor)
             return predictions.cpu().numpy()
 
@@ -444,6 +466,12 @@ class EnsembleTradingModel(BaseTradingModel):
         predictions = []
         for name, model in self.models.items():
             try:
+                # Check if sklearn model is fitted
+                if hasattr(model, 'predict') and hasattr(model, 'fit'):
+                    # For sklearn models, check if fitted
+                    if not hasattr(model, 'estimators_') and not hasattr(model, 'n_features_in_'):
+                        logger.warning(f"Model {name} is not fitted, skipping")
+                        continue
                 pred = model.predict(X_flat)
                 predictions.append(pred)
             except Exception as e:

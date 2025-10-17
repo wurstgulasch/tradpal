@@ -25,6 +25,10 @@ import time
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
+# Add pandas and numpy imports
+import pandas as pd
+import numpy as np
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -262,7 +266,58 @@ class TradPalOrchestrator:
                         except Exception as e:
                             logger.warning(f"Failed to get alternative data: {e}")
 
-                    # Get market regime information
+                                        # Get market regime information using new analysis
+                    market_regime_data = {}
+                    if MARKET_REGIME_ANALYSIS_AVAILABLE and data:
+                        try:
+                            # Convert data to DataFrame for analysis
+                            df_data = pd.DataFrame(data)
+                            if len(df_data) > 50:  # Need minimum data for analysis
+                                # Detect market regime
+                                regime_series = detect_market_regime(df_data)
+                                current_regime = regime_series.iloc[-1] if len(regime_series) > 0 else MarketRegime.SIDEWAYS
+
+                                # Get multi-timeframe analysis if we have data for multiple timeframes
+                                mtf_data = {TIMEFRAME: df_data}
+                                mtf_analysis = analyze_multi_timeframe(mtf_data)
+
+                                # Get adaptive strategy configuration
+                                adaptive_config = get_adaptive_strategy_config(mtf_data)
+
+                                market_regime_data = {
+                                    'current_regime': current_regime,
+                                    'regime_series': regime_series,
+                                    'mtf_analysis': mtf_analysis,
+                                    'adaptive_config': adaptive_config,
+                                    'confidence_score': adaptive_config.get('confidence_score', 0.5)
+                                }
+
+                                logger.debug(f"Market regime analysis: {current_regime.value} (confidence: {market_regime_data['confidence_score']:.2f})")
+                            else:
+                                logger.debug("Insufficient data for market regime analysis")
+                        except Exception as e:
+                            logger.warning(f"Market regime analysis failed: {e}")
+
+                    # Get alternative data for enhanced decision making
+                    alternative_data = {}
+                    if ALTERNATIVE_DATA_SERVICE_AVAILABLE and 'alternative_data' in self.services:
+                        try:
+                            sentiment_data = await self.services['alternative_data'].get_sentiment_data(
+                                symbol=SYMBOL, timeframe=TIMEFRAME
+                            )
+                            onchain_data = await self.services['alternative_data'].get_onchain_metrics(SYMBOL)
+                            composite_score = await self.services['alternative_data'].get_composite_score(SYMBOL)
+
+                            alternative_data = {
+                                'sentiment': sentiment_data,
+                                'onchain': onchain_data,
+                                'composite_score': composite_score
+                            }
+                            logger.debug(f"Alternative data collected: {len(alternative_data)} sources")
+                        except Exception as e:
+                            logger.warning(f"Failed to get alternative data: {e}")
+
+                    # Get market regime information from service (legacy)
                     market_regime = {}
                     if MARKET_REGIME_SERVICE_AVAILABLE and 'market_regime' in self.services:
                         try:
@@ -275,9 +330,9 @@ class TradPalOrchestrator:
                                 'volatility_regime': volatility_regime,
                                 'trend_regime': trend_regime
                             }
-                            logger.debug(f"Market regime detected: {regime_data.get('regime', 'unknown')}")
+                            logger.debug(f"Legacy market regime detected: {regime_data.get('regime', 'unknown')}")
                         except Exception as e:
-                            logger.warning(f"Failed to get market regime: {e}")
+                            logger.warning(f"Failed to get legacy market regime: {e}")
 
                     # Calculate indicators and signals using core service
                     if CORE_SERVICE_AVAILABLE and 'core' in self.services:
@@ -300,7 +355,7 @@ class TradPalOrchestrator:
 
                         # Enhance signals with AI services
                         enhanced_signals = await self._enhance_signals_with_ai(
-                            signals, indicators, alternative_data, market_regime, data
+                            signals, indicators, alternative_data, market_regime_data, data
                         )
 
                         # Execute strategy if enhanced signals found
@@ -330,7 +385,7 @@ class TradPalOrchestrator:
             logger.error(f"Live trading failed: {e}")
 
     async def _enhance_signals_with_ai(self, signals: Dict[str, Any], indicators: Dict[str, Any],
-                                     alternative_data: Dict[str, Any], market_regime: Dict[str, Any],
+                                     alternative_data: Dict[str, Any], market_regime_data: Dict[str, Any],
                                      market_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Enhance trading signals using AI services.
@@ -339,7 +394,7 @@ class TradPalOrchestrator:
             signals: Base signals from core service
             indicators: Technical indicators
             alternative_data: Alternative data sources
-            market_regime: Market regime information
+            market_regime_data: Market regime information from new analysis
             market_data: Raw market data
 
         Returns:
@@ -358,9 +413,9 @@ class TradPalOrchestrator:
                     "position_size": 0.0,  # Assume neutral position for decision making
                     "current_price": latest_data.get('close', 0),
                     "portfolio_value": 10000.0,  # Default portfolio value
-                    "market_regime": market_regime.get('market_regime', {}).get('regime', 'sideways'),
-                    "volatility_regime": market_regime.get('volatility_regime', {}).get('regime', 'normal'),
-                    "trend_strength": market_regime.get('trend_regime', {}).get('strength', 0.0),
+                    "market_regime": market_regime_data.get('current_regime', MarketRegime.SIDEWAYS).value if market_regime_data else 'sideways',
+                    "volatility_regime": "normal",  # Placeholder
+                    "trend_strength": market_regime_data.get('mtf_analysis', {}).get('timeframe_strength', {}).get(TIMEFRAME, 0.5) if market_regime_data else 0.5,
                     "technical_indicators": {
                         "rsi": indicators.get('rsi', 50.0),
                         "macd": indicators.get('macd', 0.0),
@@ -405,9 +460,13 @@ class TradPalOrchestrator:
                         logger.warning(f"RL service enhancement failed: {e}")
 
                 # Add market regime context to signals
-                if market_regime:
-                    enhanced_signals['market_context'] = market_regime
-                    logger.debug(f"Added market regime context: {market_regime.get('market_regime', {}).get('regime')}")
+                if market_regime_data:
+                    enhanced_signals['market_regime_context'] = {
+                        'current_regime': market_regime_data['current_regime'].value,
+                        'confidence_score': market_regime_data['confidence_score'],
+                        'adaptive_config': market_regime_data['adaptive_config']
+                    }
+                    logger.debug(f"Added market regime context: {market_regime_data['current_regime'].value}")
 
                 # Add alternative data insights
                 if alternative_data:
@@ -422,19 +481,52 @@ class TradPalOrchestrator:
         return enhanced_signals
 
     async def run_backtesting(self, **kwargs) -> Dict[str, Any]:
-        """Run backtesting mode"""
-        logger.info("📊 Starting Backtesting Mode...")
+        """Run backtesting mode with market regime analysis"""
+        logger.info("📊 Starting Backtesting Mode with Market Regime Analysis...")
 
         try:
             # Use backtesting service
             if BACKTESTING_SERVICE_AVAILABLE and 'backtesting' in self.services:
+                # Get adaptive strategy config based on market regime analysis
+                adaptive_config = {}
+                if MARKET_REGIME_ANALYSIS_AVAILABLE:
+                    try:
+                        # Create sample data for regime analysis (simplified)
+                        # In production, this would use actual historical data
+                        dates = pd.date_range(start=kwargs.get('start_date', '2023-01-01'),
+                                            end=kwargs.get('end_date', '2024-01-01'),
+                                            freq='D')
+                        sample_prices = 100 + np.random.normal(0, 1, len(dates)).cumsum()
+                        sample_data = pd.DataFrame({
+                            'open': sample_prices,
+                            'high': sample_prices * 1.01,
+                            'low': sample_prices * 0.99,
+                            'close': sample_prices,
+                            'volume': np.random.uniform(100000, 1000000, len(dates))
+                        }, index=dates)
+
+                        mtf_data = {kwargs.get('timeframe', TIMEFRAME): sample_data}
+                        adaptive_config = get_adaptive_strategy_config(mtf_data)
+
+                        logger.info(f"Using adaptive strategy: {adaptive_config.get('model_type', 'default')} "
+                                  f"(regime: {adaptive_config.get('current_regime', 'unknown')})")
+                    except Exception as e:
+                        logger.warning(f"Failed to get adaptive config: {e}")
+
+                # Enhanced strategy config with market regime insights
+                strategy_config = {
+                    'indicators': ['ema', 'rsi', 'bb', 'atr'],
+                    'adaptive_config': adaptive_config,
+                    'use_market_regime': MARKET_REGIME_ANALYSIS_AVAILABLE
+                }
+
                 results = await self.services['backtesting'].run_backtest(
                     symbol=kwargs.get('symbol', SYMBOL),
                     timeframe=kwargs.get('timeframe', TIMEFRAME),
                     start_date=kwargs.get('start_date'),
                     end_date=kwargs.get('end_date'),
                     initial_capital=10000.0,
-                    strategy_config={'indicators': ['ema', 'rsi', 'bb']},
+                    strategy_config=strategy_config,
                     risk_config={'risk_per_trade': 0.01},
                     data_source=kwargs.get('data_source', 'kaggle')  # Use Kaggle for better data
                 )

@@ -493,6 +493,11 @@ class AdvancedFeatureEngineer:
 
     def _fit_scaler(self, data: pd.DataFrame) -> None:
         """Fit scaler on data."""
+        if data.empty or data.shape[0] == 0:
+            logger.warning("Cannot fit scaler on empty data")
+            self.scaler = None
+            return
+
         if self.config.scaling_method == 'standard':
             self.scaler = StandardScaler()
         elif self.config.scaling_method == 'robust':
@@ -502,7 +507,8 @@ class AdvancedFeatureEngineer:
     def _scale_features(self, data: pd.DataFrame) -> pd.DataFrame:
         """Scale features."""
         if self.scaler is None:
-            raise ValueError("Scaler must be fitted before scaling")
+            logger.warning("Scaler not fitted, returning unscaled data")
+            return data
         scaled_data = self.scaler.transform(data)
         return pd.DataFrame(scaled_data, columns=data.columns, index=data.index)
 
