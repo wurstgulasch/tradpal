@@ -67,6 +67,7 @@ SECURITY_SERVICE_URL = os.getenv('SECURITY_SERVICE_URL', 'http://localhost:8012'
 # Additional legacy constants for backward compatibility
 ADAPTIVE_OPTIMIZATION_ENABLED_LIVE = os.getenv('ADAPTIVE_OPTIMIZATION_ENABLED_LIVE', 'false').lower() == 'true'
 MONITORING_STACK_ENABLED = os.getenv('MONITORING_STACK_ENABLED', 'true').lower() == 'true'
+PERFORMANCE_MONITORING_ENABLED = os.getenv('PERFORMANCE_MONITORING_ENABLED', 'true').lower() == 'true'
 
 # Timeframe parameters (simplified version)
 TIMEFRAME_PARAMS = {

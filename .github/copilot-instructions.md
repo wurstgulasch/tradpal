@@ -18,7 +18,7 @@
   - `security_service/`: Zero-Trust-Authentifizierung
   - `web_ui/`: Streamlit/Plotly Dashboard
 - `config/`: Zentrale Konfiguration (modulare Struktur)
-  - `settings.py`: Haupt-Konfigurationsdatei (importiert aus Modulen)
+  - `settings.py`: Haupt-Konfigurationsdatei (importiert aus Modulen + Legacy-Konstanten für Abwärtskompatibilität)
   - `core_settings.py`: Core Trading und Risikomanagement
   - `ml_settings.py`: Machine Learning und AI Konfigurationen
   - `service_settings.py`: Microservices und Data Mesh Einstellungen
@@ -74,6 +74,7 @@
 ## Anweisungen für Copilot
 - **Microservices-Architektur einhalten:** Neue Features immer in Services/, nie in Root oder src/
 - **Modulare Konfiguration verwenden:** Konfigurationseinstellungen in entsprechenden config/ Modulen ablegen (core_settings.py, ml_settings.py, etc.)
+- **Legacy-Konstanten in settings.py:** Aktuell hybride Struktur mit modularen Imports + Legacy-Konstanten für Abwärtskompatibilität beibehalten
 - **Service-Clients verwenden:** Für Cross-Service-Kommunikation
 - **Async-Patterns:** asyncio für alle Netzwerk-I/O
 - **Testing-First:** Unit-Tests vor Implementierung
@@ -133,5 +134,11 @@
 6. **Monitoring-Setup:** Erweiterte Alerting-Regeln und Dashboards
 7. **Security-Scanning:** Automatisierte Security-Tests und Vulnerability Scanning
 8. **Performance-Optimierung:** Erweiterte GPU-Unterstützung und verteiltes Training
+9. **Dynamische Konfiguration:** Lazy-Loading Settings-System implementieren
+   - Nur tatsächlich verwendete Settings laden (reduziert Memory-Footprint)
+   - Automatische Typkonvertierung für Environment-Variablen
+   - Fallback zu sinnvollen Defaults
+   - Vereinfacht Erweiterung neuer Konfigurationseinstellungen
+   - Migration von Legacy-Konstanten zu dynamischem System planen
 
 *Letzte Aktualisierung: 17.10.2025*
