@@ -76,6 +76,28 @@ class ActiveOptimizationsResponse(BaseModel):
     optimizations: List[Dict[str, Any]]
     count: int
 
+class OptimizeBotRequest(BaseModel):
+    """Request model for optimizing bot configuration."""
+    symbol: str = Field(..., description="Trading symbol (e.g., 'BTC/USDT')")
+    timeframe: str = Field(..., description="Timeframe (e.g., '1d', '1h')")
+    start_date: str = Field(..., description="Start date (YYYY-MM-DD)")
+    end_date: str = Field(..., description="End date (YYYY-MM-DD)")
+    population_size: Optional[int] = Field(100, description="GA population size", ge=10, le=200)
+    generations: Optional[int] = Field(30, description="Number of GA generations", ge=5, le=100)
+    use_walk_forward: Optional[bool] = Field(True, description="Use walk-forward analysis")
+
+class OptimizeBotResponse(BaseModel):
+    """Response model for bot optimization results."""
+    success: bool
+    optimization_id: str
+    best_fitness: Optional[float] = None
+    best_config: Optional[Dict[str, Any]] = None
+    total_evaluations: Optional[int] = None
+    duration_seconds: Optional[float] = None
+    top_configurations: Optional[List[Dict[str, Any]]] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
 # Background task storage
 active_tasks = {}
 
@@ -188,40 +210,102 @@ async def cancel_optimization(optimization_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel optimization: {str(e)}")
 
-@app.get("/api/v1/health")
-async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "service": "discovery-service",
-        "timestamp": datetime.now().isoformat(),
-        "active_optimizations": len(active_tasks)
-    }
+@app.post("/api/v1/bot-optimization/start", response_model=OptimizeBotResponse)
+async def start_bot_optimization(request: OptimizeBotRequest, background_tasks: BackgroundTasks):
+    """
+    Start a new bot optimization run.
 
-@app.get("/api/v1/indicator-combinations")
-async def get_indicator_combinations():
-    """Get available indicator combinations for optimization."""
+    This endpoint initiates a genetic algorithm optimization for trading bot configurations,
+    including technical indicators and risk parameters. The optimization runs asynchronously
+    in the background.
+    """
     try:
-        combinations = discovery_service.INDICATOR_COMBINATIONS
-        return {
-            "combinations": combinations,
-            "count": len(combinations)
-        }
+        # Validate request
+        if not request.symbol or not request.timeframe:
+            raise HTTPException(status_code=400, detail="Symbol and timeframe are required")
+
+        # Generate optimization ID
+        optimization_id = f"bot_opt_{request.symbol}_{request.timeframe}_{int(datetime.now().timestamp())}"
+
+        # Start optimization in background
+        background_tasks.add_task(
+            run_bot_optimization_background,
+            optimization_id,
+            request.symbol,
+            request.timeframe,
+            request.start_date,
+            request.end_date,
+            request.population_size,
+            request.generations,
+            request.use_walk_forward
+        )
+
+        return OptimizeBotResponse(
+            success=True,
+            optimization_id=optimization_id,
+            error=None
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get combinations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start bot optimization: {str(e)}")
 
-@app.get("/api/v1/optimization/{optimization_id}/results")
-async def get_optimization_results(optimization_id: str):
-    """Get detailed results of a completed optimization."""
+async def run_bot_optimization_background(optimization_id: str, symbol: str, timeframe: str,
+                                        start_date: str, end_date: str, population_size: int,
+                                        generations: int, use_walk_forward: bool):
+    """Background task to run bot optimization."""
     try:
-        status = await discovery_service.get_optimization_status(optimization_id)
+        # Store task reference
+        task = asyncio.current_task()
+        active_tasks[optimization_id] = task
+
+        # Run optimization
+        result = await discovery_service.optimize_bot_configuration(
+            optimization_id=optimization_id,
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            population_size=population_size,
+            generations=generations,
+            use_walk_forward=use_walk_forward
+        )
+
+        # Clean up
+        if optimization_id in active_tasks:
+            del active_tasks[optimization_id]
+
+    except Exception as e:
+        print(f"Background bot optimization failed: {e}")
+        if optimization_id in active_tasks:
+            del active_tasks[optimization_id]
+
+@app.get("/api/v1/bot-optimization/{optimization_id}/status", response_model=StatusResponse)
+async def get_bot_optimization_status(optimization_id: str):
+    """Get the status of a specific bot optimization run."""
+    try:
+        status = await discovery_service.get_bot_optimization_status(optimization_id)
+
+        if "error" in status:
+            raise HTTPException(status_code=404, detail=status["error"])
+
+        return StatusResponse(**status)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get bot optimization status: {str(e)}")
+
+@app.get("/api/v1/bot-optimization/{optimization_id}/results")
+async def get_bot_optimization_results(optimization_id: str):
+    """Get detailed results of a completed bot optimization."""
+    try:
+        status = await discovery_service.get_bot_optimization_status(optimization_id)
 
         if "error" in status:
             raise HTTPException(status_code=404, detail=status["error"])
 
         if status["status"] != "completed":
-            raise HTTPException(status_code=400, detail="Optimization not completed yet")
+            raise HTTPException(status_code=400, detail="Bot optimization not completed yet")
 
         # Return detailed results
         return {
@@ -239,7 +323,7 @@ async def get_optimization_results(optimization_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get results: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get bot optimization results: {str(e)}")
 
 # Event handlers for service integration
 async def handle_optimization_started(event):
