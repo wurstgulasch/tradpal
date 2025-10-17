@@ -17,7 +17,14 @@
   - `mlops_service/`: ML-Experiment-Tracking und Model-Management
   - `security_service/`: Zero-Trust-Authentifizierung
   - `web_ui/`: Streamlit/Plotly Dashboard
-- `config/`: Zentrale Konfiguration (settings.py, .env-Dateien)
+- `config/`: Zentrale Konfiguration (modulare Struktur)
+  - `settings.py`: Haupt-Konfigurationsdatei (importiert aus Modulen)
+  - `core_settings.py`: Core Trading und Risikomanagement
+  - `ml_settings.py`: Machine Learning und AI Konfigurationen
+  - `service_settings.py`: Microservices und Data Mesh Einstellungen
+  - `security_settings.py`: Security und Authentifizierung
+  - `performance_settings.py`: Performance-Optimierung
+  - `.env-Dateien`: Umgebungsvariablen für verschiedene Profile
 - `tests/`: Unit- und Integrationstests (pytest)
 - `scripts/`: Utility-Scripts für Training/Demos
 - `integrations/`: Externe Integrationen (Broker, Notifications)
@@ -66,6 +73,7 @@
 
 ## Anweisungen für Copilot
 - **Microservices-Architektur einhalten:** Neue Features immer in Services/, nie in Root oder src/
+- **Modulare Konfiguration verwenden:** Konfigurationseinstellungen in entsprechenden config/ Modulen ablegen (core_settings.py, ml_settings.py, etc.)
 - **Service-Clients verwenden:** Für Cross-Service-Kommunikation
 - **Async-Patterns:** asyncio für alle Netzwerk-I/O
 - **Testing-First:** Unit-Tests vor Implementierung

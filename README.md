@@ -30,7 +30,12 @@ tradpal_indicator/
 │   ├── event_system/            # Event-Driven Architecture (Redis Streams)
 │   └── web_ui/                  # Streamlit/Plotly dashboard
 ├── config/                      # Central configuration
-│   ├── settings.py              # Main configuration
+│   ├── settings.py              # Main configuration (imports from modules)
+│   ├── core_settings.py         # Core trading and risk management
+│   ├── ml_settings.py           # Machine learning and AI configurations
+│   ├── service_settings.py      # Microservices and data mesh settings
+│   ├── security_settings.py     # Security and authentication settings
+│   ├── performance_settings.py  # Performance optimization settings
 │   ├── .env                     # Environment variables
 │   ├── .env.example             # Example configuration
 │   ├── .env.light               # Light profile (without AI/ML)
