@@ -2,7 +2,12 @@
 
 TradPal is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
-## 🏗️ Project Structure
+## � October 2025 Highlights
+- Reinforcement Learning service integration suite restored with an async-safe `httpx` test client and event-publishing mocks.
+- Market Regime Detection integration tests rewritten to match the current FastAPI contract and run end-to-end in CI.
+- Core EMA implementation now guarantees the first `period-1` slots are `NaN` regardless of TA-Lib availability, keeping analytics consistent across environments.
+
+## �🏗️ Project Structure
 
 ```
 tradpal_indicator/
@@ -143,6 +148,10 @@ pytest tests/unit/
 
 # Service-specific tests
 pytest tests/services/core/
+
+# Integration focus areas
+pytest tests/integration/test_market_regime_service.py
+pytest tests/integration/test_reinforcement_learning_service.py
 ```
 
 ## 📊 Performance & Benchmarks

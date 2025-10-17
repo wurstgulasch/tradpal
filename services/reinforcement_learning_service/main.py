@@ -4,6 +4,7 @@ Provides RL-based trading decision making and model training.
 """
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -235,6 +236,8 @@ async def get_trading_action(request: TradingStateRequest):
             q_values=q_values_dict
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Action selection failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
