@@ -1,0 +1,22 @@
+# Web UI Service Dependencies
+# Dashboard and user interface
+
+# Web framework
+streamlit==1.28.1
+flask==3.0.0
+flask-login==0.6.3
+werkzeug==3.0.1
+
+# Data visualization
+plotly==5.17.0
+matplotlib==3.8.2
+
+# Data processing
+pandas==2.1.4
+numpy==1.24.3
+
+# Authentication
+PyJWT==2.8.1
+
+# Monitoring
+prometheus-client==0.19.0

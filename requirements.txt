@@ -1,45 +1,17 @@
-# Core dependencies for TradPal
-pandas>=1.5.0
-numpy>=1.21.0
-ccxt>=4.0.0
-yfinance>=0.2.0
-matplotlib>=3.5.0
-pytest>=7.0.0
-pytest-asyncio>=1.0.0
-python-dotenv>=1.0.0
-requests>=2.28.0
-deap>=1.3.0
-
-# Web Framework & API
-fastapi>=0.100.0
-pydantic>=2.0.0
-uvicorn>=0.20.0
-aiohttp>=3.8.0
-httpx>=0.28.0
-
-# Data Science & ML
-scikit-learn>=1.3.0
-torch>=2.0.0  # PyTorch with CUDA support (install appropriate version for your CUDA)
-torchvision>=0.15.0
-torchaudio>=2.0.0
-optuna>=3.0.0
-shap>=0.42.0
-plotly>=5.17.0
-
-# Web Interface
-streamlit>=1.28.0
-
-# Database & Caching
-redis>=5.0.0
-h5py>=3.8.0
-psutil>=5.9.0
-
-# Development & Testing
-black>=22.0.0
-flake8>=4.0.0
-mypy>=0.950
-
-# For full installation with all features, use:
-# pip install -e .[all]
-# Or install from pyproject.toml:
-# pip install -e .
+# TradPal Requirements - Microservice Architecture
+#
+# In our microservice architecture, each service manages its own dependencies.
+# This file is kept for legacy compatibility and basic development setup.
+#
+# For development:
+# 1. Install base environment: pip install -e .
+# 2. Each service has its own requirements.txt with pinned versions
+# 3. See dependency_catalog.txt for approved package versions
+#
+# For production deployment:
+# - Each service is deployed independently with its own requirements.txt
+# - Services only install what they actually need
+# - Versions are consistent across all services via dependency_catalog.txt
+#
+# Quick development setup (installs core dependencies):
+# pip install -e .[dev]

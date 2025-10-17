@@ -8,6 +8,7 @@ TradPal is a fully autonomous AI trading system based on a complete microservice
 - **Microservices Architecture**: Complete modular service structure with event-driven communication
 - **Advanced ML Integration**: ML-enhanced signal generation with ensemble methods and risk management
 - **Modular Data Sources**: Kaggle Bitcoin Datasets, Yahoo Finance, CCXT integration for optimal backtesting
+- **Dependency Management**: Centralized version catalog with service-specific requirements for true microservice independence
 
 ## �️ Project Structure
 
@@ -234,6 +235,39 @@ data = liquidation_source.fetch_recent_data('BTC/USDT', '1h', limit=100)
 - **Zero-Trust-Security**: mTLS, OAuth/JWT, secrets management
 - **Observability**: Prometheus/Grafana monitoring, distributed tracing, metrics, logs
 - **Resilience**: Circuit breaker, retry patterns, health checks, chaos engineering
+
+## 📦 Dependency Management
+
+TradPal uses a sophisticated dependency management system designed for microservice independence:
+
+### Central Dependency Catalog
+- **Single Source of Truth**: `dependency_catalog.txt` defines approved package versions
+- **Version Consistency**: All services use exact versions from the catalog
+- **Automated Validation**: Scripts ensure compliance across all services
+
+### Service-Specific Requirements
+Each service in `services/` has its own `requirements.txt` with:
+- Only packages the service actually needs
+- Exact pinned versions from the catalog
+- Independent deployment capability
+
+### Management Tools
+```bash
+# Validate all service dependencies
+python scripts/manage_dependencies.py validate
+
+# List all approved dependencies
+python scripts/manage_dependencies.py list
+
+# Update package version across all services
+python scripts/manage_dependencies.py update <package> <version>
+```
+
+### Benefits
+- **True Microservice Independence**: Services can be deployed without shared dependencies
+- **Version Drift Prevention**: Automated validation prevents conflicts
+- **Simplified Updates**: Single command updates versions across all services
+- **Clean Architecture**: No dependency conflicts between services
 
 ## 🔧 Development
 
