@@ -47,19 +47,10 @@ except ImportError:
     YAHOO_AVAILABLE = False
     yf = None
 
-try:
-    import kaggle
-    KAGGLE_AVAILABLE = True
-except ImportError:
-    KAGGLE_AVAILABLE = False
-    kaggle = None
-
-import logging
-from .data_mesh import DataMeshManager, DataDomain, DataProduct, FeatureSet
-from .data_governance import DataGovernanceManager, AccessLevel, AuditEventType
-from .cache_manager import CacheManager
-from .quality_manager import DataQualityManager
 from .data_sources.factory import DataSourceFactory
+
+# Get availability from factory (which handles optional imports properly)
+KAGGLE_AVAILABLE = DataSourceFactory.get_available_sources().get('kaggle', False)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

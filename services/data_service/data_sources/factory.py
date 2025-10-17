@@ -29,9 +29,10 @@ except ImportError:
 try:
     from .kaggle import KaggleDataSource
     KAGGLE_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError) as e:
     KAGGLE_AVAILABLE = False
-    logger.warning("Kaggle data source not available")
+    KaggleDataSource = None
+    logger.warning(f"Kaggle data source not available: {e}")
 
 try:
     from .funding_rate import FundingRateDataSource
