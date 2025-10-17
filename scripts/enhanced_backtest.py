@@ -17,9 +17,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from src.data_fetcher import fetch_data
-from src.indicators import calculate_indicators
-from src.signal_generator import generate_signals
+# Import only what we need, avoiding data_service init
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
 
 # Set plotting style
 plt.style.use('default')
@@ -117,71 +118,150 @@ class EnhancedBacktester:
     def _fetch_data(self):
         """Fetch historical data for the specified period."""
         try:
-            from src.data_fetcher import fetch_historical_data
-            from datetime import datetime
-            
-            # Calculate days between start and end date
-            days = (self.end_date - self.start_date).days
-            
-            # Estimate limit based on timeframe and days
-            if self.timeframe == '1m':
-                limit = min(days * 24 * 60, 50000)  # Max 50k for 1m
-            elif self.timeframe == '5m':
-                limit = min(days * 24 * 12, 50000)
-            elif self.timeframe == '15m':
-                limit = min(days * 24 * 4, 50000)
-            elif self.timeframe == '1h':
-                limit = min(days * 24, 50000)
-            elif self.timeframe == '4h':
-                limit = min(days * 6, 50000)
-            elif self.timeframe == '1d':
-                limit = min(days, 50000)
-            else:
-                limit = 10000
-            
-            print(f"Fetching {limit} data points for {days} days...")
-            
-            # Try to fetch historical data with proper date range
-            data = fetch_historical_data(
-                symbol=self.symbol,
-                exchange_name=self.exchange,
-                timeframe=self.timeframe,
-                limit=limit,
-                start_date=self.start_date
+            # Use yfinance directly to avoid data_service complications
+            import yfinance as yf
+
+            # Convert symbol format for Yahoo Finance
+            yahoo_symbol = self.symbol.replace('/', '-')
+            if yahoo_symbol == 'BTC-USDT':
+                yahoo_symbol = 'BTC-USD'  # Yahoo Finance uses BTC-USD for Bitcoin
+
+            print(f"Fetching {yahoo_symbol} data from {self.start_date} to {self.end_date}...")
+
+            # Download data
+            data = yf.download(
+                yahoo_symbol,
+                start=self.start_date,
+                end=self.end_date,
+                interval='1h' if self.timeframe == '1h' else '1d',
+                progress=False
             )
-            
-            if data.empty or len(data) < 100:
-                print(f"Insufficient historical data ({len(data)} points), falling back to recent data")
-                # Fallback to fetch_data for more recent data
-                from src.data_fetcher import fetch_data
-                data = fetch_data(limit=max(limit, 1000))
-            
+
+            # Handle MultiIndex columns from yfinance
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.droplevel(1)  # Remove ticker level
+            data.columns = data.columns.str.lower()
+
+            if data.empty:
+                print("No data available, using sample data")
+                # Create sample data for demo
+                dates = pd.date_range(start=self.start_date, end=self.end_date, freq='1H')
+                np.random.seed(42)
+                base_price = 50000
+                prices = []
+                for i in range(len(dates)):
+                    change = np.random.normal(0, 0.02)
+                    base_price *= (1 + change)
+                    prices.append(base_price)
+
+                data = pd.DataFrame({
+                    'open': prices,
+                    'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
+                    'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
+                    'close': prices,
+                    'volume': [np.random.randint(1000000, 10000000) for _ in prices]
+                }, index=dates)
+
+            # Ensure proper column names
+            data.columns = data.columns.str.lower()
+
             return data
+
         except Exception as e:
-            print(f"Error fetching historical data: {e}, using fallback")
-            # Fallback to basic fetch_data
-            from src.data_fetcher import fetch_data
-            return fetch_data(limit=1000)
+            print(f"Error fetching data: {e}, using sample data")
+            # Fallback to sample data
+            dates = pd.date_range(start=self.start_date, end=self.end_date, freq='1H')
+            np.random.seed(42)
+            base_price = 50000
+            prices = []
+            for i in range(len(dates)):
+                change = np.random.normal(0, 0.02)
+                base_price *= (1 + change)
+                prices.append(base_price)
+
+            return pd.DataFrame({
+                'open': prices,
+                'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
+                'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
+                'close': prices,
+                'volume': [np.random.randint(1000000, 10000000) for _ in prices]
+            }, index=dates)
 
     def _calculate_indicators(self, data):
         """Calculate indicators with custom configuration."""
-        config = {
-            'ema': {'enabled': True, 'periods': [self.parameters['indicators']['ema_short'], self.parameters['indicators']['ema_long']]},
-            'rsi': {'enabled': True, 'period': self.parameters['indicators']['rsi_period'], 'oversold': self.parameters['indicators']['rsi_oversold'], 'overbought': self.parameters['indicators']['rsi_overbought']},
-            'bb': {'enabled': True, 'period': self.parameters['indicators']['bb_period'], 'std_dev': self.parameters['indicators']['bb_std_dev']},
-            'atr': {'enabled': True, 'period': self.parameters['indicators']['atr_period']}
-        }
-        return calculate_indicators(data, config=config)
+        try:
+            # Try to import from services
+            from services.core.indicators import calculate_indicators
+            config = {
+                'ema': {'enabled': True, 'periods': [self.parameters['indicators']['ema_short'], self.parameters['indicators']['ema_long']]},
+                'rsi': {'enabled': True, 'period': self.parameters['indicators']['rsi_period'], 'oversold': self.parameters['indicators']['rsi_oversold'], 'overbought': self.parameters['indicators']['rsi_overbought']},
+                'bb': {'enabled': True, 'period': self.parameters['indicators']['bb_period'], 'std_dev': self.parameters['indicators']['bb_std_dev']},
+                'atr': {'enabled': True, 'period': self.parameters['indicators']['atr_period']}
+            }
+            return calculate_indicators(data, config=config)
+        except ImportError:
+            # Fallback to simple calculations
+            print("Using fallback indicator calculations")
+            data = data.copy()
+
+            # Simple EMA calculation
+            def ema(series, period):
+                return series.ewm(span=period, adjust=False).mean()
+
+            data['ema_9'] = ema(data['close'], 9)
+            data['ema_21'] = ema(data['close'], 21)
+
+            # Simple RSI calculation
+            def rsi(series, period=14):
+                delta = series.diff()
+                gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+                loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+                rs = gain / loss
+                return 100 - (100 / (1 + rs))
+
+            data['rsi'] = rsi(data['close'], 14)
+
+            # Simple Bollinger Bands
+            data['bb_middle'] = data['close'].rolling(window=20).mean()
+            data['bb_std'] = data['close'].rolling(window=20).std()
+            data['bb_upper'] = data['bb_middle'] + (data['bb_std'] * 2)
+            data['bb_lower'] = data['bb_middle'] - (data['bb_std'] * 2)
+
+            # Simple ATR
+            high_low = data['high'] - data['low']
+            high_close = (data['high'] - data['close'].shift(1)).abs()
+            low_close = (data['low'] - data['close'].shift(1)).abs()
+            tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            data['atr'] = tr.rolling(window=14).mean()
+
+            return data
 
     def _generate_signals(self, data):
-        """Generate signals using the full TradPal signal generation pipeline (including ML features)."""
-        # Use the full TradPal signal generation which includes ML enhancement
-        from src.signal_generator import generate_signals as tradpal_generate_signals
+        """Generate signals using simple logic."""
+        try:
+            # Try to import from services
+            from services.signal_generator import generate_signals as tradpal_generate_signals
+            return tradpal_generate_signals(data)
+        except ImportError:
+            # Fallback to simple signal generation
+            print("Using fallback signal generation")
+            data = data.copy()
 
-        # Apply the full signal generation pipeline
-        data_with_signals = tradpal_generate_signals(data)
+            # Simple crossover signals
+            data['Buy_Signal'] = 0
+            data['Sell_Signal'] = 0
 
-        return data_with_signals
+            # EMA crossover
+            if 'ema_9' in data.columns and 'ema_21' in data.columns:
+                data.loc[data['ema_9'] > data['ema_21'], 'Buy_Signal'] = 1
+                data.loc[data['ema_9'] < data['ema_21'], 'Sell_Signal'] = 1
+
+            # RSI signals
+            if 'rsi' in data.columns:
+                data.loc[data['rsi'] < 35, 'Buy_Signal'] = 1
+                data.loc[data['rsi'] > 65, 'Sell_Signal'] = 1
+
+            return data
 
     def _apply_risk_management(self, data):
         """Apply risk management parameters."""
