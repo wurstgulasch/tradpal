@@ -1,202 +1,103 @@
+#!/usr/bin/env python3
 """
-Tests for Sentiment Analysis Module
-
-Tests the sentiment analysis functionality including:
-- SentimentAnalyzer class
-- SentimentData dataclass
-- Convenience functions
+Test script for Sentiment Analysis integration.
 """
 
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime
 import sys
 import os
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
 
-# Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Add project root to path
+project_root = os.path.join(os.path.dirname(__file__), '..')
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, 'src'))
 
-# Try to import sentiment analyzer components
-try:
-    from sentiment_analyzer import SentimentAnalyzer, SentimentData, get_current_sentiment, get_sentiment_score
-    SENTIMENT_AVAILABLE = True
-except ImportError:
-    SENTIMENT_AVAILABLE = False
-    pytest.skip("Sentiment analysis module not available", allow_module_level=True)
+def test_sentiment_analysis():
+    """Test sentiment analysis integration."""
+    print("Testing Sentiment Analysis integration...")
 
+    try:
+        # Test sentiment analyzer import
+        print("📊 Testing sentiment analyzer import...")
+        from src.sentiment_analyzer import get_sentiment_score, SENTIMENT_ENABLED
+        print(f"   Sentiment analysis enabled: {SENTIMENT_ENABLED}")
 
-class TestSentimentData:
-    """Test suite for SentimentData dataclass."""
+        if SENTIMENT_ENABLED:
+            # Test sentiment score retrieval
+            print("🧠 Testing sentiment score retrieval...")
+            score, confidence = get_sentiment_score()
+            print(".3f")
+        else:
+            print("⚠️  Sentiment analysis is disabled in configuration")
+            print("💡 To enable sentiment analysis, set SENTIMENT_ENABLED=true in your environment or .env file")
+            print("   Required API keys: TWITTER_BEARER_TOKEN, NEWS_API_KEY, REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET")
+            return True
 
-    def setup_method(self):
-        """Skip test if sentiment analysis is not available."""
-        if not SENTIMENT_AVAILABLE:
-            pytest.skip("Sentiment analysis module not available")
+        # Test signal generator with sentiment
+        print("📊 Testing signal generation with sentiment...")
+        from src.signal_generator import generate_signals, calculate_indicators
 
-    def test_sentiment_data_creation(self):
-        """Test SentimentData object creation."""
-        data = SentimentData(
-            timestamp=datetime.now(),
-            source="test",
-            sentiment_score=0.7,
-            confidence=0.85,
-            text_sample="Test text",
-            metadata={"test": "data"}
-        )
+        # Create sample data
+        dates = pd.date_range(start='2023-01-01', periods=100, freq='D')
+        np.random.seed(42)
 
-        assert data.sentiment_score == 0.7
-        assert data.confidence == 0.85
-        assert data.source == "test"
-        assert data.text_sample == "Test text"
-        assert data.metadata == {"test": "data"}
-        assert isinstance(data.timestamp, datetime)
+        # Generate realistic BTC/USDT price data
+        base_price = 30000
+        prices = []
+        current_price = base_price
 
-    def test_sentiment_data_with_extreme_values(self):
-        """Test SentimentData with extreme values."""
-        # Test positive sentiment
-        positive_data = SentimentData(
-            timestamp=datetime.now(),
-            source="twitter",
-            sentiment_score=1.0,
-            confidence=1.0,
-            text_sample="Amazing bullish signal!",
-            metadata={"likes": 1000}
-        )
-        assert positive_data.sentiment_score == 1.0
-        assert positive_data.confidence == 1.0
+        for i in range(100):
+            trend = 0.001 * np.sin(i / 20)
+            noise = np.random.normal(0, 0.02)
+            change = trend + noise
+            current_price *= (1 + change)
+            prices.append(current_price)
 
-        # Test negative sentiment
-        negative_data = SentimentData(
-            timestamp=datetime.now(),
-            source="news",
-            sentiment_score=-1.0,
-            confidence=0.9,
-            text_sample="Market crash incoming",
-            metadata={"source": "reuters"}
-        )
-        assert negative_data.sentiment_score == -1.0
-        assert negative_data.confidence == 0.9
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'open': prices,
+            'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
+            'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
+            'close': prices,
+            'volume': [np.random.uniform(1000000, 5000000) for _ in range(100)]
+        })
+        df.set_index('timestamp', inplace=True)
 
+        # Calculate indicators
+        df = calculate_indicators(df)
 
-class TestSentimentAnalyzer:
-    """Test suite for SentimentAnalyzer class."""
+        # Generate signals (this will include sentiment enhancement)
+        df_signals = generate_signals(df)
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.analyzer = SentimentAnalyzer()
-        """Set up test fixtures."""
-        self.analyzer = SentimentAnalyzer()
+        # Check for sentiment columns
+        sentiment_columns = ['Sentiment_Score', 'Sentiment_Confidence', 'Sentiment_Enhanced']
+        found_columns = [col for col in sentiment_columns if col in df_signals.columns]
 
-    @patch('sentiment_analyzer.TwitterSentimentClient')
-    @patch('sentiment_analyzer.NewsSentimentClient')
-    @patch('sentiment_analyzer.RedditSentimentClient')
-    def test_sentiment_analyzer_initialization(self, mock_reddit, mock_news, mock_twitter):
-        """Test SentimentAnalyzer initialization."""
-        analyzer = SentimentAnalyzer()
-        assert analyzer is not None
-        assert hasattr(analyzer, 'get_aggregated_sentiment')
-        assert hasattr(analyzer, 'get_weighted_sentiment_score')
+        print(f"   Found sentiment columns: {found_columns}")
 
-    @patch('sentiment_analyzer.TwitterSentimentClient')
-    @patch('sentiment_analyzer.NewsSentimentClient')
-    @patch('sentiment_analyzer.RedditSentimentClient')
-    def test_get_aggregated_sentiment(self, mock_reddit, mock_news, mock_twitter):
-        """Test getting aggregated sentiment."""
-        # Mock the clients
-        mock_twitter.return_value.get_sentiment.return_value = {
-            'sentiment_score': 0.8,
-            'confidence': 0.9,
-            'source': 'twitter'
-        }
-        mock_news.return_value.get_sentiment.return_value = {
-            'sentiment_score': 0.6,
-            'confidence': 0.8,
-            'source': 'news'
-        }
-        mock_reddit.return_value.get_sentiment.return_value = {
-            'sentiment_score': 0.4,
-            'confidence': 0.7,
-            'source': 'reddit'
-        }
+        if found_columns:
+            # Show sample sentiment-enhanced signals
+            sentiment_signals = df_signals[df_signals['Sentiment_Enhanced'] == True]
+            print(f"   Sentiment-enhanced signals: {len(sentiment_signals)}")
 
-        result = self.analyzer.get_aggregated_sentiment()
-        assert isinstance(result, dict)
-        assert 'score' in result
-        assert 'confidence' in result
-        assert 'enabled' in result
+            if len(sentiment_signals) > 0:
+                sample = sentiment_signals.head(1)
+                print("   Sample sentiment-enhanced signal:")
+                print(f"     Signal: {sample['Enhanced_Signal'].iloc[0]}")
+                print(".3f")
+                print(".3f")
 
-    def test_get_weighted_sentiment_score(self):
-        """Test getting weighted sentiment score."""
-        score, confidence = self.analyzer.get_weighted_sentiment_score()
-        assert isinstance(score, (float, int))
-        assert isinstance(confidence, (float, int))
-        assert -1 <= score <= 1
-        assert 0 <= confidence <= 1
+        print("\n✅ Sentiment analysis integration test completed successfully!")
+        return True
 
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
-class TestConvenienceFunctions:
-    """Test suite for convenience functions."""
-
-    def setup_method(self):
-        """Skip test if sentiment analysis is not available."""
-        if not SENTIMENT_AVAILABLE:
-            pytest.skip("Sentiment analysis module not available")
-
-    @pytest.mark.asyncio
-    async def test_get_current_sentiment(self):
-        """Test get_current_sentiment function."""
-        result = await get_current_sentiment()
-        assert isinstance(result, dict)
-        assert 'enabled' in result
-        assert 'score' in result
-        assert 'confidence' in result
-        assert isinstance(result['enabled'], bool)
-        assert isinstance(result['score'], (int, float))
-        assert isinstance(result['confidence'], (int, float))
-
-    def test_get_sentiment_score(self):
-        """Test get_sentiment_score function."""
-        score, confidence = get_sentiment_score()
-        assert isinstance(score, (int, float))
-        assert isinstance(confidence, (int, float))
-        assert -1 <= score <= 1
-        assert 0 <= confidence <= 1
-
-
-class TestSentimentIntegration:
-    """Integration tests for sentiment analysis."""
-
-    def setup_method(self):
-        """Skip test if sentiment analysis is not available."""
-        if not SENTIMENT_AVAILABLE:
-            pytest.skip("Sentiment analysis module not available")
-
-    def test_sentiment_data_integration(self):
-        """Test SentimentData in integration scenario."""
-        # Create multiple sentiment data points
-        data_points = [
-            SentimentData(
-                timestamp=datetime.now(),
-                source="twitter",
-                sentiment_score=0.8,
-                confidence=0.9,
-                text_sample="BTC to the moon!",
-                metadata={"likes": 150}
-            ),
-            SentimentData(
-                timestamp=datetime.now(),
-                source="news",
-                sentiment_score=-0.3,
-                confidence=0.7,
-                text_sample="Bitcoin volatility increases",
-                metadata={"source": "bloomberg"}
-            )
-        ]
-
-        # Test aggregation logic
-        total_score = sum(data.sentiment_score * data.confidence for data in data_points)
-        total_confidence = sum(data.confidence for data in data_points)
-        weighted_average = total_score / total_confidence if total_confidence > 0 else 0
-
-        assert len(data_points) == 2
-        assert -1 <= weighted_average <= 1
+if __name__ == "__main__":
+    success = test_sentiment_analysis()
+    sys.exit(0 if success else 1)

@@ -1,11 +1,12 @@
 # TradPal Test Suite
 
-Diese Test-Suite ist nach Best-Practices für Microservices-Architekturen organisiert.
+Diese Test-Suite ist nach Best-Practices für Microservices-Architekturen organisiert und bietet eine zentrale Test-Suite im Projekt-Root.
 
 ## Struktur
 
 ```
 tests/
+├── conftest.py                    # Zentrale Test-Konfiguration und Fixtures
 ├── unit/                          # Unit-Tests (isolierte Komponenten)
 │   ├── test_*.py                 # Einzelne Funktionen/Klassen
 │   └── __init__.py
@@ -14,12 +15,7 @@ tests/
 │   └── __init__.py
 ├── services/                      # Service-spezifische Tests
 │   ├── core/                      # Core Service Tests
-│   │   ├── test_memory_optimization.py
-│   │   ├── test_vectorization.py
-│   │   └── test_indicators.py
 │   ├── data_service/              # Data Service Tests
-│   │   ├── test_data_fetcher.py
-│   │   └── test_cache.py
 │   ├── trading_bot_live/          # Trading Bot Tests
 │   ├── backtesting_service/       # Backtesting Tests
 │   ├── discovery_service/         # Parameter Optimization Tests
@@ -28,6 +24,9 @@ tests/
 │   ├── mlops_service/             # ML Operations Tests
 │   ├── security_service/          # Security Tests
 │   └── web_ui/                    # Web UI Tests
+├── e2e/                           # End-to-End Tests (komplette Workflows)
+│   ├── test_*.py                 # Vollständige System-Tests
+│   └── __init__.py
 ├── config/                        # Konfigurationstests
 └── integrations/                  # Integration-Setup Tests
 ```
@@ -51,6 +50,32 @@ tests/
 - Unit- und Integration-Tests für jeden Service
 - Fokus: Service-Logik und -Integration
 
+### End-to-End Tests (`tests/e2e/`)
+- Testen komplette Workflows vom Daten-Import bis zur Trade-Ausführung
+- Verwenden reale Service-Instanzen (in Containern)
+- Sehr langsam, aber höchste Confidence
+- Fokus: System als Ganzes funktioniert
+
+## Zentrale Test-Konfiguration
+
+### conftest.py
+Die zentrale `conftest.py` im `tests/` Root-Verzeichnis bietet:
+
+- **Gemeinsame Fixtures**: `sample_ohlcv_data`, `mock_redis`, `mock_http_session`, etc.
+- **Test Utilities**: `TestUtils` Klasse mit Helper-Funktionen
+- **Async Support**: Event loop fixtures für asyncio Tests
+- **Test Markers**: Automatische Registrierung von pytest Markern
+- **Cleanup**: Automatische Bereinigung temporärer Dateien
+
+### Verfügbare Fixtures
+- `sample_ohlcv_data`: Beispiel OHLCV Daten für Tests
+- `mock_redis`: Gemockter Redis Client
+- `mock_http_session`: Gemockte HTTP Session
+- `test_config`: Sichere Test-Konfiguration
+- `mock_service_client`: Gemockter Service Client
+- `performance_metrics`: Beispiel Performance-Metriken
+- `test_utils`: TestUtils Instanz mit Helper-Methoden
+
 ## Ausführung
 
 ### Alle Tests
@@ -58,25 +83,51 @@ tests/
 pytest
 ```
 
-### Nur Unit-Tests
+### Nach Test-Typ
 ```bash
+# Nur Unit-Tests (schnell)
+pytest -m "unit"
+
+# Nur Integration-Tests
+pytest -m "integration"
+
+# Nur Service-Tests
+pytest -m "service"
+
+# Nur E2E-Tests (langsam)
+pytest -m "e2e"
+```
+
+### Nach Verzeichnis
+```bash
+# Unit-Tests
 pytest tests/unit/
-```
 
-### Nur Integration-Tests
-```bash
+# Integration-Tests
 pytest tests/integration/
-```
 
-### Service-spezifische Tests
-```bash
+# Service-spezifische Tests
 pytest tests/services/core/
 pytest tests/services/data_service/
+
+# E2E-Tests
+pytest tests/e2e/
 ```
 
 ### Mit Coverage
 ```bash
 pytest --cov=services --cov-report=html
+pytest --cov=services --cov-report=term-missing
+```
+
+### Performance Tests
+```bash
+pytest -m "performance" --durations=10
+```
+
+### Debug-Modus
+```bash
+pytest -v -s --tb=long
 ```
 
 ## Best Practices
