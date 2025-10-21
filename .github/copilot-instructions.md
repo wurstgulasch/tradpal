@@ -47,10 +47,10 @@
 - `docs/`: Documentation
 - `main.py`: Hybrid orchestrator with service clients
 
-**CRITICAL:** Never place files in root directory! New features always in services/, never in root or src/. Terminals always in conda environment `tradpal-env`. Documentation, README, and copilot-instructions.md always synchronized. Documentation, README, and copilot-instructions.md always in English and always current.
+**CRITICAL:** Never place files in root directory! New features always in services/. Terminals always in conda environment `tradpal_env`. Documentation, README, and copilot-instructions.md always synchronized and in english (commit messages as well). 
 
 ## Architecture Principles
-- **Microservices-First:** Every new functionality as a separate service
+- **Microservices-Architecture:** Similar to a modular monolith, but each module is a separate service
 - **Event-Driven:** Redis Streams for real-time service communication
 - **API Gateway:** Centralized routing, authentication, and load balancing at port 8000
 - **Zero-Trust Security:** mTLS, OAuth/JWT, secrets management
@@ -95,7 +95,7 @@ make dev-ui
 
 # Alternative: Traditional setup
 conda env create -f environment.yml
-conda activate tradpal-env
+conda activate tradpal_env
 cp config/.env.example config/.env
 ```
 
@@ -317,7 +317,7 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 - **Root-Verzeichnis sauber halten:** Keine Code-Dateien im Root, nur config/, services/, tests/, scripts/, docs/, integrations/, examples/
 
 ## Kritische Entwicklungs-Workflows
-- **Environment Setup:** `conda env create -f environment.yml && conda activate tradpal-env`
+- **Environment Setup:** `conda env create -f environment.yml && conda activate tradpal_env`
 - **Profile-basierte Ausführung:** `python main.py --profile light --mode live` (light für minimal, heavy für voll)
 - **Testing:** `pytest tests/` (Unit-Tests in `tests/unit/`, Integration in `tests/integration/`)
 - **Performance Benchmarking:** `python scripts/performance_benchmark.py`

@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel, Field
 import uvicorn
 
-from .service import BacktestingService
+from .backtesting.service import BacktestingService
 # Event system - using mock implementation for now
 EVENT_SYSTEM_AVAILABLE = False
 

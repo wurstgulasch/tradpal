@@ -1,6 +1,6 @@
 """
 TradPal Backtesting Service Orchestrator
-Unified orchestrator for backtesting, ML training, optimization, and walk-forward analysis
+Unified orchestrator using consolidated BacktestingService
 """
 
 import logging
@@ -10,46 +10,27 @@ from datetime import datetime
 import pandas as pd
 
 from .backtesting.service import BacktestingService
-from .ml_training.service import MLTrainingService
-from .optimization.service import OptimizationService
-from .walk_forward.service import WalkForwardService
 
 logger = logging.getLogger(__name__)
 
 
 class BacktestingServiceOrchestrator:
-    """Unified orchestrator for all backtesting-related services"""
+    """Unified orchestrator using consolidated BacktestingService"""
 
     def __init__(self, event_system=None):
         self.event_system = event_system
 
-        # Initialize service components
+        # Initialize consolidated service
         self.backtesting_service = BacktestingService(event_system=event_system)
-        self.ml_training_service = MLTrainingService(event_system=event_system)
-        self.optimization_service = OptimizationService(event_system=event_system)
-        self.walk_forward_service = WalkForwardService(
-            event_system=event_system,
-            backtesting_service=self.backtesting_service,
-            optimization_service=self.optimization_service
-        )
 
         self.is_initialized = False
 
     async def initialize(self):
-        """Initialize all backtesting service components"""
+        """Initialize the consolidated backtesting service"""
         logger.info("Initializing Backtesting Service Orchestrator...")
 
         try:
-            # Initialize all services concurrently
-            init_tasks = [
-                self.backtesting_service.initialize(),
-                self.ml_training_service.initialize(),
-                self.optimization_service.initialize(),
-                self.walk_forward_service.initialize()
-            ]
-
-            await asyncio.gather(*init_tasks)
-
+            await self.backtesting_service.initialize()
             self.is_initialized = True
             logger.info("Backtesting Service Orchestrator initialized successfully")
 
@@ -58,20 +39,11 @@ class BacktestingServiceOrchestrator:
             raise
 
     async def shutdown(self):
-        """Shutdown all backtesting service components"""
+        """Shutdown the consolidated backtesting service"""
         logger.info("Shutting down Backtesting Service Orchestrator...")
 
         try:
-            # Shutdown all services concurrently
-            shutdown_tasks = [
-                self.backtesting_service.shutdown(),
-                self.ml_training_service.shutdown(),
-                self.optimization_service.shutdown(),
-                self.walk_forward_service.shutdown()
-            ]
-
-            await asyncio.gather(*shutdown_tasks)
-
+            await self.backtesting_service.shutdown()
             self.is_initialized = False
             logger.info("Backtesting Service Orchestrator shut down successfully")
 
@@ -81,7 +53,7 @@ class BacktestingServiceOrchestrator:
     async def run_complete_backtesting_workflow(self, strategy_config: Dict[str, Any],
                                               data: pd.DataFrame,
                                               workflow_config: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Run complete backtesting workflow including optimization and walk-forward analysis"""
+        """Run complete backtesting workflow using consolidated service"""
         if not self.is_initialized:
             raise RuntimeError("Backtesting Service Orchestrator not initialized")
 
@@ -110,8 +82,14 @@ class BacktestingServiceOrchestrator:
             # Phase 2: ML training (if enabled)
             if enable_ml:
                 logger.info("Phase 2: Training ML model")
-                ml_training = await self.ml_training_service.train_model(
-                    strategy_config, data, workflow_config.get("ml_config", {})
+                ml_config = workflow_config.get("ml_config", {})
+                ml_training = await self.backtesting_service.train_model(
+                    symbol=strategy_config.get("symbol", "BTC/USDT"),
+                    timeframe=strategy_config.get("timeframe", "1d"),
+                    start_date=str(data.index.min()),
+                    end_date=str(data.index.max()),
+                    model_type=ml_config.get("model_type", "random_forest"),
+                    use_optuna=ml_config.get("optimize_hyperparams", False)
                 )
                 workflow_results["phases"]["ml_training"] = ml_training
 
@@ -121,8 +99,8 @@ class BacktestingServiceOrchestrator:
                 logger.info("Phase 3: Optimizing strategy parameters")
                 param_ranges = workflow_config.get("param_ranges", {})
                 if param_ranges:
-                    optimization = await self.optimization_service.optimize_strategy(
-                        strategy_config.get("name", "unknown"), param_ranges, data
+                    optimization = await self.backtesting_service.optimize_strategy(
+                        strategy_config.get("name", "unknown"), param_ranges
                     )
                     workflow_results["phases"]["optimization"] = optimization
                     optimized_params = {**strategy_config, **optimization["best_params"]}
@@ -130,27 +108,25 @@ class BacktestingServiceOrchestrator:
                     logger.warning("No parameter ranges provided for optimization")
 
             # Phase 4: Walk-forward analysis (if enabled)
-            if enable_walk_forward and enable_optimization:
+            if enable_walk_forward:
                 logger.info("Phase 4: Running walk-forward analysis")
-                param_ranges = workflow_config.get("param_ranges", {})
-                if param_ranges:
-                    wf_config = workflow_config.get("walk_forward_config", {})
-                    walk_forward = await self.walk_forward_service.run_walk_forward_analysis(
-                        strategy_config.get("name", "unknown"), param_ranges, data, wf_config
-                    )
-                    workflow_results["phases"]["walk_forward"] = walk_forward
+                symbol = strategy_config.get("symbol", "BTC/USDT")
+                timeframe = strategy_config.get("timeframe", "1d")
+                start_date = str(data.index.min())
+                end_date = str(data.index.max())
 
-                    # Analyze stability
-                    stability = await self.walk_forward_service.analyze_walk_forward_stability(walk_forward)
-                    workflow_results["phases"]["stability_analysis"] = stability
+                walk_forward = await self.backtesting_service.run_walk_forward_optimization(
+                    symbol, timeframe, start_date, end_date, "sharpe_ratio"
+                )
+                workflow_results["phases"]["walk_forward"] = walk_forward
 
-                    # Generate report
-                    report = await self.walk_forward_service.generate_walk_forward_report(
-                        walk_forward, stability
-                    )
-                    workflow_results["phases"]["walk_forward_report"] = report
-                else:
-                    logger.warning("No parameter ranges provided for walk-forward analysis")
+                # Analyze stability from walk-forward results
+                stability = self._analyze_walk_forward_stability(walk_forward)
+                workflow_results["phases"]["stability_analysis"] = stability
+
+                # Generate report
+                report = self._generate_walk_forward_report(walk_forward, stability)
+                workflow_results["phases"]["walk_forward_report"] = report
 
             # Generate final recommendation
             workflow_results["final_recommendation"] = self._generate_workflow_recommendation(workflow_results)
@@ -180,7 +156,7 @@ class BacktestingServiceOrchestrator:
             raise RuntimeError("Backtesting Service Orchestrator not initialized")
 
         logger.info(f"Optimizing strategy: {strategy_name}")
-        return await self.optimization_service.optimize_strategy(strategy_name, param_ranges, data)
+        return await self.backtesting_service.optimize_strategy(strategy_name, param_ranges)
 
     async def train_ml_model(self, strategy_config: Dict[str, Any],
                            data: pd.DataFrame, ml_config: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -189,7 +165,22 @@ class BacktestingServiceOrchestrator:
             raise RuntimeError("Backtesting Service Orchestrator not initialized")
 
         logger.info(f"Training ML model for {strategy_config.get('name', 'unknown')}")
-        return await self.ml_training_service.train_model(strategy_config, data, ml_config or {})
+
+        ml_config = ml_config or {}
+        model_name = f"{strategy_config.get('name', 'unknown')}_ml"
+        symbol = strategy_config.get("symbol", "BTC/USDT")
+        timeframe = strategy_config.get("timeframe", "1d")
+        start_date = str(data.index.min())
+        end_date = str(data.index.max())
+
+        return await self.backtesting_service.train_model(
+            symbol=symbol,
+            timeframe=timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            model_type=ml_config.get("model_type", "random_forest"),
+            use_optuna=ml_config.get("optimize_hyperparams", False)
+        )
 
     async def run_walk_forward_analysis(self, strategy_name: str, param_ranges: Dict[str, List],
                                       data: pd.DataFrame, config: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -198,7 +189,80 @@ class BacktestingServiceOrchestrator:
             raise RuntimeError("Backtesting Service Orchestrator not initialized")
 
         logger.info(f"Running walk-forward analysis for {strategy_name}")
-        return await self.walk_forward_service.run_walk_forward_analysis(strategy_name, param_ranges, data, config)
+
+        # Extract parameters from data
+        symbol = "BTC/USDT"  # Default, could be extracted from data or config
+        timeframe = "1d"     # Default, could be extracted from data or config
+        start_date = str(data.index.min())
+        end_date = str(data.index.max())
+
+        return await self.backtesting_service.run_walk_forward_optimization(
+            symbol, timeframe, start_date, end_date, "sharpe_ratio"
+        )
+
+    def _analyze_walk_forward_stability(self, walk_forward_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze walk-forward stability from results"""
+        analysis = walk_forward_results.get("analysis", {})
+
+        stability_rating = "unknown"
+        positive_ratio = analysis.get("positive_ratio", 0)
+        consistency_score = analysis.get("consistency_score", 0)
+        overfitting_ratio = analysis.get("overfitting_ratio", 1)
+
+        if positive_ratio >= 0.7 and consistency_score >= 0.8 and overfitting_ratio <= 0.3:
+            stability_rating = "excellent"
+        elif positive_ratio >= 0.6 and consistency_score >= 0.6 and overfitting_ratio <= 0.5:
+            stability_rating = "good"
+        elif positive_ratio >= 0.5 and consistency_score >= 0.4:
+            stability_rating = "moderate"
+        else:
+            stability_rating = "poor"
+
+        return {
+            "stability_rating": stability_rating,
+            "positive_ratio": positive_ratio,
+            "consistency_score": consistency_score,
+            "overfitting_ratio": overfitting_ratio,
+            "information_coefficient": analysis.get("information_coefficient", 0),
+            "performance_decay": analysis.get("performance_decay", 0)
+        }
+
+    def _generate_walk_forward_report(self, walk_forward_results: Dict[str, Any],
+                                    stability_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate walk-forward analysis report"""
+        analysis = walk_forward_results.get("analysis", {})
+
+        report = {
+            "summary": {
+                "total_windows": walk_forward_results.get("total_windows", 0),
+                "average_oos_performance": analysis.get("average_oos_performance", 0),
+                "stability_rating": stability_analysis.get("stability_rating", "unknown")
+            },
+            "key_metrics": {
+                "positive_ratio": stability_analysis.get("positive_ratio", 0),
+                "consistency_score": stability_analysis.get("consistency_score", 0),
+                "overfitting_ratio": stability_analysis.get("overfitting_ratio", 1),
+                "information_coefficient": stability_analysis.get("information_coefficient", 0)
+            },
+            "recommendations": []
+        }
+
+        # Generate recommendations based on stability
+        rating = stability_analysis.get("stability_rating", "unknown")
+        if rating == "excellent":
+            report["recommendations"].append("Strategy shows excellent stability - suitable for live trading")
+            report["recommendations"].append("Consider implementing with confidence")
+        elif rating == "good":
+            report["recommendations"].append("Strategy shows good stability with minor concerns")
+            report["recommendations"].append("Monitor performance closely in live trading")
+        elif rating == "moderate":
+            report["recommendations"].append("Strategy shows moderate stability")
+            report["recommendations"].append("Significant improvements recommended before live trading")
+        else:
+            report["recommendations"].append("Strategy shows poor stability")
+            report["recommendations"].append("Not recommended for live trading without major revisions")
+
+        return report
 
     def _generate_workflow_recommendation(self, workflow_results: Dict[str, Any]) -> Dict[str, Any]:
         """Generate final recommendation based on workflow results"""
@@ -262,13 +326,10 @@ class BacktestingServiceOrchestrator:
         return recommendation
 
     def get_service_status(self) -> Dict[str, Any]:
-        """Get status of all orchestrated services"""
+        """Get status of the consolidated backtesting service"""
         return {
             "orchestrator_initialized": self.is_initialized,
             "backtesting_service": self.backtesting_service.is_initialized,
-            "ml_training_service": self.ml_training_service.is_initialized,
-            "optimization_service": self.optimization_service.is_initialized,
-            "walk_forward_service": self.walk_forward_service.is_initialized,
             "timestamp": datetime.now().isoformat()
         }
 
