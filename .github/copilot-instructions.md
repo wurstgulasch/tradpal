@@ -3,22 +3,28 @@
 ## Overview
 **TradPal** is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
-**Current Status (October 2025):** Version 3.0.1 with complete microservices migration and 100% test coverage for implemented features (537 tests passing).
+**Current Status (October 2025):** Version 2.5.1 with partial microservices consolidation (trading_service, data_service, backtesting_service unified) and 98 organized test files with comprehensive coverage.
 
 ## Project Structure (STRICTLY ENFORCE!)
-- `services/`: **Microservices Architecture** - ALL new features/service developments go here
+- `services/`: **Microservices Architecture** - ALL new features/service developments go here (25+ services, partial consolidation)
   - `core/`: Core calculations (indicators, vectorization, memory optimization)
   - `data_service/`: Data management (CCXT, Kaggle Bitcoin datasets, Yahoo Finance, caching, HDF5)
-  - `trading_bot_live/`: Live-trading engine with AI models
+  - `trading_service/`: **Consolidated AI-powered trading service** (unified from multiple trading components)
+    - `orchestrator.py`: Main trading orchestrator coordinating execution, risk, RL, regime detection
+    - `execution/`: Order execution logic
+    - `risk_management/`: Risk management and position sizing
+    - `reinforcement_learning/`: RL agents for trading decisions
+    - `market_regime/`: Market regime detection
+    - `monitoring/`: Trading performance monitoring
   - `backtesting_service/`: Historical simulation and performance analysis
   - `discovery_service/`: ML parameter optimization and genetic algorithms
   - `risk_service/`: Risk management and position sizing
   - `notification_service/`: Alerts (Telegram, Discord, Email)
   - `mlops_service/`: ML experiment tracking and model management
   - `security_service/`: Zero-trust authentication
-  - `web_ui/`: Streamlit/Plotly dashboard
   - `event_system/`: Event-driven communication via Redis Streams
   - `api_gateway/`: Centralized service routing and authentication
+  - `[20+ additional individual services]`: Pending consolidation into unified services
 - `config/`: Central configuration (modular structure)
   - `settings.py`: Main configuration file (imports from modules + legacy constants for backward compatibility)
   - `core_settings.py`: Core trading and risk management
@@ -27,7 +33,14 @@
   - `security_settings.py`: Security and authentication
   - `performance_settings.py`: Performance optimization
   - `.env` files: Environment variables for different profiles
-- `tests/`: Unit and integration tests (pytest)
+- `tests/`: **Centralized test suite** (98 test files organized by best practices)
+  - `conftest.py`: **Central test configuration** with fixtures and utilities
+  - `unit/`: Unit tests (25+ files) - isolated component testing
+  - `integration/`: Integration tests (13+ files) - service interaction testing
+  - `services/`: Service-specific tests organized by service
+  - `e2e/`: End-to-end tests for complete workflows
+  - `config/`: Configuration tests
+  - `integrations/`: Integration setup tests
 - `scripts/`: Utility scripts for training/demos
 - `integrations/`: External integrations (brokers, notifications)
 - `examples/`: Jupyter notebooks and demos
@@ -56,13 +69,16 @@
 - Circuit breaker and health check resilience patterns
 - Modular data sources (Kaggle Bitcoin datasets, Yahoo Finance, CCXT)
 - Zero-trust security with mTLS and JWT
+- **Partial Service Consolidation**: trading_service, data_service, backtesting_service unified
+- **Centralized Test Suite**: 98 organized test files with comprehensive coverage
 
 🔄 **In Progress:**
-1. **AI Outperformance:** ML models that consistently outperform benchmarks
-2. **Service Optimization:** Performance, scalability, reliability
-3. **Advanced Features:** Reinforcement learning, market regime detection, alternative data
-4. **Data Sources Expansion:** Additional datasets and real-time feeds
-5. **Enterprise Readiness:** Security, monitoring, deployment automation
+1. **Complete Service Consolidation**: Reduce 25+ services to 4 main services (core_service, data_service, backtesting_service, trading_service)
+2. **AI Outperformance**: ML models that consistently outperform benchmarks
+3. **Service Optimization**: Performance, scalability, reliability
+4. **Advanced Features**: Reinforcement learning, market regime detection, alternative data
+5. **Data Sources Expansion**: Additional datasets and real-time feeds
+6. **Enterprise Readiness**: Security, monitoring, deployment automation
 
 ## Critical Developer Workflows
 
@@ -217,9 +233,12 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 ## Testing Patterns
 
 ### Test Organization
-- **Unit tests**: `tests/unit/` - Isolated component testing
-- **Integration tests**: `tests/integration/` - Service interaction testing
-- **Service tests**: `tests/services/` - Service-specific functionality
+- **Unit tests**: `tests/unit/` - Isolated component testing (25+ files)
+- **Integration tests**: `tests/integration/` - Service interaction testing (13+ files)
+- **Service tests**: `tests/services/` - Service-specific functionality organized by service
+- **E2E tests**: `tests/e2e/` - End-to-end tests for complete workflows
+- **Config tests**: `tests/config/` - Configuration testing
+- **Integration tests**: `tests/integrations/` - Integration setup testing
 - **Async testing**: `pytest-asyncio` for async test functions
 
 ### Test Coverage Goals

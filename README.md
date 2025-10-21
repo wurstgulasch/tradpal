@@ -3,35 +3,41 @@
 TradPal is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
 ## 🎯 October 2025 Highlights
-- **537 Tests Passing**: Comprehensive test coverage achieved with 100% coverage for implemented features
-- **Async Test Fixes**: Resolved all async test failures in advanced signal generation tests
-- **Microservices Architecture**: Complete modular service structure with event-driven communication
+- **98 Test Files**: Comprehensive test coverage with organized test structure (unit/integration/services/e2e)
+- **Service Consolidation**: Partial consolidation of 25+ services into unified trading, data, and backtesting services
 - **Advanced ML Integration**: ML-enhanced signal generation with ensemble methods and risk management
 - **Modular Data Sources**: Kaggle Bitcoin Datasets, Yahoo Finance, CCXT integration for optimal backtesting
-- **Dependency Management**: Centralized version catalog with service-specific requirements for true microservice independence
+- **Centralized Test Suite**: Organized test structure with conftest.py, fixtures, and comprehensive coverage
 
-## �️ Project Structure
+## 🏗️ Project Structure
 
 ```
-tradpal_indicator/
-├── services/                    # Microservices Architecture
+tradpal/
+├── services/                    # Microservices Architecture (25+ services, partial consolidation)
 │   ├── core/                    # Core calculations & Memory optimization
-│   ├── data_service/            # Data Management (CCXT, Kaggle, Yahoo Finance, Caching, HDF5)
+│   ├── data_service/            # Data Management (CCXT, Kaggle, Yahoo Finance, caching, HDF5)
 │   │   └── data_sources/        # Modular data sources (Kaggle Bitcoin Datasets, Exchanges)
 │   │       ├── liquidation.py   # Liquidation data with fallback chain
 │   │       ├── volatility.py    # Volatility indicators as liquidation proxy
 │   │       ├── sentiment.py     # Sentiment analysis data source
 │   │       ├── onchain.py       # On-chain metrics data source
 │   │       └── factory.py       # Data source factory with 8+ sources
-│   ├── trading_bot_live/        # Live-Trading-Engine with AI models
-│   ├── backtesting_service/     # Historical simulation
+│   ├── trading_service/         # Consolidated AI-powered trading service
+│   │   ├── orchestrator.py      # Main trading orchestrator
+│   │   ├── execution/           # Order execution
+│   │   ├── risk_management/     # Risk management
+│   │   ├── reinforcement_learning/ # RL agents
+│   │   ├── market_regime/       # Market regime detection
+│   │   └── monitoring/          # Trading monitoring
+│   ├── backtesting_service/     # Historical simulation and ML training
 │   ├── discovery_service/       # ML parameter optimization
-│   ├── risk_service/            # Risk management & position sizing
+│   ├── risk_service/            # Risk management and position sizing
 │   ├── notification_service/    # Alerts (Telegram, Discord, Email)
-│   ├── mlops_service/           # ML experiment tracking
+│   ├── mlops_service/           # ML experiment tracking and model management
 │   ├── security_service/        # Zero-trust authentication
 │   ├── event_system/            # Event-Driven Architecture (Redis Streams)
-│   └── web_ui/                  # Streamlit/Plotly dashboard
+│   ├── api_gateway/             # Centralized service routing and authentication
+│   └── [20+ additional services]/ # Individual microservices (pending consolidation)
 ├── config/                      # Central configuration
 │   ├── settings.py              # Main configuration (imports from modules)
 │   ├── core_settings.py         # Core trading and risk management
@@ -43,17 +49,14 @@ tradpal_indicator/
 │   ├── .env.example             # Example configuration
 │   ├── .env.light               # Light profile (without AI/ML)
 │   └── .env.heavy               # Heavy profile (full features)
-├── data/                        # Data directories
-│   ├── cache/                   # Cache files
-│   ├── logs/                    # Log files
-│   └── output/                  # Output files (backtests, reports)
-├── infrastructure/              # Infrastructure & deployment
-│   ├── deployment/              # AWS, Kubernetes configurations
-│   └── monitoring/              # Prometheus, Grafana setups
-├── tests/                       # Test suite (organized by best practices)
-│   ├── unit/                    # Unit tests
-│   ├── integration/             # Integration tests
-│   └── services/                # Service-specific tests
+├── tests/                       # Centralized test suite (98 test files)
+│   ├── conftest.py              # Central test configuration and fixtures
+│   ├── unit/                    # Unit tests (25+ files)
+│   ├── integration/             # Integration tests (13+ files)
+│   ├── services/                # Service-specific tests
+│   ├── e2e/                     # End-to-end tests
+│   ├── config/                  # Configuration tests
+│   └── integrations/            # Integration setup tests
 ├── scripts/                     # Utility scripts for training/demos
 ├── examples/                    # Jupyter notebooks and demos
 ├── integrations/                # External integrations
@@ -319,4 +322,4 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**TradPal v3.0.1** - *Last updated: October 2025*
+**TradPal v2.5.1** - *Last updated: October 21, 2025*
