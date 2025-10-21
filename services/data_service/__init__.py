@@ -1,27 +1,26 @@
+# TradPal Data Service
 """
-Data Service - Centralized time-series data management for TradPal.
+Centralized data management service for the TradPal trading system.
 
-This package provides:
-- Multi-source data fetching (CCXT, Yahoo Finance)
-- Data quality validation and scoring
-- Redis caching for performance
-- REST API for data access
-- Automatic fallback systems
+This service consolidates the following previously separate services:
+- data_service: Core data fetching and caching
+- alternative_data_service: Sentiment, on-chain, and economic data
+- market_regime_detection_service: Market regime classification
+
+The data service provides a unified interface for all data operations
+with quality validation, caching, and real-time updates.
 """
 
-from .service import DataService, DataRequest, DataResponse, DataMetadata
-from .service import DataSource, DataProvider, DataQuality, EventSystem
-from .client import DataServiceClient
+__version__ = "3.0.1"
+__author__ = "TradPal Team"
+__description__ = "TradPal Data Service - Centralized data management"
 
-__version__ = "1.0.0"
+# Import main components for easy access
+from .main import DataServiceOrchestrator
+from .data_sources.service import DataService
+
 __all__ = [
+    "DataServiceOrchestrator",
     "DataService",
-    "DataRequest",
-    "DataResponse",
-    "DataMetadata",
-    "DataSource",
-    "DataProvider",
-    "DataQuality",
-    "EventSystem",
-    "DataServiceClient"
+    # TODO: Add AlternativeDataService and MarketRegimeDetectionServiceClient when implemented
 ]

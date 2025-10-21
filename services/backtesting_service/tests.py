@@ -1,495 +1,275 @@
 """
-Tests for Backtesting Service.
-
-Comprehensive test suite covering:
-- Single backtest execution
-- Multi-symbol backtesting
-- Multi-model comparison
-- Walk-forward optimization
-- Event integration
-- Error handling
+TradPal Backtesting Service Tests
+Unit and integration tests for the unified backtesting service
 """
 
-import asyncio
 import pytest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, AsyncMock
 
-from services.backtesting_service import BacktestingService, AsyncBacktester
-# Event system - using mock implementation for now
-EVENT_SYSTEM_AVAILABLE = False
-
-class Event:
-    def __init__(self, type: str, data: dict):
-        self.type = type
-        self.data = data
-
-class EventSystem:
-    def __init__(self):
-        self.handlers = {}
-
-    def subscribe(self, event_type: str, handler):
-        if event_type not in self.handlers:
-            self.handlers[event_type] = []
-        self.handlers[event_type].append(handler)
-
-    async def publish(self, event: Event):
-        # Mock implementation - just call handlers synchronously
-        if event.type in self.handlers:
-            for handler in self.handlers[event.type]:
-                try:
-                    if asyncio.iscoroutinefunction(handler):
-                        await handler(event)
-                    else:
-                        handler(event)
-                except Exception as e:
-                    print(f"Error in event handler: {e}")
+from services.backtesting_service.orchestrator import BacktestingServiceOrchestrator
 
 
-class TestBacktestingService:
-    """Test cases for BacktestingService class."""
+@pytest.fixture
+def sample_data():
+    """Generate sample OHLC data for testing"""
+    dates = pd.date_range(start='2020-01-01', end='2023-01-01', freq='D')
+    np.random.seed(42)
 
-    @pytest.fixture
-    def event_system(self):
-        """Mock event system for testing."""
-        return Mock(spec=EventSystem)
+    # Generate realistic OHLC data
+    n = len(dates)
+    close_prices = 100 * np.exp(np.cumsum(np.random.normal(0.0005, 0.02, n)))
+    highs = close_prices * (1 + np.random.uniform(0, 0.03, n))
+    lows = close_prices * (1 - np.random.uniform(0, 0.03, n))
+    opens = close_prices + np.random.normal(0, close_prices * 0.01, n)
 
-    @pytest.fixture
-    def cache(self):
-        """Mock cache for testing."""
-        return Mock()
+    return pd.DataFrame({
+        'open': opens,
+        'high': highs,
+        'low': lows,
+        'close': close_prices,
+        'volume': np.random.randint(1000, 10000, n)
+    }, index=dates)
 
-class TestBacktestingService:
-    """Test cases for BacktestingService class."""
 
-    @pytest.fixture
-    def event_system(self):
-        """Mock event system for testing."""
-        return Mock()
+@pytest.fixture
+def sample_strategy():
+    """Sample strategy configuration"""
+    return {
+        "name": "moving_average_crossover",
+        "type": "technical",
+        "parameters": {
+            "fast_period": 10,
+            "slow_period": 20,
+            "stop_loss": 0.02,
+            "take_profit": 0.05
+        }
+    }
 
-    @pytest.fixture
-    def service(self, event_system):
-        """Create BacktestingService instance for testing."""
-        cache = Mock()
-        return BacktestingService(event_system=event_system, cache=cache)
 
-    @pytest.fixture
-    def backtester(self):
-        """Create AsyncBacktester instance for testing."""
-        return AsyncBacktester(
-            symbol="BTC/USDT",
-            exchange="kraken",
-            timeframe="1d",
-            start_date="2024-01-01",
-            end_date="2024-04-09",
-            initial_capital=10000.0
-        )
+@pytest.fixture
+async def orchestrator():
+    """Initialize backtesting orchestrator for testing"""
+    orch = BacktestingServiceOrchestrator()
+    await orch.initialize()
+    yield orch
+    await orch.shutdown()
+
+
+class TestBacktestingServiceOrchestrator:
+    """Test the backtesting service orchestrator"""
 
     @pytest.mark.asyncio
-    async def test_initialization(self, service, event_system):
-        """Test service initialization."""
-        assert service.event_system == event_system
-        assert service.active_backtests == {}
-        assert service.backtest_results == {}
-
-        # Check that event handlers are registered
-        event_system.subscribe.assert_any_call("backtest.request", service._handle_backtest_request)
-        event_system.subscribe.assert_any_call("backtest.multi_symbol.request", service._handle_multi_symbol_request)
-        event_system.subscribe.assert_any_call("backtest.multi_model.request", service._handle_multi_model_request)
-        event_system.subscribe.assert_any_call("backtest.walk_forward.request", service._handle_walk_forward_request)
+    async def test_initialization(self, orchestrator):
+        """Test orchestrator initialization"""
+        status = orchestrator.get_service_status()
+        assert status["orchestrator_initialized"] is True
+        assert status["backtesting_service"] is True
+        assert status["optimization_service"] is True
 
     @pytest.mark.asyncio
-    async def test_run_backtest_success(self, backtester):
-        """Test successful single backtest execution."""
-        # Mock data fetching and signal preparation
-        with patch.object(backtester, '_fetch_data_async', return_value=pd.DataFrame({
-            'close': [100, 101, 102],
-            'Buy_Signal': [1, 0, 0],
-            'Sell_Signal': [0, 0, 1],
-            'Position_Size_Absolute': [1000, 1000, 1000],
-            'Stop_Loss_Buy': [98, 99, 100],
-            'Stop_Loss_Sell': [102, 103, 104],
-            'Take_Profit_Buy': [102, 103, 104],
-            'Take_Profit_Sell': [98, 99, 100],
-            'ATR': [1, 1, 1]
-        })):
-            with patch.object(backtester, '_prepare_traditional_signals_async') as mock_prepare:
-                mock_prepare.return_value = pd.DataFrame({
-                    'close': [100, 101, 102],
-                    'Buy_Signal': [1, 0, 0],
-                    'Sell_Signal': [0, 0, 1],
-                    'Position_Size_Absolute': [1000, 1000, 1000],
-                    'Stop_Loss_Buy': [98, 99, 100],
-                    'Stop_Loss_Sell': [102, 103, 104],
-                    'Take_Profit_Buy': [102, 103, 104],
-                    'Take_Profit_Sell': [98, 99, 100],
-                    'ATR': [1, 1, 1]
-                })
+    async def test_quick_backtest(self, orchestrator, sample_data, sample_strategy):
+        """Test quick backtest functionality"""
+        results = await orchestrator.run_quick_backtest(sample_strategy, sample_data)
 
-                result = await backtester.run_backtest_async(strategy="traditional")
+        assert results["success"] is True
+        assert "metrics" in results
+        assert "trades" in results
+        assert "performance" in results
 
-                assert result["success"] is True
-                assert "metrics" in result
-                assert "trades" in result
-                assert "trades_count" in result
-                assert result["trades_count"] > 0
+        # Check metrics structure
+        metrics = results["metrics"]
+        assert "total_return" in metrics
+        assert "sharpe_ratio" in metrics
+        assert "max_drawdown" in metrics
+        assert "win_rate" in metrics
 
     @pytest.mark.asyncio
-    async def test_run_backtest_failure(self, backtester):
-        """Test backtest execution failure."""
-        with patch.object(backtester, '_fetch_data_async', return_value=pd.DataFrame()):
-            result = await backtester.run_backtest_async()
-
-            assert result["success"] is False
-            assert "No data available" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_multi_symbol_backtest(self, service):
-        """Test multi-symbol backtest execution."""
-        symbols = ["BTC/USDT", "ETH/USDT"]
-
-        # Mock individual backtests
-        with patch.object(service, 'run_backtest_async') as mock_run_backtest:
-            mock_run_backtest.side_effect = [
-                {
-                    "success": True,
-                    "metrics": {"total_pnl": 1000.0, "win_rate": 60.0},
-                    "trades_count": 5
-                },
-                {
-                    "success": True,
-                    "metrics": {"total_pnl": 500.0, "win_rate": 55.0},
-                    "trades_count": 3
-                }
-            ]
-
-            result = await service.run_multi_symbol_backtest_async(
-                symbols=symbols,
-                backtest_id="test_multi_symbol"
-            )
-
-            assert result["backtest_id"] == "test_multi_symbol"
-            assert result["symbols_tested"] == symbols
-            assert len(result["successful_backtests"]) == 2
-            assert "aggregated_metrics" in result
-
-            # Verify individual backtests were called
-            assert mock_run_backtest.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_multi_model_backtest(self, service):
-        """Test multi-model backtest execution."""
-        models = ["traditional_ml", "lstm"]
-
-        with patch.object(service, 'run_backtest_async') as mock_run_backtest:
-            mock_run_backtest.side_effect = [
-                {
-                    "success": True,
-                    "metrics": {"sharpe_ratio": 1.5, "total_pnl": 1000.0}
-                },
-                {
-                    "success": True,
-                    "metrics": {"sharpe_ratio": 1.8, "total_pnl": 1200.0}
-                }
-            ]
-
-            result = await service.run_multi_model_backtest_async(
-                symbol="BTC/USDT",
-                models_to_test=models,
-                backtest_id="test_multi_model"
-            )
-
-            assert result["backtest_id"] == "test_multi_model"
-            assert result["models_tested"] == models
-            assert "comparison" in result
-            assert "best_model" in result["comparison"]
-
-    @pytest.mark.asyncio
-    async def test_walk_forward_optimization(self, service):
-        """Test walk-forward optimization."""
-        parameter_grid = {"ema_short": [5, 9, 12]}
-
-        with patch('src.walk_forward_optimizer.WalkForwardOptimizer') as mock_optimizer_class:
-            mock_optimizer = Mock()
-            mock_optimizer.optimize_strategy_parameters = Mock(return_value={
-                "success": True,
-                "best_parameters": {"ema_short": 9},
-                "best_score": 1.5
-            })
-            mock_optimizer_class.return_value = mock_optimizer
-
-            with patch.object(service, 'run_backtest_async') as mock_run_backtest:
-                mock_run_backtest.return_value = {"success": True, "metrics": {"total_pnl": 1000.0}}
-
-                result = await service.run_walk_forward_backtest_async(
-                    parameter_grid=parameter_grid,
-                    backtest_id="test_walk_forward"
-                )
-
-                assert "optimization_results" in result
-                assert "final_backtest" in result
-                assert result["optimization_results"]["best_parameters"]["ema_short"] == 9
-
-    @pytest.mark.asyncio
-    async def test_get_backtest_status(self, service):
-        """Test getting backtest status."""
-        # Test active backtest
-        service.active_backtests["test_active"] = {
-            "status": "running",
-            "start_time": datetime.now()
+    async def test_strategy_optimization(self, orchestrator, sample_data):
+        """Test strategy parameter optimization"""
+        param_ranges = {
+            "fast_period": [5, 10, 15, 20],
+            "slow_period": [20, 30, 40, 50],
+            "stop_loss": [0.01, 0.02, 0.03],
+            "take_profit": [0.03, 0.05, 0.07]
         }
 
-        status = await service.get_backtest_status("test_active")
-        assert status["status"] == "running"
+        results = await orchestrator.optimize_strategy(
+            "moving_average_crossover", param_ranges, sample_data
+        )
 
-        # Test completed backtest
-        service.backtest_results["test_completed"] = {"success": True, "metrics": {"pnl": 100.0}}
+        assert results["success"] is True
+        assert "best_params" in results
+        assert "best_score" in results
+        assert "optimization_history" in results
 
-        status = await service.get_backtest_status("test_completed")
-        assert status["status"] == "completed"
-        assert status["result"]["success"] is True
-
-        # Test not found
-        status = await service.get_backtest_status("not_found")
-        assert status["status"] == "not_found"
+        # Check best parameters
+        best_params = results["best_params"]
+        assert "fast_period" in best_params
+        assert "slow_period" in best_params
+        assert best_params["fast_period"] < best_params["slow_period"]  # Fast should be less than slow
 
     @pytest.mark.asyncio
-    async def test_cleanup_completed_backtests(self, service):
-        """Test cleanup of old completed backtests."""
-        old_time = datetime.now() - timedelta(hours=25)
+    async def test_ml_training(self, orchestrator, sample_data, sample_strategy):
+        """Test ML model training"""
+        ml_config = {
+            "model_type": "random_forest",
+            "train_split": 0.7,
+            "validation_split": 0.2
+        }
 
-        service.active_backtests = {
-            "old_completed": {
-                "status": "completed",
-                "end_time": old_time
+        results = await orchestrator.train_ml_model(sample_strategy, sample_data, ml_config)
+
+        assert results["success"] is True
+        assert "model_info" in results
+        assert "training_metrics" in results
+        assert "feature_importance" in results
+
+    @pytest.mark.asyncio
+    async def test_walk_forward_analysis(self, orchestrator, sample_data):
+        """Test walk-forward analysis"""
+        param_ranges = {
+            "fast_period": [5, 10, 15],
+            "slow_period": [20, 30, 40],
+            "stop_loss": [0.01, 0.02],
+            "take_profit": [0.03, 0.05]
+        }
+
+        config = {
+            "in_sample_window": 252,  # ~1 year
+            "out_sample_window": 21,  # ~1 month
+            "step_size": 21
+        }
+
+        results = await orchestrator.run_walk_forward_analysis(
+            "moving_average_crossover", param_ranges, sample_data, config
+        )
+
+        assert results["success"] is True
+        assert "total_windows" in results
+        assert "average_oos_score" in results
+        assert "all_windows" in results
+        assert len(results["all_windows"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_complete_workflow(self, orchestrator, sample_data, sample_strategy):
+        """Test complete backtesting workflow"""
+        workflow_config = {
+            "enable_ml": False,
+            "enable_optimization": True,
+            "enable_walk_forward": True,
+            "param_ranges": {
+                "fast_period": [5, 10, 15],
+                "slow_period": [20, 30, 40],
+                "stop_loss": [0.01, 0.02],
+                "take_profit": [0.03, 0.05]
             },
-            "recent_completed": {
-                "status": "completed",
-                "end_time": datetime.now()
-            },
-            "still_running": {
-                "status": "running",
-                "start_time": datetime.now()
+            "walk_forward_config": {
+                "in_sample_window": 252,
+                "out_sample_window": 21,
+                "step_size": 21
             }
         }
 
-        await service.cleanup_completed_backtests(max_age_hours=24)
-
-        # Old completed backtest should be removed
-        assert "old_completed" not in service.active_backtests
-        # Recent completed should remain
-        assert "recent_completed" in service.active_backtests
-        # Running should remain
-        assert "still_running" in service.active_backtests
-
-
-class TestAsyncBacktester:
-    """Test cases for AsyncBacktester class."""
-
-    @pytest.fixture
-    def sample_data(self):
-        """Create sample OHLCV data for testing."""
-        dates = pd.date_range(start='2024-01-01', periods=100, freq='1d')
-        np.random.seed(42)
-
-        data = pd.DataFrame({
-            'timestamp': dates,
-            'open': 50000 + np.random.normal(0, 1000, 100),
-            'high': 51000 + np.random.normal(0, 1000, 100),
-            'low': 49000 + np.random.normal(0, 1000, 100),
-            'close': 50000 + np.random.normal(0, 1000, 100),
-            'volume': np.random.randint(1000, 10000, 100)
-        })
-
-        # Add trend
-        trend = np.linspace(0, 5000, 100)
-        data['close'] = data['close'] + trend
-        data.set_index('timestamp', inplace=True)
-
-        return data
-
-    @pytest.fixture
-    def backtester(self):
-        """Create AsyncBacktester instance for testing."""
-        return AsyncBacktester(
-            symbol="BTC/USDT",
-            exchange="kraken",
-            timeframe="1d",
-            start_date="2024-01-01",
-            end_date="2024-04-09",
-            initial_capital=10000.0
+        results = await orchestrator.run_complete_backtesting_workflow(
+            sample_strategy, sample_data, workflow_config
         )
 
-    @pytest.mark.asyncio
-    async def test_initialization(self, backtester):
-        """Test backtester initialization."""
-        assert backtester.symbol == "BTC/USDT"
-        assert backtester.exchange == "kraken"
-        assert backtester.timeframe == "1d"
-        assert backtester.initial_capital == 10000.0
-        assert backtester.current_capital == 10000.0
-        assert backtester.commission == 0.001
+        assert results["success"] is True
+        assert "phases" in results
+        assert "final_recommendation" in results
+
+        # Check phases
+        phases = results["phases"]
+        assert "initial_backtest" in phases
+        assert "optimization" in phases
+        assert "walk_forward" in phases
+
+        # Check recommendation
+        recommendation = results["final_recommendation"]
+        assert "overall_rating" in recommendation
+        assert "confidence_level" in recommendation
+        assert "recommendations" in recommendation
+
+
+class TestBacktestingService:
+    """Test individual backtesting service components"""
 
     @pytest.mark.asyncio
-    async def test_run_backtest_traditional(self, backtester, sample_data):
-        """Test running traditional strategy backtest."""
-        # Mock data fetching
-        with patch.object(backtester, '_fetch_data_async', return_value=sample_data):
-            # Mock signal preparation
-            with patch.object(backtester, '_prepare_traditional_signals_async') as mock_prepare:
-                mock_prepare.return_value = sample_data.copy()
+    async def test_backtesting_service_basic(self, orchestrator, sample_data, sample_strategy):
+        """Test basic backtesting functionality"""
+        from services.backtesting_service.backtesting.service import BacktestingService
 
-                # Add required columns for trade simulation
-                test_data = sample_data.copy()
-                test_data['Buy_Signal'] = np.random.choice([0, 1], len(test_data))
-                test_data['Sell_Signal'] = np.random.choice([0, 1], len(test_data))
-                test_data['Position_Size_Absolute'] = 1000.0
-                test_data['Stop_Loss_Buy'] = test_data['close'] * 0.98
-                test_data['Stop_Loss_Sell'] = test_data['close'] * 1.02
-                test_data['Take_Profit_Buy'] = test_data['close'] * 1.02
-                test_data['Take_Profit_Sell'] = test_data['close'] * 0.98
-                test_data['ATR'] = 1000.0  # Mock ATR
+        service = BacktestingService()
+        await service.initialize()
 
-                mock_prepare.return_value = test_data
+        results = await service.run_backtest(sample_strategy, sample_data)
 
-                result = await backtester.run_backtest_async(strategy="traditional")
+        assert results["success"] is True
+        assert "metrics" in results
+        assert "trades" in results
 
-                assert "success" in result
-                assert "metrics" in result
-                assert "trades" in result
-                assert "trades_count" in result
+        await service.shutdown()
 
     @pytest.mark.asyncio
-    async def test_run_backtest_ml_enhanced(self, backtester, sample_data):
-        """Test running ML-enhanced strategy backtest."""
-        with patch.object(backtester, '_fetch_data_async', return_value=sample_data):
-            with patch.object(backtester, '_prepare_ml_enhanced_signals_async') as mock_prepare:
-                test_data = sample_data.copy()
-                test_data['Buy_Signal'] = np.random.choice([0, 1], len(test_data))
-                test_data['Sell_Signal'] = np.random.choice([0, 1], len(test_data))
-                test_data['Position_Size_Absolute'] = 1000.0
-                test_data['ATR'] = 1000.0
+    async def test_optimization_service(self, orchestrator, sample_data):
+        """Test optimization service"""
+        from services.backtesting_service.optimization.service import OptimizationService
 
-                mock_prepare.return_value = test_data
+        service = OptimizationService()
+        await service.initialize()
 
-                result = await backtester.run_backtest_async(strategy="ml_enhanced")
+        param_ranges = {
+            "fast_period": [5, 10, 15],
+            "slow_period": [20, 30, 40]
+        }
 
-                assert "success" in result
-                assert result["success"] is True
+        results = await service.optimize_strategy(
+            "moving_average_crossover", param_ranges, sample_data
+        )
 
-    @pytest.mark.asyncio
-    async def test_run_backtest_no_data(self, backtester):
-        """Test backtest with no data available."""
-        with patch.object(backtester, '_fetch_data_async', return_value=pd.DataFrame()):
-            result = await backtester.run_backtest_async()
+        assert results["success"] is True
+        assert "best_params" in results
+        assert "best_score" in results
 
-            assert result["success"] is False
-            assert "No data available" in result["error"]
-
-    @pytest.mark.asyncio
-    async def test_calculate_metrics_no_trades(self, backtester):
-        """Test metrics calculation with no trades."""
-        backtester.trades = []
-
-        metrics = await backtester._calculate_metrics_async()
-
-        assert "error" in metrics
-        assert "No trades executed" in metrics["error"]
-
-    @pytest.mark.asyncio
-    async def test_calculate_metrics_with_trades(self, backtester):
-        """Test metrics calculation with trades."""
-        # Create sample trades
-        backtester.trades = [
-            {
-                'pnl': 100.0,
-                'entry_commission': 5.0,
-                'exit_commission': 5.0,
-                'status': 'closed'
-            },
-            {
-                'pnl': -50.0,
-                'entry_commission': 5.0,
-                'exit_commission': 5.0,
-                'status': 'closed'
-            },
-            {
-                'pnl': 200.0,
-                'entry_commission': 5.0,
-                'exit_commission': 5.0,
-                'status': 'closed'
-            }
-        ]
-        backtester.initial_capital = 10000.0
-        backtester.current_capital = 10250.0
-        backtester.start_date = pd.to_datetime("2024-01-01")
-        backtester.end_date = pd.to_datetime("2024-04-01")
-
-        metrics = await backtester._calculate_metrics_async()
-
-        assert 'total_trades' in metrics
-        assert 'win_rate' in metrics
-        assert 'total_pnl' in metrics
-        assert 'sharpe_ratio' in metrics
-        assert metrics['total_trades'] == 3
-        assert metrics['winning_trades'] == 2
-        assert metrics['losing_trades'] == 1
+        await service.shutdown()
 
 
-class TestEventHandling:
-    """Test event handling in BacktestingService."""
+# Integration test for the complete service
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_service_integration(sample_data, sample_strategy):
+    """Integration test for the complete backtesting service"""
+    orchestrator = BacktestingServiceOrchestrator()
 
-    @pytest.fixture
-    def service(self):
-        """Create service for event testing."""
-        event_system = EventSystem()
-        cache = Mock()
-        return BacktestingService(event_system=event_system, cache=cache)
+    try:
+        await orchestrator.initialize()
 
-    @pytest.mark.asyncio
-    async def test_handle_backtest_request(self, service):
-        """Test handling backtest request event."""
-        with patch.object(service, 'run_backtest_async') as mock_run:
-            mock_run.return_value = {"success": True, "metrics": {"pnl": 100.0}}
+        # Run complete workflow
+        workflow_config = orchestrator.get_default_workflow_config()
+        workflow_config["param_ranges"] = {
+            "fast_period": [5, 10],
+            "slow_period": [20, 30],
+            "stop_loss": [0.01, 0.02],
+            "take_profit": [0.03, 0.05]
+        }
 
-            event = Event(
-                type="backtest.request",
-                data={
-                    "backtest_id": "event_test",
-                    "symbol": "BTC/USDT",
-                    "timeframe": "1d"
-                }
-            )
+        results = await orchestrator.run_complete_backtesting_workflow(
+            sample_strategy, sample_data, workflow_config
+        )
 
-            await service._handle_backtest_request(event)
+        assert results["success"] is True
+        assert len(results["phases"]) >= 2  # At least initial backtest and optimization
 
-            # Verify backtest was called
-            mock_run.assert_called_once()
-            call_args = mock_run.call_args
-            assert call_args[1]["symbol"] == "BTC/USDT"
-            assert call_args[1]["timeframe"] == "1d"
-            assert call_args[1]["backtest_id"] == "event_test"
+        print(f"Integration test completed successfully")
+        print(f"Strategy: {results['strategy']}")
+        print(f"Final recommendation: {results['final_recommendation']['overall_rating']}")
 
-    @pytest.mark.asyncio
-    async def test_handle_multi_symbol_request(self, service):
-        """Test handling multi-symbol backtest request event."""
-        with patch.object(service, 'run_multi_symbol_backtest_async') as mock_run:
-            mock_run.return_value = {"success": True}
+    finally:
+        await orchestrator.shutdown()
 
-            event = Event(
-                type="backtest.multi_symbol.request",
-                data={
-                    "backtest_id": "multi_symbol_event",
-                    "symbols": ["BTC/USDT", "ETH/USDT"],
-                    "timeframe": "1h"
-                }
-            )
 
-            await service._handle_multi_symbol_request(event)
-
-            mock_run.assert_called_once()
-            call_args = mock_run.call_args
-            assert call_args[1]["symbols"] == ["BTC/USDT", "ETH/USDT"]
-            assert call_args[1]["timeframe"] == "1h"
+if __name__ == "__main__":
+    # Run basic tests
+    pytest.main([__file__, "-v"])

@@ -1,0 +1,71 @@
+# TradPal Data Service Docker Configuration
+# Add this to docker-compose.dev.yml or docker-compose.yml
+
+# Data Service - Centralized data management
+data-service:
+  build:
+    context: .
+    dockerfile: Dockerfile
+  command: python -m services.data_service.main
+  ports:
+    - "8001:8001"  # Data service port
+  volumes:
+    - ./cache:/app/cache:rw
+    - ./logs:/app/logs:rw
+    - ./config:/app/config:ro
+    - ./data:/app/data:ro
+  environment:
+    - PYTHONPATH=/app
+    - PYTHONUNBUFFERED=1
+    - SERVICE_NAME=data_service
+    - SERVICE_HOST=0.0.0.0
+    - SERVICE_PORT=8001
+    - REDIS_URL=redis://redis:6379
+    - DEPLOYMENT_ENV=development
+    - LOG_LEVEL=INFO
+    # Data Sources Configuration
+    - ENABLE_CCXT=true
+    - ENABLE_YAHOO_FINANCE=true
+    - ENABLE_KAGGLE_DATASETS=true
+    # Alternative Data Configuration
+    - ENABLE_SENTIMENT_ANALYSIS=true
+    - ENABLE_ONCHAIN_DATA=true
+    - ENABLE_ECONOMIC_DATA=true
+    # Market Regime Configuration
+    - REGIME_DETECTION_ALGORITHM=clustering
+    - REGIME_LOOKBACK_PERIODS=100
+    - REGIME_CONFIDENCE_THRESHOLD=0.7
+    # Caching Configuration
+    - CACHE_TTL_HOURS=24
+    - CACHE_MAX_SIZE_GB=10
+    # Quality Control
+    - DATA_QUALITY_THRESHOLD=0.8
+    - VALIDATION_STRICT_MODE=true
+    # API Keys (set these in your .env file)
+    - TWITTER_API_KEY=${TWITTER_API_KEY:-}
+    - TWITTER_API_SECRET=${TWITTER_API_SECRET:-}
+    - WEB3_PROVIDER_URL=${WEB3_PROVIDER_URL:-}
+    - FRED_API_KEY=${FRED_API_KEY:-}
+  depends_on:
+    redis:
+      condition: service_healthy
+    core-service:
+      condition: service_healthy
+  networks:
+    - tradpal-dev
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 40s
+  restart: unless-stopped
+  # Resource limits for data processing
+  deploy:
+    resources:
+      limits:
+        memory: 4G
+        cpus: '2.0'
+      reservations:
+        memory: 2G
+        cpus: '1.0'

@@ -1,23 +1,49 @@
-# Data Service Dependencies
-# Data fetching, processing, and management
+# TradPal Data Service Requirements
+# Consolidated dependencies from migrated services:
+# - data_service, alternative_data_service, market_regime_detection_service
 
-# Core data
+# Web Framework and async
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+aiohttp==3.12.14
+
+# HTTP Client for service communication
+httpx==0.25.2
+requests==2.32.4
+
+# Core data processing
 pandas==2.1.4
 numpy==1.24.3
+scipy==1.11.4
 
 # Trading data sources
 ccxt==4.2.45
 yfinance==0.2.28
 
-# Web APIs
-requests==2.32.4
-aiohttp==3.12.14
-httpx==0.25.2
+# Alternative data sources
+tweepy==4.14.0
+textblob==0.17.1
+vaderSentiment==3.3.2
+web3==6.15.0
+
+# Machine Learning for market regime
+scikit-learn==1.3.2
+matplotlib==3.8.2
 
 # Caching and storage
 redis==5.0.1
 h5py==3.10.0
 
-# Monitoring
+# Monitoring and logging
 prometheus-client==0.19.0
 structlog==23.2.0
+psutil==5.9.7
+
+# Configuration
+python-dotenv==1.0.0
+
+# Testing (optional)
+pytest==7.4.4
+pytest-asyncio==0.21.1

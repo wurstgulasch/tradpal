@@ -1,16 +1,22 @@
+# TradPal Backtesting Service
 """
-Backtesting Service - Microservice for historical trading strategy backtesting.
+Unified backtesting service for historical analysis, ML training, and strategy optimization.
 
-This module provides the BacktestingService class and supporting components
-for running comprehensive backtests of trading strategies.
+This service consolidates:
+- backtesting_service: Core backtesting engine
+- ml_trainer: ML model training
+- optimizer: Parameter optimization
+- walk_forward_optimizer: Walk-forward analysis
+- discovery_service: Parameter discovery
 """
 
-from .service import BacktestingService, AsyncBacktester
-from .api import BacktestingAPI, run_backtesting_service
+__version__ = "3.0.1"
+__author__ = "TradPal Team"
+__description__ = "TradPal Backtesting Service - Historical Analysis & ML Training"
+
+# Import main components for easy access
+from .main import BacktestingServiceOrchestrator
 
 __all__ = [
-    'BacktestingService',
-    'AsyncBacktester',
-    'BacktestingAPI',
-    'run_backtesting_service'
+    "BacktestingServiceOrchestrator",
 ]

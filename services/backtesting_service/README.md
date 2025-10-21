@@ -1,356 +1,189 @@
-# Backtesting Service
-
-A microservice for comprehensive historical trading strategy backtesting in the TradPal Trading System.
+# TradPal Backtesting Service
 
 ## Overview
 
-The Backtesting Service provides async, event-driven backtesting capabilities for trading strategies. It supports:
+The Backtesting Service is a unified microservice that consolidates backtesting, ML training, optimization, and walk-forward analysis functionality. It provides a complete toolkit for strategy development and validation.
 
-- **Single Strategy Backtesting**: Traditional, ML-enhanced, LSTM, and Transformer strategies
-- **Multi-Symbol Backtesting**: Parallel backtesting across multiple trading pairs
-- **Multi-Model Comparison**: Compare performance of different ML models
-- **Walk-Forward Optimization**: Parameter optimization with walk-forward analysis
-- **Real-time Monitoring**: Track backtest progress and results
-- **Event Integration**: Seamless integration with the event-driven architecture
+## Features
+
+- **Unified Backtesting Engine**: Run backtests for various trading strategies
+- **ML Model Training**: Train machine learning models for enhanced strategies
+- **Parameter Optimization**: Optimize strategy parameters using grid search, random search, and genetic algorithms
+- **Walk-Forward Analysis**: Validate strategy robustness through time-series validation
+- **Complete Workflow**: Run end-to-end backtesting workflows with optimization and validation
 
 ## Architecture
 
-### Components
+The service consists of four main components:
 
-- **`service.py`**: Core `BacktestingService` and `AsyncBacktester` classes
-- **`api.py`**: FastAPI REST endpoints for HTTP access
-- **`tests.py`**: Comprehensive unit test suite
-- **`test_integration.py`**: Integration tests for end-to-end validation
+- `backtesting/`: Core backtesting engine
+- `ml_training/`: Machine learning model training
+- `optimization/`: Strategy parameter optimization
+- `walk_forward/`: Walk-forward analysis and validation
 
-### Key Features
+All components are orchestrated through the `BacktestingServiceOrchestrator`.
 
-#### Async Processing
-- Non-blocking backtest execution using asyncio
-- Thread pool execution for CPU-intensive operations
-- Concurrent processing of multiple backtests
+## Quick Start
 
-#### Event-Driven Design
-- Integration with Redis event streams
-- Publish/subscribe pattern for service communication
-- Real-time status updates and notifications
+### Installation
 
-#### Comprehensive Metrics
-- Standard performance metrics (Sharpe ratio, win rate, drawdown)
-- Transaction cost analysis
-- Risk-adjusted return calculations
-- CAGR and profit factor analysis
-
-#### Strategy Support
-- **Traditional**: EMA, RSI, Bollinger Bands, ATR, ADX
-- **ML-Enhanced**: PyTorch models with confidence scoring
-- **LSTM**: Time series prediction models
-- **Transformer**: Advanced sequence modeling
-
-## API Endpoints
-
-### Core Endpoints
-
-#### `POST /backtest`
-Run a single backtest.
-
-**Request:**
-```json
-{
-  "symbol": "BTC/USDT",
-  "timeframe": "1d",
-  "start_date": "2024-01-01",
-  "end_date": "2024-12-31",
-  "strategy": "traditional",
-  "initial_capital": 10000.0,
-  "config": {}
-}
+```bash
+cd services/backtesting_service
+pip install -r requirements.txt
 ```
 
-**Response:**
-```json
-{
-  "backtest_id": "backtest_20241231_143052",
-  "status": "running"
-}
-```
-
-#### `POST /backtest/multi-symbol`
-Run parallel backtests for multiple symbols.
-
-**Request:**
-```json
-{
-  "symbols": ["BTC/USDT", "ETH/USDT", "ADA/USDT"],
-  "timeframe": "1d",
-  "start_date": "2024-01-01",
-  "end_date": "2024-06-01",
-  "initial_capital": 5000.0,
-  "max_workers": 3
-}
-```
-
-#### `POST /backtest/multi-model`
-Compare different ML models.
-
-**Request:**
-```json
-{
-  "symbol": "BTC/USDT",
-  "timeframe": "1d",
-  "models_to_test": ["traditional_ml", "lstm", "transformer"],
-  "max_workers": 3
-}
-```
-
-#### `POST /backtest/walk-forward`
-Run parameter optimization.
-
-**Request:**
-```json
-{
-  "parameter_grid": {
-    "ema_short": [5, 9, 12],
-    "ema_long": [21, 26, 50]
-  },
-  "evaluation_metric": "sharpe_ratio"
-}
-```
-
-### Monitoring Endpoints
-
-#### `GET /backtest/{backtest_id}`
-Get status and results of a specific backtest.
-
-#### `GET /backtest/active`
-List all currently running backtests.
-
-#### `DELETE /backtest/completed`
-Clean up old completed backtests.
-
-#### `GET /health`
-Service health check.
-
-## Usage Examples
-
-### Python Client
+### Basic Usage
 
 ```python
-import requests
+from services.backtesting_service.orchestrator import BacktestingServiceOrchestrator
+import pandas as pd
 
-# Single backtest
-response = requests.post("http://localhost:8001/backtest", json={
-    "symbol": "BTC/USDT",
-    "timeframe": "1d",
-    "start_date": "2024-01-01",
-    "end_date": "2024-12-31",
-    "strategy": "ml_enhanced",
-    "initial_capital": 10000.0
+# Initialize orchestrator
+orchestrator = BacktestingServiceOrchestrator()
+await orchestrator.initialize()
+
+# Sample strategy configuration
+strategy = {
+    "name": "moving_average_crossover",
+    "type": "technical",
+    "parameters": {
+        "fast_period": 10,
+        "slow_period": 20,
+        "stop_loss": 0.02,
+        "take_profit": 0.05
+    }
+}
+
+# Sample data (OHLC format)
+data = pd.DataFrame({
+    'open': [...],
+    'high': [...],
+    'low': [...],
+    'close': [...],
+    'volume': [...]
 })
 
-backtest_id = response.json()["backtest_id"]
+# Run quick backtest
+results = await orchestrator.run_quick_backtest(strategy, data)
+print(f"Sharpe Ratio: {results['metrics']['sharpe_ratio']}")
 
-# Check status
-status = requests.get(f"http://localhost:8001/backtest/{backtest_id}")
-print(f"Status: {status.json()['status']}")
-```
-
-### Event-Driven Usage
-
-```python
-from src.event_system import EventSystem
-
-event_system = EventSystem()
-
-# Subscribe to backtest completion
-event_system.subscribe("backtest.completed", handle_completion)
-
-# Publish backtest request
-event_system.publish(Event(
-    type="backtest.request",
-    data={
-        "backtest_id": "my_backtest",
-        "symbol": "BTC/USDT",
-        "strategy": "traditional"
+# Run complete workflow with optimization
+workflow_config = {
+    "enable_ml": False,
+    "enable_optimization": True,
+    "enable_walk_forward": True,
+    "param_ranges": {
+        "fast_period": [5, 10, 15],
+        "slow_period": [20, 30, 40]
     }
-))
+}
+
+results = await orchestrator.run_complete_backtesting_workflow(strategy, data, workflow_config)
+print(f"Final Recommendation: {results['final_recommendation']['overall_rating']}")
+
+await orchestrator.shutdown()
 ```
+
+### API Usage
+
+Start the FastAPI service:
+
+```bash
+python services/backtesting_service/main.py --host 0.0.0.0 --port 8001
+```
+
+Available endpoints:
+
+- `GET /health` - Health check
+- `POST /backtest` - Run quick backtest
+- `POST /optimize` - Optimize strategy parameters
+- `POST /ml/train` - Train ML model
+- `POST /walk-forward` - Run walk-forward analysis
+- `POST /workflow` - Run complete workflow
 
 ## Configuration
 
-### Environment Variables
-
-- `REDIS_URL`: Redis connection URL (default: redis://localhost:6379)
-- `BACKTEST_TIMEOUT`: Default backtest timeout in seconds (default: 300)
-- `MAX_WORKERS`: Maximum parallel workers (default: 4)
-
 ### Strategy Configuration
 
-Backtests can be customized with indicator parameters:
-
-```json
-{
-  "ema_short": 9,
-  "ema_long": 21,
-  "rsi_period": 14,
-  "rsi_oversold": 30,
-  "rsi_overbought": 70,
-  "bb_period": 20,
-  "bb_std": 2.0,
-  "atr_period": 14
+```python
+strategy_config = {
+    "name": "strategy_name",
+    "type": "technical|ml_based",
+    "parameters": {
+        # Strategy-specific parameters
+    }
 }
 ```
 
-## Performance Metrics
+### Workflow Configuration
 
-The service calculates comprehensive performance metrics:
-
-- **Return Metrics**: Total P&L, CAGR, Return %
-- **Risk Metrics**: Sharpe Ratio, Maximum Drawdown, Volatility
-- **Trade Metrics**: Win Rate, Profit Factor, Average Win/Loss
-- **Cost Analysis**: Total Commissions, Net P&L after costs
-
-## Deployment
-
-### Docker
-
-```bash
-# Build image
-docker build -t tradpal/backtesting-service ./services/backtesting_service
-
-# Run container
-docker run -p 8001:8001 -v $(pwd)/output:/app/output tradpal/backtesting-service
-```
-
-### Kubernetes
-
-```bash
-# Deploy to Kubernetes
-kubectl apply -f services/backtesting_service/k8s-deployment.yaml
-```
-
-### Local Development
-
-```bash
-# Install dependencies
-pip install -r services/backtesting_service/requirements.txt
-
-# Run service
-python -m services.backtesting_service.api
+```python
+workflow_config = {
+    "enable_ml": False,
+    "enable_optimization": True,
+    "enable_walk_forward": True,
+    "ml_config": {
+        "model_type": "random_forest",
+        "train_split": 0.7
+    },
+    "param_ranges": {
+        "param1": [value1, value2, ...],
+        "param2": [value1, value2, ...]
+    },
+    "walk_forward_config": {
+        "in_sample_window": 252,
+        "out_sample_window": 21,
+        "step_size": 21
+    }
+}
 ```
 
 ## Testing
 
-### Unit Tests
+Run the test suite:
 
 ```bash
-# Run unit tests
 pytest services/backtesting_service/tests.py -v
 ```
 
-### Integration Tests
+Run integration tests:
 
 ```bash
-# Run integration tests (requires running service)
-python services/backtesting_service/test_integration.py
-
-# Quick smoke test
-python services/backtesting_service/test_integration.py --smoke-only
+pytest services/backtesting_service/tests.py::test_service_integration -v
 ```
-
-### Test Coverage
-
-The test suite covers:
-- Service initialization and event handling
-- Single and multi-symbol backtesting
-- ML model comparison
-- Walk-forward optimization
-- Error handling and edge cases
-- API endpoint validation
-
-## Monitoring
-
-### Health Checks
-
-The service provides health check endpoints for monitoring:
-
-- `/health`: Basic service health
-- `/backtest/active`: Active backtest count
-- Service logs: Comprehensive logging with structured output
-
-### Metrics
-
-Key metrics to monitor:
-- Active backtest count
-- Backtest completion rate
-- Error rate
-- Average backtest duration
-- Memory and CPU usage
-
-## Error Handling
-
-The service implements comprehensive error handling:
-
-- **Timeout Management**: Configurable timeouts for long-running backtests
-- **Resource Limits**: Memory and CPU limits to prevent resource exhaustion
-- **Graceful Degradation**: Continues operation when individual backtests fail
-- **Detailed Logging**: Structured logging for debugging and monitoring
-
-## Integration
-
-### Event System Integration
-
-The service integrates with the TradPal event system for:
-
-- **Backtest Requests**: Receive backtest execution requests
-- **Status Updates**: Publish real-time progress updates
-- **Result Distribution**: Broadcast completed results
-- **Error Notifications**: Alert on backtest failures
-
-### Data Sources
-
-Supports multiple data sources:
-- **CCXT**: Cryptocurrency exchanges
-- **Local Cache**: Redis/file-based caching
-- **Custom Sources**: Extensible data provider interface
 
 ## Development
 
 ### Adding New Strategies
 
-1. Implement strategy logic in `AsyncBacktester`
-2. Add strategy method (e.g., `_prepare_custom_strategy_async`)
-3. Update API validation
-4. Add unit tests
+1. Extend the `BacktestingService` class
+2. Add strategy logic in the `run_backtest` method
+3. Update parameter validation
+4. Add tests for the new strategy
 
-### Extending Metrics
+### Adding New Optimization Methods
 
-1. Add metric calculation in `_calculate_metrics_sync`
-2. Update response models
-3. Add tests for new metrics
+1. Extend the `OptimizationService` class
+2. Implement optimization algorithm
+3. Add configuration options
+4. Update tests
 
-### Performance Optimization
+## Performance Considerations
 
-- Use vectorized operations for calculations
-- Implement caching for repeated data access
-- Optimize memory usage for large datasets
-- Consider GPU acceleration for ML models
+- Use async/await for all I/O operations
+- Implement proper error handling and timeouts
+- Consider memory usage for large datasets
+- Use pandas vectorized operations for performance
 
-## Troubleshooting
+## Dependencies
 
-### Common Issues
-
-1. **Timeout Errors**: Increase timeout values or optimize backtest parameters
-2. **Memory Issues**: Reduce data size or implement streaming processing
-3. **ML Model Errors**: Check model training status and dependencies
-4. **Event System Issues**: Verify Redis connectivity and event routing
-
-### Debugging
-
-- Enable debug logging: Set `LOG_LEVEL=DEBUG`
-- Check service logs for detailed error information
-- Use integration tests to isolate issues
-- Monitor resource usage during backtest execution
+- pandas: Data manipulation
+- numpy: Numerical computations
+- scikit-learn: Machine learning (optional)
+- fastapi: API framework (optional)
+- uvicorn: ASGI server (optional)
+- pytest: Testing framework
 
 ## License
 
-This service is part of the TradPal Trading System and follows the same MIT license.
+See main project LICENSE file.
