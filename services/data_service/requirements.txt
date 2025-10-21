@@ -5,9 +5,9 @@
 # Web Framework and async
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
+pydantic==2.12.3
 pydantic-settings==2.1.0
-aiohttp==3.12.14
+aiohttp==3.13.1
 
 # HTTP Client for service communication
 httpx==0.25.2
@@ -15,7 +15,7 @@ requests==2.32.4
 
 # Core data processing
 pandas==2.1.4
-numpy==1.24.3
+numpy==2.3.4
 scipy==1.11.4
 
 # Trading data sources
@@ -29,7 +29,7 @@ vaderSentiment==3.3.2
 web3==6.15.0
 
 # Machine Learning for market regime
-scikit-learn==1.3.2
+scikit-learn==1.5.0
 matplotlib==3.8.2
 
 # Caching and storage
