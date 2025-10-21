@@ -562,3 +562,31 @@ class DataMeshManager:
                 break
 
         return health
+
+    async def get_status(self) -> Dict[str, Any]:
+        """
+        Get comprehensive Data Mesh status.
+
+        Returns:
+            Data Mesh health and statistics
+        """
+        try:
+            status = await self.health_check()
+
+            # Add additional statistics
+            status.update({
+                "data_products_count": len(self.data_products),
+                "domain_owners": self.domain_owners,
+                "supported_domains": [d.value for d in DataDomain]
+            })
+
+            return status
+
+        except Exception as e:
+            logger.error(f"Data Mesh status check failed: {e}")
+            return {
+                "service": "data_mesh",
+                "status": "error",
+                "error": str(e),
+                "data_products_count": 0
+            }

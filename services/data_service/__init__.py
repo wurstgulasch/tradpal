@@ -16,11 +16,9 @@ __author__ = "TradPal Team"
 __description__ = "TradPal Data Service - Centralized data management"
 
 # Import main components for easy access
-from .main import DataServiceOrchestrator
 from .data_sources.service import DataService
 
 __all__ = [
-    "DataServiceOrchestrator",
     "DataService",
     # TODO: Add AlternativeDataService and MarketRegimeDetectionServiceClient when implemented
 ]

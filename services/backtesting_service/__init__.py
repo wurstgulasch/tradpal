@@ -15,8 +15,9 @@ __author__ = "TradPal Team"
 __description__ = "TradPal Backtesting Service - Historical Analysis & ML Training"
 
 # Import main components for easy access
-from .main import BacktestingServiceOrchestrator
+# Temporarily disabled due to FastAPI compatibility issues
+# from .main import BacktestingServiceOrchestrator
 
 __all__ = [
-    "BacktestingServiceOrchestrator",
+    # "BacktestingServiceOrchestrator",
 ]

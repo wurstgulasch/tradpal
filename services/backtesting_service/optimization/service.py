@@ -1,278 +1,286 @@
 """
-TradPal Optimization Service - Strategy and Parameter Optimization
-Simplified implementation for unified service consolidation
+Optimizer Service
+
+Enhanced optimization service with:
+- Walk-forward optimization with advanced metrics
+- Information Coefficient tracking
+- Bias-Variance tradeoff analysis
+- Overfitting detection
 """
 
-import logging
-from typing import Dict, Any, Optional, List
-import pandas as pd
-import numpy as np
-from datetime import datetime
+import sys
+import os
+from pathlib import Path
+import argparse
+import json
+from datetime import datetime, timedelta
 
-logger = logging.getLogger(__name__)
+# Add parent directories to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from services.data_service.data_fetcher import fetch_historical_data
+from services.core.indicators import calculate_indicators
+from services.backtesting_service.optimization.walk_forward_optimizer import WalkForwardOptimizer, get_walk_forward_optimizer
+from config.settings import SYMBOL, TIMEFRAME, LOOKBACK_DAYS
 
 
-class OptimizationService:
-    """Simplified optimization service for core functionality"""
+def run_walk_forward_optimization(symbol: str, timeframe: str, start_date: str,
+                                  end_date: str, evaluation_metric: str = 'sharpe_ratio'):
+    """
+    Run walk-forward optimization with enhanced metrics.
+    
+    Args:
+        symbol: Trading symbol
+        timeframe: Timeframe
+        start_date: Start date
+        end_date: End date
+        evaluation_metric: Metric to optimize
+    """
+    print(f"🔍 Starting walk-forward optimization for {symbol} on {timeframe}")
+    print(f"Evaluation metric: {evaluation_metric}")
+    
+    # Fetch data
+    print(f"📈 Fetching data from {start_date} to {end_date}...")
+    df = fetch_historical_data(
+        symbol=symbol,
+        timeframe=timeframe,
+        limit=10000,
+        start_date=datetime.fromisoformat(start_date) if start_date else None,
+        show_progress=False
+    )
+    
+    if df is None or len(df) == 0:
+        print("❌ Failed to fetch data")
+        return None
+    
+    print(f"✅ Fetched {len(df)} candles")
+    
+    # Calculate indicators
+    print("🔧 Calculating indicators...")
+    df = calculate_indicators(df)
+    
+    # Get optimizer
+    optimizer = get_walk_forward_optimizer(symbol=symbol, timeframe=timeframe)
+    
+    # Create walk-forward windows
+    print("📊 Creating walk-forward windows...")
+    windows = optimizer.create_walk_forward_windows(
+        df=df,
+        initial_train_size=1000,
+        test_size=200,
+        step_size=50,
+        min_samples=500
+    )
+    
+    print(f"✅ Created {len(windows)} windows")
+    
+    # Define parameter grid for optimization
+    parameter_grid = {
+        'ema_short': [9, 12, 15, 20],
+        'ema_long': [21, 26, 30, 50],
+        'rsi_period': [14],
+        'rsi_oversold': [25, 30, 35],
+        'rsi_overbought': [65, 70, 75],
+        'atr_period': [14],
+        'risk_per_trade': [0.01, 0.02]
+    }
+    
+    print(f"🎯 Parameter grid: {len([1 for _ in parameter_grid])} parameters")
+    
+    # Run optimization
+    print("\n🚀 Starting optimization...")
+    results = optimizer.optimize_strategy_parameters(
+        df=df,
+        parameter_grid=parameter_grid,
+        evaluation_metric=evaluation_metric,
+        min_trades=10
+    )
+    
+    # Display enhanced metrics
+    print("\n" + "=" * 70)
+    print("OPTIMIZATION RESULTS")
+    print("=" * 70)
+    
+    analysis = results.get('analysis', {})
+    
+    print(f"\n📊 Performance Metrics:")
+    print(f"  Average OOS Performance: {analysis.get('average_oos_performance', 0):.4f}")
+    print(f"  Std OOS Performance: {analysis.get('std_oos_performance', 0):.4f}")
+    print(f"  Average IS Performance: {analysis.get('average_is_performance', 0):.4f}")
+    print(f"  Performance Decay: {analysis.get('performance_decay', 0):.4f}")
+    
+    # Enhanced metrics
+    print(f"\n🎓 Advanced Metrics:")
+    print(f"  Information Coefficient: {analysis.get('information_coefficient', 'N/A')}")
+    print(f"  Overfitting Ratio: {analysis.get('overfitting_ratio', 'N/A')}")
+    print(f"  Consistency Score: {analysis.get('consistency_score', 'N/A')}")
+    
+    # Bias-Variance analysis
+    bias_variance = analysis.get('bias_variance', {})
+    if bias_variance:
+        print(f"\n⚖️  Bias-Variance Tradeoff:")
+        print(f"  Bias: {bias_variance.get('bias', 'N/A')}")
+        print(f"  Variance: {bias_variance.get('variance', 'N/A')}")
+        print(f"  Total Error: {bias_variance.get('total_error', 'N/A')}")
+        print(f"  Bias/Variance Ratio: {bias_variance.get('bias_variance_ratio', 'N/A')}")
+        print(f"  Interpretation: {bias_variance.get('interpretation', 'N/A')}")
+    
+    # Robustness
+    robustness = analysis.get('robustness', {})
+    if robustness:
+        print(f"\n💪 Robustness:")
+        print(f"  Positive Windows: {robustness.get('positive_windows', 0)}")
+        print(f"  Positive Ratio: {robustness.get('positive_ratio', 0):.2%}")
+    
+    # Save results
+    results_dir = Path("output/walk_forward")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    results_path = results_dir / f"walk_forward_{symbol}_{timeframe}_{timestamp}.json"
+    
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    
+    print(f"\n💾 Results saved to {results_path}")
+    
+    # Generate interpretation
+    print("\n" + "=" * 70)
+    print("INTERPRETATION")
+    print("=" * 70)
+    
+    interpret_results(analysis)
+    
+    return results
 
-    def __init__(self, event_system=None, backtesting_service=None):
-        self.event_system = event_system
-        self.backtesting_service = backtesting_service
-        self.is_initialized = False
 
-    async def initialize(self):
-        """Initialize the optimization service"""
-        logger.info("Initializing Optimization Service...")
-        # TODO: Initialize actual optimization components
-        self.is_initialized = True
-        logger.info("Optimization Service initialized")
-
-    async def shutdown(self):
-        """Shutdown the optimization service"""
-        logger.info("Optimization Service shut down")
-        self.is_initialized = False
-
-    async def optimize_strategy(self, strategy_name: str, param_ranges: Dict[str, List],
-                              data: pd.DataFrame, optimization_method: str = "grid_search") -> Dict[str, Any]:
-        """Optimize strategy parameters"""
-        if not self.is_initialized:
-            raise RuntimeError("Optimization service not initialized")
-
-        logger.info(f"Optimizing strategy {strategy_name} using {optimization_method}")
-
-        if optimization_method == "grid_search":
-            results = await self._grid_search(strategy_name, param_ranges, data)
-        elif optimization_method == "random_search":
-            results = await self._random_search(strategy_name, param_ranges, data)
-        elif optimization_method == "genetic_algorithm":
-            results = await self._genetic_algorithm(strategy_name, param_ranges, data)
+def interpret_results(analysis: dict):
+    """
+    Provide human-readable interpretation of results.
+    
+    Args:
+        analysis: Analysis dictionary from walk-forward optimization
+    """
+    performance_decay = analysis.get('performance_decay', 0)
+    overfitting_ratio = analysis.get('overfitting_ratio')
+    ic = analysis.get('information_coefficient')
+    consistency = analysis.get('consistency_score')
+    
+    print("\n📝 Strategy Assessment:")
+    
+    # Overfitting check
+    if overfitting_ratio is not None:
+        if overfitting_ratio > 0.5:
+            print("⚠️  HIGH OVERFITTING RISK")
+            print("   Strategy performs significantly better in-sample than out-of-sample.")
+            print("   Consider: simplifying model, adding regularization, or more data.")
+        elif overfitting_ratio > 0.2:
+            print("⚡ MODERATE OVERFITTING")
+            print("   Some overfitting detected but within acceptable range.")
+            print("   Monitor performance in live trading closely.")
         else:
-            raise ValueError(f"Unknown optimization method: {optimization_method}")
-
-        return results
-
-    async def _grid_search(self, strategy_name: str, param_ranges: Dict[str, List],
-                          data: pd.DataFrame) -> Dict[str, Any]:
-        """Perform grid search optimization"""
-        logger.info("Running grid search optimization")
-
-        best_params = {}
-        best_score = -np.inf
-        all_results = []
-
-        # Generate all parameter combinations
-        param_names = list(param_ranges.keys())
-        param_values = list(param_ranges.values())
-
-        from itertools import product
-        combinations = list(product(*param_values))
-
-        for combo in combinations[:20]:  # Limit for demo
-            params = dict(zip(param_names, combo))
-
-            # Mock backtest run
-            score = np.random.uniform(0.1, 2.0)  # Sharpe ratio range
-
-            all_results.append({
-                "params": params,
-                "score": float(score)
-            })
-
-            if score > best_score:
-                best_score = score
-                best_params = params
-
-        return {
-            "strategy": strategy_name,
-            "method": "grid_search",
-            "best_params": best_params,
-            "best_score": float(best_score),
-            "total_combinations": len(combinations),
-            "evaluated_combinations": len(all_results),
-            "all_results": all_results,
-            "success": True
-        }
-
-    async def _random_search(self, strategy_name: str, param_ranges: Dict[str, List],
-                           data: pd.DataFrame) -> Dict[str, Any]:
-        """Perform random search optimization"""
-        logger.info("Running random search optimization")
-
-        best_params = {}
-        best_score = -np.inf
-        all_results = []
-        n_samples = 50  # Number of random samples
-
-        for _ in range(n_samples):
-            # Generate random parameters
-            params = {}
-            for param_name, param_range in param_ranges.items():
-                if isinstance(param_range, list) and len(param_range) > 1:
-                    params[param_name] = np.random.choice(param_range)
-                elif isinstance(param_range, (list, tuple)) and len(param_range) == 2:
-                    params[param_name] = np.random.uniform(param_range[0], param_range[1])
-
-            # Mock backtest run
-            score = np.random.uniform(0.1, 2.0)
-
-            all_results.append({
-                "params": params,
-                "score": float(score)
-            })
-
-            if score > best_score:
-                best_score = score
-                best_params = params
-
-        return {
-            "strategy": strategy_name,
-            "method": "random_search",
-            "best_params": best_params,
-            "best_score": float(best_score),
-            "total_samples": n_samples,
-            "all_results": all_results,
-            "success": True
-        }
-
-    async def _genetic_algorithm(self, strategy_name: str, param_ranges: Dict[str, List],
-                               data: pd.DataFrame) -> Dict[str, Any]:
-        """Perform genetic algorithm optimization"""
-        logger.info("Running genetic algorithm optimization")
-
-        # Simplified GA implementation
-        population_size = 20
-        generations = 10
-
-        # Initialize population
-        population = []
-        for _ in range(population_size):
-            individual = {}
-            for param_name, param_range in param_ranges.items():
-                if isinstance(param_range, list):
-                    individual[param_name] = np.random.choice(param_range)
-                else:
-                    individual[param_name] = np.random.uniform(param_range[0], param_range[1])
-            population.append(individual)
-
-        best_individual = None
-        best_fitness = -np.inf
-
-        for generation in range(generations):
-            # Evaluate fitness
-            fitness_scores = []
-            for individual in population:
-                fitness = np.random.uniform(0.1, 2.0)  # Mock fitness
-                fitness_scores.append(fitness)
-
-                if fitness > best_fitness:
-                    best_fitness = fitness
-                    best_individual = individual
-
-            # Simple selection and reproduction (simplified)
-            # In a real implementation, this would be more sophisticated
-            sorted_indices = np.argsort(fitness_scores)[::-1]
-            elite = [population[i] for i in sorted_indices[:5]]  # Keep top 5
-
-            # Generate new population
-            new_population = elite.copy()
-            while len(new_population) < population_size:
-                parent1, parent2 = np.random.choice(elite, 2, replace=False)
-                # Simple crossover
-                child = {}
-                for param in param_ranges.keys():
-                    child[param] = parent1[param] if np.random.random() < 0.5 else parent2[param]
-                new_population.append(child)
-
-            population = new_population
-
-        return {
-            "strategy": strategy_name,
-            "method": "genetic_algorithm",
-            "best_params": best_individual,
-            "best_score": float(best_fitness),
-            "generations": generations,
-            "population_size": population_size,
-            "success": True
-        }
-
-    async def walk_forward_optimization(self, strategy_name: str, param_ranges: Dict[str, List],
-                                      data: pd.DataFrame, window_size: int = 252,
-                                      step_size: int = 21) -> Dict[str, Any]:
-        """Perform walk-forward optimization"""
-        if not self.is_initialized:
-            raise RuntimeError("Optimization service not initialized")
-
-        logger.info(f"Running walk-forward optimization for {strategy_name}")
-
-        results = []
-        data_length = len(data)
-
-        for start_idx in range(0, data_length - window_size, step_size):
-            end_idx = min(start_idx + window_size, data_length)
-            window_data = data.iloc[start_idx:end_idx]
-
-            # Optimize on this window
-            window_result = await self.optimize_strategy(strategy_name, param_ranges, window_data)
-            window_result["window_start"] = data.index[start_idx].isoformat()
-            window_result["window_end"] = data.index[end_idx-1].isoformat()
-
-            results.append(window_result)
-
-        # Calculate overall performance
-        avg_score = np.mean([r["best_score"] for r in results])
-        best_overall = max(results, key=lambda x: x["best_score"])
-
-        return {
-            "strategy": strategy_name,
-            "method": "walk_forward",
-            "window_size": window_size,
-            "step_size": step_size,
-            "total_windows": len(results),
-            "average_score": float(avg_score),
-            "best_window": best_overall,
-            "all_windows": results,
-            "success": True
-        }
-
-    def get_available_methods(self) -> List[str]:
-        """Get list of available optimization methods"""
-        return [
-            "grid_search",
-            "random_search",
-            "genetic_algorithm",
-            "walk_forward"
-        ]
+            print("✅ LOW OVERFITTING")
+            print("   Strategy generalizes well to unseen data.")
+    
+    # Information Coefficient
+    if ic is not None:
+        print(f"\n📊 Predictive Power (IC: {ic:.3f}):")
+        if ic > 0.5:
+            print("✅ STRONG predictive relationship between in-sample and out-of-sample")
+        elif ic > 0.2:
+            print("⚡ MODERATE predictive relationship")
+        elif ic > 0:
+            print("⚠️  WEAK predictive relationship")
+        else:
+            print("❌ NO or NEGATIVE predictive relationship")
+    
+    # Consistency
+    if consistency is not None:
+        print(f"\n🎯 Consistency Score: {consistency:.3f}")
+        if consistency > 0.7:
+            print("✅ HIGH consistency - results are stable across different periods")
+        elif consistency > 0.4:
+            print("⚡ MODERATE consistency - some variation in performance")
+        else:
+            print("⚠️  LOW consistency - highly variable performance")
+    
+    # Overall recommendation
+    print("\n💡 Recommendation:")
+    
+    if overfitting_ratio and overfitting_ratio > 0.5:
+        print("❌ NOT RECOMMENDED for live trading")
+        print("   High overfitting risk - strategy unlikely to perform as expected")
+    elif ic and ic < 0.1:
+        print("⚠️  CAUTION ADVISED")
+        print("   Weak predictive power - consider refining strategy")
+    elif consistency and consistency < 0.3:
+        print("⚠️  USE WITH CAUTION")
+        print("   Inconsistent performance - may work in some conditions but not others")
+    else:
+        print("✅ ACCEPTABLE for further testing")
+        print("   Strategy shows reasonable generalization")
+        print("   Recommended: paper trading before live deployment")
 
 
-# Simplified model classes for API compatibility
-class StrategyOptimizationRequest:
-    """Strategy optimization request model"""
-    def __init__(self, strategy: str, param_ranges: Dict[str, List], method: str = "grid_search"):
-        self.strategy = strategy
-        self.param_ranges = param_ranges
-        self.method = method
+def main():
+    """Main optimizer service entry point."""
+    parser = argparse.ArgumentParser(description="Optimizer Service")
+    parser.add_argument('--symbol', type=str, default=SYMBOL, help='Trading symbol')
+    parser.add_argument('--timeframe', type=str, default=TIMEFRAME, help='Timeframe')
+    parser.add_argument('--start-date', type=str, help='Start date (YYYY-MM-DD)')
+    parser.add_argument('--end-date', type=str, help='End date (YYYY-MM-DD)')
+    parser.add_argument('--lookback-days', type=int, default=LOOKBACK_DAYS,
+                       help='Days of historical data')
+    parser.add_argument('--metric', type=str, default='sharpe_ratio',
+                       choices=['sharpe_ratio', 'win_rate', 'profit_factor', 'total_return'],
+                       help='Evaluation metric')
+    
+    args = parser.parse_args()
+    
+    # Calculate dates if not provided
+    if not args.end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+    else:
+        end_date = args.end_date
+    
+    if not args.start_date:
+        start_date = (datetime.now() - timedelta(days=args.lookback_days)).strftime('%Y-%m-%d')
+    else:
+        start_date = args.start_date
+    
+    print("=" * 70)
+    print("OPTIMIZER SERVICE")
+    print("=" * 70)
+    print(f"Symbol: {args.symbol}")
+    print(f"Timeframe: {args.timeframe}")
+    print(f"Period: {start_date} to {end_date}")
+    print(f"Metric: {args.metric}")
+    print("=" * 70)
+    print()
+    
+    # Run optimization
+    try:
+        results = run_walk_forward_optimization(
+            symbol=args.symbol,
+            timeframe=args.timeframe,
+            start_date=start_date,
+            end_date=end_date,
+            evaluation_metric=args.metric
+        )
+        
+        if results:
+            print("\n✅ Optimization complete!")
+            return 0
+        else:
+            print("\n❌ Optimization failed")
+            return 1
+            
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
-class StrategyOptimizationResponse:
-    """Strategy optimization response model"""
-    def __init__(self, success: bool, best_params: Dict = None, best_score: float = None,
-                 method: str = None, error: str = None):
-        self.success = success
-        self.best_params = best_params or {}
-        self.best_score = best_score
-        self.method = method
-        self.error = error
 
-class WalkForwardRequest:
-    """Walk-forward optimization request model"""
-    def __init__(self, strategy: str, param_ranges: Dict[str, List], window_size: int = 252, step_size: int = 21):
-        self.strategy = strategy
-        self.param_ranges = param_ranges
-        self.window_size = window_size
-        self.step_size = step_size
-
-class WalkForwardResponse:
-    """Walk-forward optimization response model"""
-    def __init__(self, success: bool, results: List[Dict] = None, error: str = None):
-        self.success = success
-        self.results = results or []
-        self.error = error
+if __name__ == '__main__':
+    sys.exit(main())

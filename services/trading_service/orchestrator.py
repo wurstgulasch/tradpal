@@ -9,8 +9,6 @@ import asyncio
 from datetime import datetime
 
 from .trading.service import TradingService
-from .execution.service import ExecutionService
-from .risk_management.service import RiskManagementService
 from .reinforcement_learning.service import ReinforcementLearningService
 from .market_regime.service import MarketRegimeService
 from .monitoring.service import MonitoringService
@@ -26,8 +24,6 @@ class TradingServiceOrchestrator:
 
         # Initialize service components
         self.trading_service = TradingService(event_system=event_system)
-        self.execution_service = ExecutionService(event_system=event_system)
-        self.risk_service = RiskManagementService(event_system=event_system)
         self.rl_service = ReinforcementLearningService(event_system=event_system)
         self.regime_service = MarketRegimeService(event_system=event_system)
         self.monitoring_service = MonitoringService(event_system=event_system)
@@ -42,8 +38,6 @@ class TradingServiceOrchestrator:
             # Initialize all services concurrently
             init_tasks = [
                 self.trading_service.initialize(),
-                self.execution_service.initialize(),
-                self.risk_service.initialize(),
                 self.rl_service.initialize(),
                 self.regime_service.initialize(),
                 self.monitoring_service.initialize()
@@ -66,8 +60,6 @@ class TradingServiceOrchestrator:
             # Shutdown all services concurrently
             shutdown_tasks = [
                 self.trading_service.shutdown(),
-                self.execution_service.shutdown(),
-                self.risk_service.shutdown(),
                 self.rl_service.shutdown(),
                 self.regime_service.shutdown(),
                 self.monitoring_service.shutdown()
@@ -129,7 +121,7 @@ class TradingServiceOrchestrator:
             # Simplified volatility calculation
             volatility = 0.02  # 2% daily volatility assumption
 
-            position_size = await self.risk_service.calculate_position_size(
+            position_size = await self.trading_service.calculate_position_size(
                 capital, risk_per_trade, 0.02, market_data.get("current_price", 50000.0)
             )
 
@@ -176,7 +168,7 @@ class TradingServiceOrchestrator:
 
         # Get status from all services
         trading_status = await self.trading_service.get_session_status("all")
-        execution_stats = await self.execution_service.get_execution_stats()
+        execution_stats = await self.trading_service.get_execution_stats()
         system_metrics = await self.monitoring_service.get_system_metrics()
         active_alerts = await self.monitoring_service.get_alerts(acknowledged=False, limit=10)
 
@@ -265,8 +257,6 @@ class TradingServiceOrchestrator:
         return {
             "orchestrator_initialized": self.is_initialized,
             "trading_service": self.trading_service.is_initialized,
-            "execution_service": self.execution_service.is_initialized,
-            "risk_service": self.risk_service.is_initialized,
             "rl_service": self.rl_service.is_initialized,
             "regime_service": self.regime_service.is_initialized,
             "monitoring_service": self.monitoring_service.is_initialized,

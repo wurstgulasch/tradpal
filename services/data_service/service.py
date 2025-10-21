@@ -25,6 +25,10 @@ import pandas as pd
 import numpy as np
 from pydantic import BaseModel, Field, validator
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Optional imports with fallbacks
 try:
     import redis
@@ -48,6 +52,41 @@ except ImportError:
     yf = None
 
 from .data_sources.factory import DataSourceFactory
+
+# Data Mesh and Governance imports
+try:
+    from .data_mesh import (
+        DataMeshManager, DataDomain, DataProduct, FeatureSet,
+        TimeSeriesDatabase
+    )
+    from .data_governance import (
+        DataGovernanceManager, AccessLevel, AuditEventType
+    )
+    from .cache_manager import CacheManager
+    from .quality_manager import DataQualityManager
+    DATA_MESH_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Data Mesh components not available: {e}")
+    DataMeshManager = None
+    DataGovernanceManager = None
+    CacheManager = None
+    DataQualityManager = None
+    DATA_MESH_AVAILABLE = False
+
+# Alternative Data imports
+try:
+    from .alternative_data.sentiment_analyzer import SentimentAnalyzer
+    from .alternative_data.onchain_collector import OnChainDataCollector
+    from .alternative_data.economic_collector import EconomicDataCollector
+    from .alternative_data.data_processor import AlternativeDataProcessor
+    ALTERNATIVE_DATA_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Alternative data components not available: {e}")
+    SentimentAnalyzer = None
+    OnChainDataCollector = None
+    EconomicDataCollector = None
+    AlternativeDataProcessor = None
+    ALTERNATIVE_DATA_AVAILABLE = False
 
 # Get availability from factory (which handles optional imports properly)
 KAGGLE_AVAILABLE = DataSourceFactory.get_available_sources().get('kaggle', False)
@@ -233,17 +272,33 @@ class DataService:
                 logger.warning(f"Redis initialization failed: {e}")
 
         # Initialize Data Mesh components
-        self.data_mesh = DataMeshManager(
-            redis_url=redis_url,
-            event_system=self.event_system
-        )
+        if DATA_MESH_AVAILABLE:
+            self.data_mesh = DataMeshManager({
+                "redis_url": redis_url,
+                "event_system": self.event_system
+            })
 
-        # Initialize Data Governance components
-        self.data_governance = DataGovernanceManager({
-            "redis_url": redis_url,
-            "max_recent_events": 1000,
-            "max_results": 1000
-        })
+            # Initialize Data Governance components
+            self.data_governance = DataGovernanceManager({
+                "redis_url": redis_url,
+                "max_recent_events": 1000,
+                "max_results": 1000
+            })
+        else:
+            self.data_mesh = None
+            self.data_governance = None
+
+        # Initialize Alternative Data components
+        if ALTERNATIVE_DATA_AVAILABLE:
+            self.sentiment_analyzer = SentimentAnalyzer()
+            self.onchain_collector = OnChainDataCollector()
+            self.economic_collector = EconomicDataCollector()
+            self.alternative_data_processor = AlternativeDataProcessor()
+        else:
+            self.sentiment_analyzer = None
+            self.onchain_collector = None
+            self.economic_collector = None
+            self.alternative_data_processor = None
 
         # Data source priorities for fallbacks
         self.source_priorities = {
@@ -265,16 +320,24 @@ class DataService:
     async def initialize(self):
         """Initialize the data service."""
         # Initialize cache manager
-        self.cache_manager = CacheManager()
-        await self.cache_manager.initialize()
+        if DATA_MESH_AVAILABLE:
+            self.cache_manager = CacheManager()
+            await self.cache_manager.initialize()
 
-        # Initialize quality manager
-        self.quality_manager = DataQualityManager()
+            # Initialize quality manager
+            self.quality_manager = DataQualityManager()
 
         # Initialize data source factory
         self.data_source_factory = DataSourceFactory
 
+        # Initialize Alternative Data components
+        if ALTERNATIVE_DATA_AVAILABLE:
+            await self.sentiment_analyzer.initialize()
+            await self.onchain_collector.initialize()
+            await self.economic_collector.initialize()
+
         logger.info("Data service initialized")
+        self.is_initialized = True
 
     async def cleanup(self):
         """Cleanup data service resources."""
@@ -1018,22 +1081,32 @@ class DataService:
             return status
 
         except Exception as e:
-            error_msg = f"Data Mesh status check failed: {str(e)}"
+            error_msg = f"Governance status check failed: {str(e)}"
             logger.error(error_msg)
             return {
                 "service": "data_service",
                 "status": "error",
-                "error": error_msg,
-                "data_mesh_enabled": False
+                "error": "An internal error has occurred. Please contact support.",
+                "governance_enabled": False
             }
 
     async def health_check(self) -> Dict[str, Any]:
-        """Perform health check."""
+        """Perform comprehensive health check including orchestrator status"""
         health = {
             "service": "data_service",
-            "status": "healthy",
+            "status": "healthy" if self.is_initialized else "unhealthy",
             "timestamp": datetime.now().isoformat(),
-            "components": {}
+            "components": {},
+            "orchestrator": {
+                "status": "healthy" if self.is_initialized else "unhealthy",
+                "components": [
+                    "data_sources",
+                    "alternative_data",
+                    "data_governance",
+                    "data_mesh",
+                    "event_system"
+                ]
+            }
         }
 
         # Check Redis
@@ -1062,10 +1135,48 @@ class DataService:
             health["components"]["data_mesh"] = f"error: {e}"
             health["status"] = "degraded"
 
+        # Check Alternative Data components
+        try:
+            alt_data_status = await self.get_alternative_data_status()
+            health["components"]["alternative_data"] = alt_data_status.get("alternative_data_available", False)
+            if not alt_data_status.get("alternative_data_available", False):
+                health["status"] = "degraded"
+        except Exception as e:
+            health["components"]["alternative_data"] = f"error: {e}"
+            health["status"] = "degraded"
+
         if not CCXT_AVAILABLE and not YAHOO_AVAILABLE and not KAGGLE_AVAILABLE:
             health["status"] = "unhealthy"
 
         return health
+
+    def get_available_sources(self) -> List[str]:
+        """Get list of available data sources"""
+        sources = []
+        if CCXT_AVAILABLE:
+            sources.append("ccxt")
+        if YAHOO_AVAILABLE:
+            sources.append("yahoo_finance")
+        if KAGGLE_AVAILABLE:
+            sources.append("kaggle")
+        return sources
+
+    async def get_service_info(self) -> Dict[str, Any]:
+        """Get information about the data service"""
+        return {
+            "name": "TradPal Data Service",
+            "version": "1.0.0",
+            "description": "Unified data service for market data, alternative data, and market regime analysis",
+            "components": [
+                "data_sources",
+                "alternative_data",
+                "data_governance",
+                "data_mesh",
+                "event_system"
+            ],
+            "api_port": 8001,
+            "initialized": self.is_initialized
+        }
 
     # Governance Methods
 
@@ -1496,3 +1607,430 @@ class DataService:
                 "error": "An internal error has occurred. Please contact support.",
                 "governance_enabled": False
             }
+
+    # Alternative Data Methods
+
+    async def analyze_sentiment(self, symbol: str, hours: int = 24) -> Dict[str, Any]:
+        """
+        Analyze sentiment for a symbol.
+
+        Args:
+            symbol: Trading symbol (e.g., 'BTC/USDT')
+            hours: Hours of historical data to analyze
+
+        Returns:
+            Sentiment analysis result
+        """
+        if not ALTERNATIVE_DATA_AVAILABLE or not self.sentiment_analyzer:
+            return {
+                "success": False,
+                "error": "Sentiment analysis not available"
+            }
+
+        try:
+            result = await self.sentiment_analyzer.analyze_symbol_sentiment(
+                symbol=symbol,
+                hours=hours
+            )
+
+            await self.event_system.publish("sentiment.analyzed", {
+                "symbol": symbol,
+                "hours": hours,
+                "result": result
+            })
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        except Exception as e:
+            error_msg = f"Sentiment analysis failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_fear_greed_index(self) -> Dict[str, Any]:
+        """
+        Get current Fear & Greed Index.
+
+        Returns:
+            Fear & Greed Index data
+        """
+        if not ALTERNATIVE_DATA_AVAILABLE or not self.sentiment_analyzer:
+            return {
+                "success": False,
+                "error": "Fear & Greed Index not available"
+            }
+
+        try:
+            result = await self.sentiment_analyzer.get_fear_greed_index()
+
+            await self.event_system.publish("fear_greed.updated", {
+                "index": result
+            })
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        except Exception as e:
+            error_msg = f"Fear & Greed Index fetch failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_onchain_metrics(self, symbol: str, metrics: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Get on-chain metrics for a symbol.
+
+        Args:
+            symbol: Crypto symbol (e.g., 'BTC')
+            metrics: Specific metrics to fetch
+
+        Returns:
+            On-chain metrics data
+        """
+        if not ALTERNATIVE_DATA_AVAILABLE or not self.onchain_collector:
+            return {
+                "success": False,
+                "error": "On-chain metrics not available"
+            }
+
+        try:
+            result = await self.onchain_collector.get_metrics(
+                symbol=symbol,
+                metrics=metrics
+            )
+
+            await self.event_system.publish("onchain.metrics_fetched", {
+                "symbol": symbol,
+                "metrics": metrics,
+                "result": result
+            })
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        except Exception as e:
+            error_msg = f"On-chain metrics fetch failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_economic_indicators(self, indicators: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Get economic indicators.
+
+        Args:
+            indicators: Specific indicators to fetch
+
+        Returns:
+            Economic indicators data
+        """
+        if not ALTERNATIVE_DATA_AVAILABLE or not self.economic_collector:
+            return {
+                "success": False,
+                "error": "Economic indicators not available"
+            }
+
+        try:
+            result = await self.economic_collector.get_indicators(
+                indicators=indicators
+            )
+
+            await self.event_system.publish("economic.indicators_fetched", {
+                "indicators": indicators,
+                "result": result
+            })
+
+            return {
+                "success": True,
+                "data": result
+            }
+
+        except Exception as e:
+            error_msg = f"Economic indicators fetch failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def collect_alternative_data(self, symbol: str) -> Dict[str, Any]:
+        """
+        Collect complete alternative data packet for a symbol.
+
+        Args:
+            symbol: Trading symbol
+
+        Returns:
+            Alternative data collection result
+        """
+        if not ALTERNATIVE_DATA_AVAILABLE:
+            return {
+                "success": False,
+                "error": "Alternative data collection not available"
+            }
+
+        try:
+            # Collect all data types concurrently
+            sentiment_task = self.analyze_sentiment(symbol)
+            onchain_task = self.get_onchain_metrics(symbol)
+            economic_task = self.get_economic_indicators()
+            fear_greed_task = self.get_fear_greed_index()
+
+            results = await asyncio.gather(
+                sentiment_task, onchain_task, economic_task, fear_greed_task,
+                return_exceptions=True
+            )
+
+            sentiment_result, onchain_result, economic_result, fear_greed_result = results
+
+            # Check for exceptions
+            if any(isinstance(r, Exception) for r in results):
+                failed_components = []
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        component_names = ["sentiment", "onchain", "economic", "fear_greed"]
+                        failed_components.append(component_names[i])
+
+                return {
+                    "success": False,
+                    "error": f"Failed to collect data from: {', '.join(failed_components)}"
+                }
+
+            # Create alternative data packet
+            from .alternative_data import AlternativeDataPacket
+
+            packet = AlternativeDataPacket(
+                symbol=symbol,
+                sentiment_data=sentiment_result.get("data", []),
+                onchain_data=onchain_result.get("data", []),
+                economic_data=economic_result.get("data", []),
+                fear_greed_index=fear_greed_result.get("data", {}).get("value")
+            )
+
+            await self.event_system.publish("alternative_data.collected", {
+                "symbol": symbol,
+                "packet": packet.__dict__
+            })
+
+            return {
+                "success": True,
+                "data": packet.__dict__
+            }
+
+        except Exception as e:
+            error_msg = f"Alternative data collection failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def process_alternative_data(self, symbol: str,
+                                     include_sentiment: bool = True,
+                                     include_onchain: bool = True,
+                                     include_economic: bool = True) -> Dict[str, Any]:
+        """
+        Process alternative data into ML features.
+
+        Args:
+            symbol: Trading symbol
+            include_sentiment: Include sentiment features
+            include_onchain: Include on-chain features
+            include_economic: Include economic features
+
+        Returns:
+            Processed ML features
+        """
+        if not ALTERNATIVE_DATA_AVAILABLE or not self.alternative_data_processor:
+            return {
+                "success": False,
+                "error": "Alternative data processing not available"
+            }
+
+        try:
+            # Get raw alternative data
+            raw_data_result = await self.collect_alternative_data(symbol)
+            if not raw_data_result["success"]:
+                return raw_data_result
+
+            # Create packet from raw data
+            from .alternative_data import AlternativeDataPacket
+            packet = AlternativeDataPacket(**raw_data_result["data"])
+
+            # Process into features
+            features = await self.alternative_data_processor.process_to_features(
+                data_packet=packet,
+                include_sentiment=include_sentiment,
+                include_onchain=include_onchain,
+                include_economic=include_economic
+            )
+
+            await self.event_system.publish("alternative_data.processed", {
+                "symbol": symbol,
+                "features": features.__dict__
+            })
+
+            return {
+                "success": True,
+                "data": features.__dict__
+            }
+
+        except Exception as e:
+            error_msg = f"Alternative data processing failed: {str(e)}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg
+            }
+
+    async def get_alternative_data_status(self) -> Dict[str, Any]:
+        """
+        Get status of alternative data components.
+
+        Returns:
+            Alternative data component status
+        """
+        status = {
+            "alternative_data_available": ALTERNATIVE_DATA_AVAILABLE,
+            "components": {}
+        }
+
+        if ALTERNATIVE_DATA_AVAILABLE:
+            status["components"] = {
+                "sentiment_analyzer": self.sentiment_analyzer is not None,
+                "onchain_collector": self.onchain_collector is not None,
+                "economic_collector": self.economic_collector is not None,
+                "data_processor": self.alternative_data_processor is not None
+            }
+
+            # Get metrics from each component if available
+            metrics = {}
+            try:
+                if self.sentiment_analyzer and hasattr(self.sentiment_analyzer, 'get_metrics'):
+                    metrics["sentiment"] = await self.sentiment_analyzer.get_metrics()
+            except:
+                pass
+
+            try:
+                if self.onchain_collector and hasattr(self.onchain_collector, 'get_metrics'):
+                    metrics["onchain"] = await self.onchain_collector.get_metrics()
+            except:
+                pass
+
+            try:
+                if self.economic_collector and hasattr(self.economic_collector, 'get_metrics'):
+                    metrics["economic"] = await self.economic_collector.get_metrics()
+            except:
+                pass
+
+            try:
+                if self.alternative_data_processor and hasattr(self.alternative_data_processor, 'get_metrics'):
+                    metrics["processor"] = await self.alternative_data_processor.get_metrics()
+            except:
+                pass
+
+            status["metrics"] = metrics
+
+        return status
+
+    async def validate_data_quality(self, data: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Validate data quality and return detailed results.
+
+        Args:
+            data: DataFrame to validate
+
+        Returns:
+            Quality validation results
+        """
+        try:
+            quality_score, quality_level = self._calculate_data_quality(data)
+
+            # Create detailed validation results
+            validation_results = {
+                "quality_score": quality_score,
+                "quality_level": quality_level.value,
+                "is_valid": quality_level != DataQuality.INVALID,
+                "record_count": len(data) if hasattr(data, '__len__') else 0,
+                "columns": list(data.columns) if hasattr(data, 'columns') else [],
+                "issues": []
+            }
+
+            # Check for common issues
+            if data.empty:
+                validation_results["issues"].append("DataFrame is empty")
+
+            if hasattr(data, 'isnull'):
+                null_counts = data.isnull().sum()
+                if null_counts.sum() > 0:
+                    validation_results["issues"].append(f"Found {null_counts.sum()} null values")
+
+            # Check OHLC relationships if applicable
+            if all(col in data.columns for col in ['open', 'high', 'low', 'close']):
+                invalid_ohlc = (
+                    (data['open'] > data['high']) |
+                    (data['low'] > data['open']) |
+                    (data['close'] > data['high']) |
+                    (data['close'] < data['low'])
+                ).sum()
+                if invalid_ohlc > 0:
+                    validation_results["issues"].append(f"Found {invalid_ohlc} invalid OHLC relationships")
+
+            # Check volume validity
+            if 'volume' in data.columns:
+                negative_volume = (data['volume'] < 0).sum()
+                if negative_volume > 0:
+                    validation_results["issues"].append(f"Found {negative_volume} negative volume values")
+
+            return validation_results
+
+        except Exception as e:
+            logger.error(f"Data quality validation failed: {e}")
+            return {
+                "quality_score": 0.0,
+                "quality_level": "invalid",
+                "is_valid": False,
+                "record_count": 0,
+                "columns": [],
+                "issues": [f"Validation error: {str(e)}"]
+            }
+
+    async def shutdown(self):
+        """Shutdown the data service and cleanup resources."""
+        try:
+            # Cleanup cache manager
+            if hasattr(self, 'cache_manager'):
+                await self.cache_manager.cleanup()
+
+            # Cleanup Alternative Data components
+            if ALTERNATIVE_DATA_AVAILABLE:
+                if self.sentiment_analyzer and hasattr(self.sentiment_analyzer, 'cleanup'):
+                    await self.sentiment_analyzer.cleanup()
+                if self.onchain_collector and hasattr(self.onchain_collector, 'cleanup'):
+                    await self.onchain_collector.cleanup()
+                if self.economic_collector and hasattr(self.economic_collector, 'cleanup'):
+                    await self.economic_collector.cleanup()
+                if self.alternative_data_processor and hasattr(self.alternative_data_processor, 'cleanup'):
+                    await self.alternative_data_processor.cleanup()
+
+            # Cleanup Data Mesh components
+            if DATA_MESH_AVAILABLE and self.data_mesh:
+                await self.data_mesh.cleanup()
+
+            logger.info("Data service shut down successfully")
+
+        except Exception as e:
+            logger.error(f"Error during data service shutdown: {e}")

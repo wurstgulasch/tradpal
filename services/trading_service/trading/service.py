@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List
 import asyncio
 from datetime import datetime
 import uuid
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,9 @@ class TradingService:
         self.trading_sessions: Dict[str, Dict[str, Any]] = {}
         self.positions: Dict[str, List[Dict[str, Any]]] = {}
         self.orders: Dict[str, Dict[str, Any]] = {}
+        # Execution service integration
+        self.pending_orders: Dict[str, Dict[str, Any]] = {}
+        self.filled_orders: Dict[str, Dict[str, Any]] = {}
         self.is_initialized = False
 
     async def initialize(self):
@@ -136,6 +140,162 @@ class TradingService:
             updated += 1
 
         return {"updated_positions": updated}
+
+    # Execution Service Integration Methods
+    def submit_order(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Submit an order for execution (from ExecutionService)"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading service not initialized")
+
+        order_id = str(uuid.uuid4())
+        order_data = {
+            "order_id": order_id,
+            "symbol": order["symbol"],
+            "side": order["side"],
+            "quantity": order["quantity"],
+            "order_type": order.get("order_type", "market"),
+            "price": order.get("price"),
+            "status": "filled",  # Simplified - immediately filled
+            "submitted_at": datetime.now().isoformat(),
+            "filled_at": datetime.now().isoformat(),
+            "fees": 0.0
+        }
+
+        self.filled_orders[order_id] = order_data
+        return {"success": True, "order_id": order_id}
+
+    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        """Cancel a pending order (from ExecutionService)"""
+        if not self.is_initialized:
+            return {"success": False, "error": "Service not initialized"}
+
+        if order_id in self.pending_orders:
+            del self.pending_orders[order_id]
+            return {"success": True}
+        else:
+            return {"success": False, "error": "Order not found"}
+
+    def get_order_status(self, order_id: str) -> Dict[str, Any]:
+        """Get order status (from ExecutionService)"""
+        if not self.is_initialized:
+            return {"error": "Service not initialized"}
+
+        if order_id in self.filled_orders:
+            return self.filled_orders[order_id]
+        elif order_id in self.pending_orders:
+            return self.pending_orders[order_id]
+        else:
+            return {"error": "Order not found"}
+
+    async def get_execution_stats(self) -> Dict[str, Any]:
+        """Get execution statistics (from ExecutionService)"""
+        if not self.is_initialized:
+            return {"error": "Service not initialized"}
+
+        total_orders = len(self.filled_orders) + len(self.pending_orders)
+        filled_orders = len(self.filled_orders)
+        pending_orders = len(self.pending_orders)
+
+        return {
+            "total_orders": total_orders,
+            "filled_orders": filled_orders,
+            "pending_orders": pending_orders,
+            "fill_rate": filled_orders / max(total_orders, 1),
+            "avg_execution_time": 0.0  # Simplified
+        }
+
+    # Risk Management Service Integration Methods
+    async def calculate_position_size(self, capital: float, risk_per_trade: float,
+                               stop_loss_pct: float, current_price: float) -> Dict[str, Any]:
+        """Calculate position size based on risk management (from RiskManagementService)"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading service not initialized")
+
+        # Position size = (Capital * Risk per trade) / (Price * Stop loss %)
+        position_size = (capital * risk_per_trade) / (current_price * stop_loss_pct)
+        return {"quantity": position_size}
+
+    def check_risk_limits(self, portfolio_value: float, daily_loss: float, max_daily_loss: float) -> Dict[str, Any]:
+        """Check if risk limits are breached (from RiskManagementService)"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading service not initialized")
+
+        within_limits = daily_loss <= (portfolio_value * max_daily_loss)
+
+        return {
+            "within_limits": within_limits,
+            "current_loss": daily_loss,
+            "max_allowed_loss": portfolio_value * max_daily_loss,
+            "portfolio_value": portfolio_value
+        }
+
+    def calculate_stop_loss(self, entry_price: float, stop_loss_pct: float) -> float:
+        """Calculate stop loss price (from RiskManagementService)"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading service not initialized")
+
+        return entry_price * (1 - stop_loss_pct)  # Assuming long position
+
+    async def calculate_take_profit(self, entry_price: float, stop_loss_price: float,
+                                  reward_risk_ratio: float = 2.0) -> float:
+        """Calculate take profit price (from RiskManagementService)"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading service not initialized")
+
+        risk_amount = entry_price - stop_loss_price
+        reward_amount = risk_amount * reward_risk_ratio
+        return entry_price + reward_amount
+
+    async def get_portfolio_risk_metrics(self, returns: List[float]) -> Dict[str, Any]:
+        """Calculate portfolio risk metrics (from RiskManagementService)"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading service not initialized")
+
+        if not returns:
+            return {
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "volatility": 0.0,
+                "total_return": 0.0
+            }
+
+        returns_array = np.array(returns)
+
+        # Sharpe ratio (assuming 0% risk-free rate)
+        if len(returns) > 1:
+            sharpe = np.mean(returns_array) / np.std(returns_array) * np.sqrt(252)
+        else:
+            sharpe = 0.0
+
+        # Max drawdown
+        cumulative = np.cumprod(1 + returns_array)
+        peak = np.maximum.accumulate(cumulative)
+        drawdown = (cumulative - peak) / peak
+        max_dd = np.min(drawdown) if len(drawdown) > 0 else 0.0
+
+        # Volatility (annualized)
+        volatility = np.std(returns_array) * np.sqrt(252)
+
+        # Total return
+        total_return = np.prod(1 + returns_array) - 1
+
+        return {
+            "sharpe_ratio": float(sharpe),
+            "max_drawdown": float(max_dd),
+            "volatility": float(volatility),
+            "total_return": float(total_return)
+        }
+
+    def get_default_risk_config(self) -> Dict[str, Any]:
+        """Get default risk management configuration (from RiskManagementService)"""
+        return {
+            "max_risk_per_trade": 0.02,  # 2%
+            "max_portfolio_risk": 0.05,  # 5%
+            "max_drawdown": 0.1,  # 10%
+            "stop_loss_multiplier": 1.5,
+            "take_profit_multiplier": 3.0,
+            "reward_risk_ratio": 2.0
+        }
 
     async def get_session_status(self, symbol: str) -> Dict[str, Any]:
         """Get trading session status"""

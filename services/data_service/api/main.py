@@ -9,8 +9,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
-# Import simplified data service
-from ..data_sources.service import DataService, DataRequest, DataResponse, DataInfoResponse
+# Import unified data service
+from ..service import DataService, DataRequest, DataResponse, DataInfoResponse
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +51,26 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "data_service",
-        "initialized": data_service.is_initialized
-    }
+    try:
+        health = await data_service.health_check()
+        return health
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "error",
+            "service": "data_service",
+            "error": str(e)
+        }
+
+@app.get("/info")
+async def get_service_info():
+    """Get service information"""
+    try:
+        info = await data_service.get_service_info()
+        return info
+    except Exception as e:
+        logger.error(f"Service info retrieval failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get service info: {str(e)}")
 
 @app.get("/data/{symbol}")
 async def get_market_data(
@@ -130,6 +145,104 @@ async def validate_data(data: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Error validating data: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to validate data: {str(e)}")
+
+# Alternative Data Endpoints
+
+@app.get("/sentiment/{symbol}")
+async def analyze_sentiment(
+    symbol: str,
+    hours: int = Query(24, description="Hours of historical data to analyze", ge=1, le=168)
+):
+    """Analyze sentiment for a symbol"""
+    try:
+        result = await data_service.analyze_sentiment(symbol, hours)
+        if not result["success"]:
+            raise HTTPException(status_code=503, detail=result["error"])
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error analyzing sentiment for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Sentiment analysis failed: {str(e)}")
+
+@app.get("/fear-greed")
+async def get_fear_greed_index():
+    """Get current Fear & Greed Index"""
+    try:
+        result = await data_service.get_fear_greed_index()
+        if not result["success"]:
+            raise HTTPException(status_code=503, detail=result["error"])
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching Fear & Greed Index: {e}")
+        raise HTTPException(status_code=500, detail=f"Fear & Greed Index fetch failed: {str(e)}")
+
+@app.get("/onchain/{symbol}")
+async def get_onchain_metrics(
+    symbol: str,
+    metrics: Optional[str] = Query(None, description="Comma-separated list of specific metrics")
+):
+    """Get on-chain metrics for a symbol"""
+    try:
+        metrics_list = [m.strip() for m in metrics.split(",")] if metrics else None
+        result = await data_service.get_onchain_metrics(symbol, metrics_list)
+        if not result["success"]:
+            raise HTTPException(status_code=503, detail=result["error"])
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching on-chain metrics for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"On-chain metrics fetch failed: {str(e)}")
+
+@app.get("/economic")
+async def get_economic_indicators(
+    indicators: Optional[str] = Query(None, description="Comma-separated list of specific indicators")
+):
+    """Get economic indicators"""
+    try:
+        indicators_list = [i.strip() for i in indicators.split(",")] if indicators else None
+        result = await data_service.get_economic_indicators(indicators_list)
+        if not result["success"]:
+            raise HTTPException(status_code=503, detail=result["error"])
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching economic indicators: {e}")
+        raise HTTPException(status_code=500, detail=f"Economic indicators fetch failed: {str(e)}")
+
+@app.get("/alternative-data/status")
+async def get_alternative_data_status():
+    """Get status of alternative data components"""
+    try:
+        status = await data_service.get_alternative_data_status()
+        return status
+
+    except Exception as e:
+        logger.error(f"Error getting alternative data status: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get alternative data status: {str(e)}")
+
+@app.get("/alternative-data/{symbol}")
+async def collect_alternative_data(symbol: str):
+    """Collect complete alternative data packet for a symbol"""
+    try:
+        result = await data_service.collect_alternative_data(symbol)
+        if not result["success"]:
+            raise HTTPException(status_code=503, detail=result["error"])
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error collecting alternative data for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Alternative data collection failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
