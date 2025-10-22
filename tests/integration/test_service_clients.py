@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Import service clients
 try:
-    from services.data_service import DataServiceClient
+    from services.data_service.client import DataServiceClient
     DATA_CLIENT_AVAILABLE = True
 except ImportError:
     DATA_CLIENT_AVAILABLE = False
@@ -75,42 +75,42 @@ async def test_service_client(name: str, client_class, test_func) -> Dict[str, A
         return {"service": name, "status": "failed", "error": str(e)}
 
 
-async def test_data_client(client: DataServiceClient) -> Dict[str, Any]:
+async def test_data_client(client) -> Dict[str, Any]:
     """Test data service client"""
     # Just test health check for now
     healthy = await client.health_check()
     return {"healthy": healthy}
 
 
-async def test_backtest_client(client: BacktestingServiceClient) -> Dict[str, Any]:
+async def test_backtest_client(client) -> Dict[str, Any]:
     """Test backtesting service client"""
     # Just test health check for now
     healthy = await client.health_check()
     return {"healthy": healthy}
 
 
-async def test_notification_client(client: NotificationServiceClient) -> Dict[str, Any]:
+async def test_notification_client(client) -> Dict[str, Any]:
     """Test notification service client"""
     # Just test health check for now
     healthy = await client.health_check()
     return {"healthy": healthy}
 
 
-async def test_risk_client(client: RiskServiceClient) -> Dict[str, Any]:
+async def test_risk_client(client) -> Dict[str, Any]:
     """Test risk service client"""
     # Just test health check for now
     healthy = await client.health_check()
     return {"healthy": healthy}
 
 
-async def test_discovery_client(client: DiscoveryServiceClient) -> Dict[str, Any]:
+async def test_discovery_client(client) -> Dict[str, Any]:
     """Test discovery service client"""
     # Just test health check for now
     healthy = await client.health_check()
     return {"healthy": healthy}
 
 
-async def test_mlops_client(client: MLOpsServiceClient) -> Dict[str, Any]:
+async def test_mlops_client(client) -> Dict[str, Any]:
     """Test MLOps service client"""
     # Just test health check for now
     healthy = await client.health_check()

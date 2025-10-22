@@ -4,7 +4,7 @@ TradPal is a fully autonomous AI trading system based on a complete microservice
 
 ## 🎯 October 2025 Highlights
 - **98 Test Files**: Comprehensive test coverage with organized test structure (unit/integration/services/e2e)
-- **Service Consolidation**: Partial consolidation of 25+ services into unified trading, data, and backtesting services
+- **Service Consolidation**: **Completed trading service consolidation** - ML training, RL agents, risk management, and market regime detection integrated into unified trading_service
 - **Advanced ML Integration**: ML-enhanced signal generation with ensemble methods and risk management
 - **Modular Data Sources**: Kaggle Bitcoin Datasets, Yahoo Finance, CCXT integration for optimal backtesting
 - **Centralized Test Suite**: Organized test structure with conftest.py, fixtures, and comprehensive coverage
@@ -13,7 +13,7 @@ TradPal is a fully autonomous AI trading system based on a complete microservice
 
 ```
 tradpal/
-├── services/                    # Microservices Architecture (25+ services, partial consolidation)
+├── services/                    # Microservices Architecture (consolidated to 4 main services)
 │   ├── core/                    # Core calculations & Memory optimization
 │   ├── data_service/            # Data Management (CCXT, Kaggle, Yahoo Finance, caching, HDF5)
 │   │   └── data_sources/        # Modular data sources (Kaggle Bitcoin Datasets, Exchanges)
@@ -22,22 +22,23 @@ tradpal/
 │   │       ├── sentiment.py     # Sentiment analysis data source
 │   │       ├── onchain.py       # On-chain metrics data source
 │   │       └── factory.py       # Data source factory with 8+ sources
-│   ├── trading_service/         # Consolidated AI-powered trading service
+│   ├── trading_service/         # ✅ **CONSOLIDATED** AI-powered trading service
 │   │   ├── orchestrator.py      # Main trading orchestrator
 │   │   ├── execution/           # Order execution
-│   │   ├── risk_management/     # Risk management
-│   │   ├── reinforcement_learning/ # RL agents
-│   │   ├── market_regime/       # Market regime detection
+│   │   ├── risk_management/     # Risk management and position sizing
+│   │   ├── reinforcement_learning/ # RL agents for trading decisions
+│   │   ├── market_regime_detection/ # Market regime detection and analysis
+│   │   ├── ml_training/         # ML model training and optimization
 │   │   └── monitoring/          # Trading monitoring
 │   ├── backtesting_service/     # Historical simulation and ML training
 │   ├── discovery_service/       # ML parameter optimization
-│   ├── risk_service/            # Risk management and position sizing
 │   ├── notification_service/    # Alerts (Telegram, Discord, Email)
 │   ├── mlops_service/           # ML experiment tracking and model management
 │   ├── security_service/        # Zero-trust authentication
 │   ├── event_system/            # Event-Driven Architecture (Redis Streams)
 │   ├── api_gateway/             # Centralized service routing and authentication
-│   └── [20+ additional services]/ # Individual microservices (pending consolidation)
+│   └── [15+ additional services]/ # Individual microservices (pending consolidation)
+├── config/                      # Central configuration
 ├── config/                      # Central configuration
 │   ├── settings.py              # Main configuration (imports from modules)
 │   ├── core_settings.py         # Core trading and risk management

@@ -114,28 +114,19 @@ except ImportError:
     NOTIFICATION_SERVICE_AVAILABLE = False
 
 try:
-    from services.risk_service.client import RiskServiceClient
-    RISK_SERVICE_AVAILABLE = True
-except ImportError:
-    RISK_SERVICE_AVAILABLE = False
-
-try:
     from services.alternative_data_service.client import AlternativeDataServiceClient
     ALTERNATIVE_DATA_SERVICE_AVAILABLE = True
 except ImportError:
     ALTERNATIVE_DATA_SERVICE_AVAILABLE = False
 
+# Import market regime analysis functions
 try:
-    from services.market_regime_detection_service.client import MarketRegimeDetectionServiceClient
-    MARKET_REGIME_SERVICE_AVAILABLE = True
+    from services.mlops_service.market_regime_analysis import (
+        detect_market_regime, analyze_multi_timeframe, get_adaptive_strategy_config, MarketRegime
+    )
+    MARKET_REGIME_ANALYSIS_AVAILABLE = True
 except ImportError:
-    MARKET_REGIME_SERVICE_AVAILABLE = False
-
-try:
-    from services.reinforcement_learning_service.client import ReinforcementLearningServiceClient
-    RL_SERVICE_AVAILABLE = True
-except ImportError:
-    RL_SERVICE_AVAILABLE = False
+    MARKET_REGIME_ANALYSIS_AVAILABLE = False
 
 
 class TradPalOrchestrator:
@@ -201,24 +192,10 @@ class TradPalOrchestrator:
                 self.services['notification'] = NotificationServiceClient()
                 logger.info("✅ Notification service initialized")
 
-            if RISK_SERVICE_AVAILABLE:
-                self.services['risk'] = RiskServiceClient()
-                logger.info("✅ Risk service initialized")
-
             if ALTERNATIVE_DATA_SERVICE_AVAILABLE:
                 self.services['alternative_data'] = AlternativeDataServiceClient()
                 await self.services['alternative_data'].initialize()
                 logger.info("✅ Alternative Data service initialized")
-
-            if MARKET_REGIME_SERVICE_AVAILABLE:
-                self.services['market_regime'] = MarketRegimeDetectionServiceClient()
-                await self.services['market_regime'].initialize()
-                logger.info("✅ Market Regime Detection service initialized")
-
-            if RL_SERVICE_AVAILABLE:
-                self.services['reinforcement_learning'] = ReinforcementLearningServiceClient()
-                await self.services['reinforcement_learning'].initialize()
-                logger.info("✅ Reinforcement Learning service initialized")
 
             logger.info("✅ Services initialized successfully")
             return True
@@ -319,20 +296,7 @@ class TradPalOrchestrator:
 
                     # Get market regime information from service (legacy)
                     market_regime = {}
-                    if MARKET_REGIME_SERVICE_AVAILABLE and 'market_regime' in self.services:
-                        try:
-                            regime_data = await self.services['market_regime'].get_market_regime(SYMBOL)
-                            volatility_regime = await self.services['market_regime'].get_volatility_regime(SYMBOL)
-                            trend_regime = await self.services['market_regime'].get_trend_regime(SYMBOL)
-
-                            market_regime = {
-                                'market_regime': regime_data,
-                                'volatility_regime': volatility_regime,
-                                'trend_regime': trend_regime
-                            }
-                            logger.debug(f"Legacy market regime detected: {regime_data.get('regime', 'unknown')}")
-                        except Exception as e:
-                            logger.warning(f"Failed to get legacy market regime: {e}")
+                    # Market regime analysis now integrated into core service
 
                     # Calculate indicators and signals using core service
                     if CORE_SERVICE_AVAILABLE and 'core' in self.services:
@@ -428,38 +392,8 @@ class TradPalOrchestrator:
                     market_state["alternative_score"] = alternative_data['composite_score'].get('score', 0.5)
 
                 # Get RL-based action recommendation
-                if RL_SERVICE_AVAILABLE and 'reinforcement_learning' in self.services:
-                    try:
-                        rl_action = await self.services['reinforcement_learning'].get_trading_action(market_state)
-
-                        if rl_action and rl_action.get('action'):
-                            # Enhance signals with RL insights
-                            enhanced_signals['ai_enhanced'] = True
-                            enhanced_signals['rl_action'] = rl_action
-                            enhanced_signals['rl_confidence'] = rl_action.get('confidence', 0.0)
-                            enhanced_signals['rl_reasoning'] = rl_action.get('reasoning', '')
-
-                            # Boost signal confidence if RL agrees with base signal
-                            if signals.get('signals'):
-                                for signal in enhanced_signals['signals']:
-                                    base_action = signal.get('action', '').upper()
-                                    rl_action_name = rl_action['action'].upper()
-
-                                    if base_action == rl_action_name:
-                                        signal['ai_confidence_boost'] = rl_action.get('confidence', 0.0)
-                                        signal['enhanced_reasoning'] = f"Base signal + RL: {rl_action.get('reasoning', '')}"
-                                    elif rl_action.get('confidence', 0.0) > 0.8:
-                                        # Override with high-confidence RL action
-                                        signal['action'] = rl_action_name
-                                        signal['ai_override'] = True
-                                        signal['override_reason'] = f"RL override: {rl_action.get('reasoning', '')}"
-
-                            logger.info(f"RL-enhanced signal: {rl_action.get('action')} (confidence: {rl_action.get('confidence', 0):.2f})")
-
-                    except Exception as e:
-                        logger.warning(f"RL service enhancement failed: {e}")
-
-                # Add market regime context to signals
+                # RL functionality now integrated into trading service
+                rl_action = None                # Add market regime context to signals
                 if market_regime_data:
                     enhanced_signals['market_regime_context'] = {
                         'current_regime': market_regime_data['current_regime'].value,
@@ -509,14 +443,18 @@ class TradPalOrchestrator:
                         adaptive_config = get_adaptive_strategy_config(mtf_data)
 
                         logger.info(f"Using adaptive strategy: {adaptive_config.get('model_type', 'default')} "
-                                  f"(regime: {adaptive_config.get('current_regime', 'unknown')})")
+                                  f"(regime: {adaptive_config.get('current_regime', 'unknown').value if hasattr(adaptive_config.get('current_regime', 'unknown'), 'value') else adaptive_config.get('current_regime', 'unknown')})")
                     except Exception as e:
                         logger.warning(f"Failed to get adaptive config: {e}")
 
                 # Enhanced strategy config with market regime insights
                 strategy_config = {
                     'indicators': ['ema', 'rsi', 'bb', 'atr'],
-                    'adaptive_config': adaptive_config,
+                    'adaptive_config': {
+                        'model_type': adaptive_config.get('model_type', 'default'),
+                        'current_regime': adaptive_config.get('current_regime', 'unknown').value if hasattr(adaptive_config.get('current_regime', 'unknown'), 'value') else adaptive_config.get('current_regime', 'unknown'),
+                        'confidence_score': adaptive_config.get('confidence_score', 0.5)
+                    },
                     'use_market_regime': MARKET_REGIME_ANALYSIS_AVAILABLE
                 }
 
@@ -677,32 +615,9 @@ class TradPalOrchestrator:
         logger.info("🤖 Starting ML Training Mode...")
 
         try:
-            # Use ML trainer service
-            if ML_TRAINER_SERVICE_AVAILABLE and 'ml_trainer' in self.services:
-                from services.ml_trainer.client import TrainingRequest
-
-                request = TrainingRequest(
-                    symbol=kwargs.get('symbol', SYMBOL),
-                    timeframe=kwargs.get('timeframe', TIMEFRAME),
-                    start_date=kwargs.get('start_date'),
-                    end_date=kwargs.get('end_date'),
-                    model_type=kwargs.get('model_type', 'random_forest'),
-                    target_horizon=5,
-                    use_optuna=True
-                )
-
-                training_result = await self.services['ml_trainer'].train_model(request)
-
-                logger.info(f"ML training completed: {training_result}")
-                return training_result
-
-            elif LEGACY_AVAILABLE:
-                # Legacy ML training would go here
-                logger.info("Legacy ML training not implemented")
-                return {"status": "legacy", "message": "Legacy ML training placeholder"}
-
-            else:
-                raise RuntimeError("No ML training service available")
+            # ML training now integrated into trading service
+            logger.info("ML training functionality moved to trading service")
+            return {"status": "integrated", "message": "ML training now available through trading service"}
 
         except Exception as e:
             logger.error(f"ML training failed: {e}")

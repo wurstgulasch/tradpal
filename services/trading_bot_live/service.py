@@ -31,6 +31,10 @@ from config.settings import (
     POSITION_UPDATE_INTERVAL
 )
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Service imports for smart trading
 try:
     from services.core.client import CoreServiceClient
@@ -39,19 +43,20 @@ except ImportError:
     CORE_SERVICE_AVAILABLE = False
     logger.warning("CoreService not available - using legacy signal generation")
 
+# Trading service imports (integrated services)
 try:
-    from services.risk_service.client import RiskServiceClient
+    from services.trading_service.risk_management.service import RiskManagementService
     RISK_SERVICE_AVAILABLE = True
 except ImportError:
     RISK_SERVICE_AVAILABLE = False
-    logger.warning("RiskService not available - using basic position sizing")
+    logger.warning("RiskManagementService not available - using basic position sizing")
 
 try:
-    from services.market_regime_detection_service.client import MarketRegimeDetectionServiceClient
+    from services.trading_service.market_regime_detection.service import MarketRegimeDetectionService
     MARKET_REGIME_SERVICE_AVAILABLE = True
 except ImportError:
     MARKET_REGIME_SERVICE_AVAILABLE = False
-    logger.warning("MarketRegimeService not available - using basic regime detection")
+    logger.warning("MarketRegimeDetectionService not available - using basic regime detection")
 
 try:
     from services.data_service.client import DataServiceClient
@@ -59,10 +64,6 @@ try:
 except ImportError:
     DATA_SERVICE_AVAILABLE = False
     logger.warning("DataService not available - using simulated data")
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class OrderSide(Enum):
@@ -205,8 +206,6 @@ class TradingBotLiveService:
         # Initialize service clients
         self._initialize_services()
 
-        logger.info("Trading Bot Live Service initialized with smart capabilities")
-
     def _initialize_services(self):
         """Initialize smart trading service clients."""
         try:
@@ -215,12 +214,12 @@ class TradingBotLiveService:
                 logger.info("✅ CoreService client initialized for ML signals")
 
             if RISK_SERVICE_AVAILABLE:
-                self.risk_service = RiskServiceClient()
-                logger.info("✅ RiskService client initialized for smart position sizing")
+                self.risk_service = RiskManagementService()
+                logger.info("✅ RiskManagementService initialized for smart position sizing")
 
             if MARKET_REGIME_SERVICE_AVAILABLE:
-                self.market_regime_service = MarketRegimeDetectionServiceClient()
-                logger.info("✅ MarketRegimeService client initialized for adaptive trading")
+                self.market_regime_service = MarketRegimeDetectionService()
+                logger.info("✅ MarketRegimeDetectionService initialized for adaptive trading")
 
             if DATA_SERVICE_AVAILABLE:
                 self.data_service = DataServiceClient()
@@ -229,6 +228,8 @@ class TradingBotLiveService:
         except Exception as e:
             logger.error(f"Error initializing service clients: {e}")
             logger.warning("Falling back to legacy trading logic")
+
+        logger.info("Trading Bot Live Service initialized with smart capabilities")
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check."""
