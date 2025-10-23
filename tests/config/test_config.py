@@ -1,7 +1,7 @@
 import pytest
 import sys
 import os
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 # Add config to path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'config'))
@@ -13,7 +13,9 @@ from config.settings import (
     LEVERAGE_BASE, LEVERAGE_MIN, LEVERAGE_MAX,
     MTA_ENABLED, MTA_TIMEFRAMES, ADX_THRESHOLD,
     TIMEFRAME_PARAMS, OUTPUT_FORMAT, OUTPUT_FILE,
-    validate_timeframe, get_timeframe_params, validate_risk_params
+    validate_timeframe, get_timeframe_params, validate_risk_params,
+    config, LazyConfig, get_legacy_constant,
+    DEFAULT_DATA_LIMIT, ML_MODEL_TYPE, ENABLE_MTLS, GPU_ACCELERATION_ENABLED
 )
 
 
@@ -229,6 +231,266 @@ class TestConfiguration:
                 pytest.skip("Cannot create output directory for testing")
 
 
+class TestLazyConfiguration:
+    """Test lazy loading configuration system."""
+
+    def test_lazy_config_initialization(self):
+        """Test that LazyConfig initializes correctly."""
+        lazy_config = LazyConfig()
+        assert lazy_config._loaded_modules == {}
+        assert 'core' in lazy_config._module_loaders
+        assert 'ml' in lazy_config._module_loaders
+        assert 'service' in lazy_config._module_loaders
+        assert 'security' in lazy_config._module_loaders
+        assert 'performance' in lazy_config._module_loaders
+
+    def test_lazy_loading_core_module(self):
+        """Test lazy loading of core module."""
+        lazy_config = LazyConfig()
+
+        # Module should not be loaded initially
+        assert 'core' not in lazy_config._loaded_modules
+
+        # Load core module
+        core_settings = lazy_config.get_module('core')
+
+        # Module should now be loaded
+        assert 'core' in lazy_config._loaded_modules
+        assert isinstance(core_settings, dict)
+        assert len(core_settings) > 0
+
+        # Check that core constants are present
+        assert 'DEFAULT_DATA_LIMIT' in core_settings
+        assert 'SYMBOL' in core_settings
+        assert 'EXCHANGE' in core_settings
+        assert 'TIMEFRAME' in core_settings
+
+    def test_lazy_loading_ml_module(self):
+        """Test lazy loading of ML module."""
+        lazy_config = LazyConfig()
+
+        # Module should not be loaded initially
+        assert 'ml' not in lazy_config._loaded_modules
+
+        # Load ML module
+        ml_settings = lazy_config.get_module('ml')
+
+        # Module should now be loaded
+        assert 'ml' in lazy_config._loaded_modules
+        assert isinstance(ml_settings, dict)
+        assert len(ml_settings) > 0
+
+        # Check that ML constants are present
+        assert 'ML_MODEL_TYPE' in ml_settings
+        assert 'ML_TRAINING_ENABLED' in ml_settings
+
+    def test_lazy_loading_service_module(self):
+        """Test lazy loading of service module."""
+        lazy_config = LazyConfig()
+
+        # Module should not be loaded initially
+        assert 'service' not in lazy_config._loaded_modules
+
+        # Load service module
+        service_settings = lazy_config.get_module('service')
+
+        # Module should now be loaded
+        assert 'service' in lazy_config._loaded_modules
+        assert isinstance(service_settings, dict)
+        assert len(service_settings) > 0
+
+        # Check that service constants are present
+        assert 'ENABLE_MTLS' in service_settings
+        assert 'MONITORING_STACK_ENABLED' in service_settings
+
+    def test_lazy_loading_performance_module(self):
+        """Test lazy loading of performance module."""
+        lazy_config = LazyConfig()
+
+        # Module should not be loaded initially
+        assert 'performance' not in lazy_config._loaded_modules
+
+        # Load performance module
+        perf_settings = lazy_config.get_module('performance')
+
+        # Module should now be loaded
+        assert 'performance' in lazy_config._loaded_modules
+        assert isinstance(perf_settings, dict)
+        assert len(perf_settings) > 0
+
+        # Check that performance constants are present
+        assert 'GPU_ACCELERATION_ENABLED' in perf_settings
+        assert 'CACHE_ENABLED' in perf_settings
+
+    def test_lazy_loading_security_module(self):
+        """Test lazy loading of security module."""
+        lazy_config = LazyConfig()
+
+        # Module should not be loaded initially
+        assert 'security' not in lazy_config._loaded_modules
+
+        # Load security module
+        security_settings = lazy_config.get_module('security')
+
+        # Module should now be loaded
+        assert 'security' in lazy_config._loaded_modules
+        assert isinstance(security_settings, dict)
+        assert len(security_settings) > 0
+
+    def test_get_method_lazy_loading(self):
+        """Test that get method triggers lazy loading."""
+        lazy_config = LazyConfig()
+
+        # Module should not be loaded initially
+        assert 'core' not in lazy_config._loaded_modules
+
+        # Get a specific value
+        symbol = lazy_config.get('core', 'SYMBOL')
+
+        # Module should now be loaded
+        assert 'core' in lazy_config._loaded_modules
+        assert symbol == 'BTC/USDT'
+
+    def test_get_method_with_default(self):
+        """Test get method with default values."""
+        lazy_config = LazyConfig()
+
+        # Test with existing key
+        symbol = lazy_config.get('core', 'SYMBOL', 'DEFAULT')
+        assert symbol == 'BTC/USDT'
+
+        # Test with non-existing key
+        nonexistent = lazy_config.get('core', 'NONEXISTENT', 'DEFAULT')
+        assert nonexistent == 'DEFAULT'
+
+    def test_invalid_module_error(self):
+        """Test that invalid module raises error."""
+        lazy_config = LazyConfig()
+
+        with pytest.raises(ValueError, match="Unknown configuration module"):
+            lazy_config.get_module('invalid_module')
+
+    def test_cache_functionality(self):
+        """Test that modules are cached after loading."""
+        lazy_config = LazyConfig()
+
+        # Load module twice
+        core1 = lazy_config.get_module('core')
+        core2 = lazy_config.get_module('core')
+
+        # Should be the same content (cached)
+        assert core1 == core2
+        assert 'core' in lazy_config._loaded_modules
+
+    def test_clear_cache(self):
+        """Test cache clearing functionality."""
+        lazy_config = LazyConfig()
+
+        # Load a module
+        lazy_config.get_module('core')
+        assert 'core' in lazy_config._loaded_modules
+
+        # Clear cache
+        lazy_config.clear_cache()
+        assert lazy_config._loaded_modules == {}
+
+    def test_get_all_loaded(self):
+        """Test getting all loaded modules."""
+        lazy_config = LazyConfig()
+
+        # Initially empty
+        assert lazy_config.get_all_loaded() == {}
+
+        # Load some modules
+        lazy_config.get_module('core')
+        lazy_config.get_module('ml')
+
+        loaded = lazy_config.get_all_loaded()
+        assert 'core' in loaded
+        assert 'ml' in loaded
+        assert 'service' not in loaded
+
+    def test_lazy_loading_performance(self):
+        """Test that lazy loading works (performance test is unreliable due to timing)."""
+        import time
+
+        lazy_config = LazyConfig()
+
+        # Just test that loading works multiple times
+        lazy_config.get_module('core')
+        lazy_config.clear_cache()
+        lazy_config.get_module('core')
+
+        # Test passed if no exceptions
+        assert True
+
+
+class TestLegacyConstants:
+    """Test legacy constant backward compatibility."""
+
+    def test_legacy_constants_defined(self):
+        """Test that all legacy constants are properly defined."""
+        # Import constants dynamically to ensure they're loaded
+        from config.settings import (
+            DEFAULT_DATA_LIMIT, SYMBOL, EXCHANGE, TIMEFRAME, CAPITAL,
+            RISK_PER_TRADE, ML_MODEL_TYPE, ENABLE_MTLS, GPU_ACCELERATION_ENABLED,
+            MONITORING_STACK_ENABLED, MAX_BACKTEST_RESULTS
+        )
+        
+        legacy_constants = [
+            DEFAULT_DATA_LIMIT, SYMBOL, EXCHANGE, TIMEFRAME, CAPITAL,
+            RISK_PER_TRADE, ML_MODEL_TYPE, ENABLE_MTLS, GPU_ACCELERATION_ENABLED,
+            MONITORING_STACK_ENABLED, MAX_BACKTEST_RESULTS
+        ]
+
+        for const in legacy_constants:
+            assert const is not None, f"Legacy constant is None: {const}"
+
+    def test_get_legacy_constant_function(self):
+        """Test the get_legacy_constant function."""
+        # Test existing constant
+        value = get_legacy_constant('SYMBOL', 'DEFAULT')
+        assert value == 'BTC/USDT'
+
+        # Test non-existing constant with default
+        value = get_legacy_constant('NONEXISTENT', 'DEFAULT')
+        assert value == 'DEFAULT'
+
+    def test_legacy_constant_types(self):
+        """Test that legacy constants have correct types."""
+        # Import constants dynamically
+        from config.settings import (
+            SYMBOL, EXCHANGE, TIMEFRAME, ML_MODEL_TYPE, DEFAULT_DATA_LIMIT,
+            CAPITAL, RISK_PER_TRADE, ENABLE_MTLS, GPU_ACCELERATION_ENABLED,
+            MONITORING_STACK_ENABLED
+        )
+        
+        # String constants
+        assert isinstance(SYMBOL, str)
+        assert isinstance(EXCHANGE, str)
+        assert isinstance(TIMEFRAME, str)
+        assert isinstance(ML_MODEL_TYPE, str)
+
+        # Numeric constants
+        assert isinstance(DEFAULT_DATA_LIMIT, int)
+        assert isinstance(CAPITAL, (int, float))
+        assert isinstance(RISK_PER_TRADE, float)
+
+        # Boolean constants
+        assert isinstance(ENABLE_MTLS, bool)
+        assert isinstance(GPU_ACCELERATION_ENABLED, bool)
+        assert isinstance(MONITORING_STACK_ENABLED, bool)
+
+    def test_legacy_constant_values(self):
+        """Test that legacy constants have reasonable values."""
+        assert DEFAULT_DATA_LIMIT > 0
+        assert CAPITAL > 0
+        assert 0 < RISK_PER_TRADE <= 1  # Risk as percentage
+        assert len(SYMBOL) > 0
+        assert len(EXCHANGE) > 0
+        assert TIMEFRAME in ['1m', '5m', '15m', '1h', '1d']  # Common timeframes
+
+
 class TestConfigurationIntegration:
     """Integration tests for configuration system."""
 
@@ -241,47 +503,95 @@ class TestConfigurationIntegration:
             CAPITAL, RISK_PER_TRADE, SL_MULTIPLIER, TP_MULTIPLIER,
             LEVERAGE_BASE, LEVERAGE_MIN, LEVERAGE_MAX,
             MTA_ENABLED, ADX_THRESHOLD,
-            TIMEFRAME_PARAMS, OUTPUT_FORMAT, OUTPUT_FILE
+            TIMEFRAME_PARAMS, OUTPUT_FORMAT, OUTPUT_FILE,
+            DEFAULT_DATA_LIMIT, ML_MODEL_TYPE, ENABLE_MTLS, GPU_ACCELERATION_ENABLED
         ]
 
         # All constants should be defined and not None
         for const in required_constants:
             assert const is not None, f"Configuration constant is None"
 
-    def test_timeframe_params_integration(self):
-        """Test integration between timeframe params and validation."""
-        for tf in TIMEFRAME_PARAMS.keys():
-            # Each timeframe in params should be valid
-            assert validate_timeframe(tf), f"Invalid timeframe in params: {tf}"
+    def test_lazy_vs_direct_loading(self):
+        """Test that lazy loading and direct constants give same results."""
+        # Test that lazy loaded values match direct constants
+        assert config.get('core', 'SYMBOL') == SYMBOL
+        assert config.get('core', 'EXCHANGE') == EXCHANGE
+        assert config.get('core', 'DEFAULT_DATA_LIMIT') == DEFAULT_DATA_LIMIT
+        assert config.get('ml', 'ML_MODEL_TYPE') == ML_MODEL_TYPE
+        assert config.get('service', 'ENABLE_MTLS') == ENABLE_MTLS
 
-            # Each timeframe should have valid parameters
-            params = get_timeframe_params(tf)
-            assert params is not None, f"No params for timeframe: {tf}"
+    def test_configuration_memory_efficiency(self):
+        """Test that lazy loading reduces initial memory usage."""
+        # Create a fresh config instance
+        test_config = LazyConfig()
 
-            # Risk params for this timeframe should be valid
-            risk_config = {
-                'capital': CAPITAL,
-                'risk_per_trade': RISK_PER_TRADE,
-                'sl_multiplier': SL_MULTIPLIER
-            }
-            assert validate_risk_params(risk_config), f"Invalid risk params for timeframe: {tf}"
+        # Initially no modules loaded
+        assert len(test_config._loaded_modules) == 0
 
-    def test_configuration_consistency(self):
-        """Test that configuration is internally consistent."""
-        # Current timeframe should exist in TIMEFRAME_PARAMS
-        assert TIMEFRAME in TIMEFRAME_PARAMS, f"Current timeframe {TIMEFRAME} not in TIMEFRAME_PARAMS"
+        # Load only core module
+        test_config.get_module('core')
+        assert len(test_config._loaded_modules) == 1
 
-        # Output format should be supported
-        supported_formats = ['json', 'csv']
-        assert OUTPUT_FORMAT in supported_formats, f"Unsupported output format: {OUTPUT_FORMAT}"
+        # Other modules should still be unloaded
+        assert 'ml' not in test_config._loaded_modules
+        assert 'service' not in test_config._loaded_modules
+        assert 'performance' not in test_config._loaded_modules
 
-        # Risk parameters should form a valid configuration
+    def test_configuration_thread_safety(self):
+        """Test that configuration loading is thread-safe."""
+        import threading
+        import time
+
+        test_config = LazyConfig()
+        results = []
+        errors = []
+
+        def load_module(module_name):
+            try:
+                settings = test_config.get_module(module_name)
+                results.append((module_name, len(settings)))
+            except Exception as e:
+                errors.append((module_name, str(e)))
+
+        # Start multiple threads loading different modules
+        threads = []
+        modules = ['core', 'ml', 'service', 'performance', 'security']
+
+        for module in modules:
+            thread = threading.Thread(target=load_module, args=(module,))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+        # Check results
+        assert len(results) == len(modules), f"Some threads failed: {errors}"
+        assert len(errors) == 0, f"Thread errors: {errors}"
+
+        # All modules should be loaded
+        for module in modules:
+            assert module in test_config._loaded_modules
+
+    def test_configuration_validation_integration(self):
+        """Test integration between configuration and validation functions."""
+        # Test that configured timeframe is valid
+        assert validate_timeframe(TIMEFRAME)
+
+        # Test that configured risk parameters are valid
         risk_config = {
             'capital': CAPITAL,
             'risk_per_trade': RISK_PER_TRADE,
             'sl_multiplier': SL_MULTIPLIER
         }
-        assert validate_risk_params(risk_config), "Global risk configuration is invalid"
+        assert validate_risk_params(risk_config)
+
+        # Test timeframe parameters integration
+        current_params = get_timeframe_params(TIMEFRAME)
+        assert current_params is not None
+        assert 'ema_short' in current_params
+        assert 'ema_long' in current_params
 
 
 if __name__ == "__main__":

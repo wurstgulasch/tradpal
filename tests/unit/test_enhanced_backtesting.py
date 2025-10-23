@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 # Add the project root to the path
-sys.path.insert(0, '/Users/danielsadowski/VSCodeProjects/tradpal_indicator')
+sys.path.insert(0, '/Users/danielsadowski/VSCodeProjects/tradpal/tradpal')
 
-from services.backtesting_service.service import BacktestingService
+from services.trading_service.backtesting_service.service import BacktestingService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -126,9 +126,9 @@ async def test_enhanced_backtesting():
 
 async def test_data_integration():
     """Test that the new data sources are properly integrated."""
-    from services.data_service.data_sources.funding_rate import FundingRateDataSource
-    from services.data_service.data_sources.liquidation import LiquidationDataSource
-    from services.data_service.data_sources.yahoo_finance import YahooFinanceDataSource
+    from services.data_service.data_service.data_sources.funding_rate import FundingRateDataSource
+    from services.data_service.data_service.data_sources.liquidation import LiquidationDataSource
+    from services.data_service.data_service.data_sources.yahoo_finance import YahooFinanceDataSource
 
     logger.info("Testing data source integration...")
 

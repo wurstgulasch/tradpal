@@ -1,305 +1,228 @@
 """
-TradPal Trading Service Orchestrator
-Unified orchestrator for trading operations, risk management, and AI components
+Trading Service Orchestrator
+Coordinates trading operations across AI, backtesting, and live trading services
 """
 
 import logging
-from typing import Dict, Any, Optional, List
 import asyncio
+from typing import Dict, Any, Optional, List
 from datetime import datetime
+import pandas as pd
 
-from .trading.service import TradingService
-from .reinforcement_learning.service import ReinforcementLearningService
-from .market_regime.service import MarketRegimeService
-from .monitoring.service import MonitoringService
+from .trading_ai_service.client import TradingAIServiceClient
+from .backtesting_service.client import BacktestingServiceClient
+from .trading_bot_live_service.client import TradingBotLiveServiceClient
 
 logger = logging.getLogger(__name__)
 
 
 class TradingServiceOrchestrator:
-    """Unified orchestrator for all trading-related services"""
+    """Orchestrator for consolidated trading operations"""
 
-    def __init__(self, event_system=None):
-        self.event_system = event_system
-
-        # Initialize service components
-        self.trading_service = TradingService(event_system=event_system)
-        self.rl_service = ReinforcementLearningService(event_system=event_system)
-        self.regime_service = MarketRegimeService(event_system=event_system)
-        self.monitoring_service = MonitoringService(event_system=event_system)
-
+    def __init__(self):
+        self.services = {}
         self.is_initialized = False
+        self.active_sessions = {}
 
     async def initialize(self):
-        """Initialize all trading service components"""
+        """Initialize all trading services"""
         logger.info("Initializing Trading Service Orchestrator...")
 
         try:
-            # Initialize all services concurrently
-            init_tasks = [
-                self.trading_service.initialize(),
-                self.rl_service.initialize(),
-                self.regime_service.initialize(),
-                self.monitoring_service.initialize()
-            ]
+            # Initialize AI service
+            self.services['ai'] = TradingAIServiceClient()
+            await self.services['ai'].authenticate()
+            logger.info("✅ Trading AI service initialized")
 
-            await asyncio.gather(*init_tasks)
+            # Initialize backtesting service
+            self.services['backtesting'] = BacktestingServiceClient()
+            await self.services['backtesting'].initialize()
+            await self.services['backtesting'].authenticate()
+            logger.info("✅ Backtesting service initialized")
+
+            # Initialize live trading service
+            self.services['live'] = TradingBotLiveServiceClient()
+            logger.info("✅ Live trading service initialized")
 
             self.is_initialized = True
-            logger.info("Trading Service Orchestrator initialized successfully")
+            logger.info("✅ Trading Service Orchestrator initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize Trading Service Orchestrator: {e}")
+            logger.error(f"❌ Failed to initialize Trading Service Orchestrator: {e}")
             raise
 
     async def shutdown(self):
-        """Shutdown all trading service components"""
+        """Shutdown all trading services"""
         logger.info("Shutting down Trading Service Orchestrator...")
 
-        try:
-            # Shutdown all services concurrently
-            shutdown_tasks = [
-                self.trading_service.shutdown(),
-                self.rl_service.shutdown(),
-                self.regime_service.shutdown(),
-                self.monitoring_service.shutdown()
-            ]
+        for name, service in self.services.items():
+            try:
+                if hasattr(service, 'close'):
+                    await service.close()
+                logger.info(f"✅ {name} service shut down")
+            except Exception as e:
+                logger.error(f"❌ {name} service shutdown failed: {e}")
 
-            await asyncio.gather(*shutdown_tasks)
-
-            self.is_initialized = False
-            logger.info("Trading Service Orchestrator shut down successfully")
-
-        except Exception as e:
-            logger.error(f"Error during Trading Service Orchestrator shutdown: {e}")
+        self.is_initialized = False
+        logger.info("✅ Trading Service Orchestrator shut down successfully")
 
     async def start_automated_trading(self, symbol: str, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Start automated trading for a symbol"""
+        """Start automated trading session"""
         if not self.is_initialized:
             raise RuntimeError("Trading Service Orchestrator not initialized")
 
-        logger.info(f"Starting automated trading for {symbol}")
-
-        # Start trading session
-        session = await self.trading_service.start_trading_session(symbol, config)
-
-        # Record metric
-        await self.monitoring_service.record_metric(
-            "trading_sessions_started",
-            1.0,
-            {"symbol": symbol}
-        )
-
-        return session
-
-    async def execute_smart_trade(self, symbol: str, market_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute a smart trade using AI and risk management"""
-        if not self.is_initialized:
-            raise RuntimeError("Trading Service Orchestrator not initialized")
-
-        logger.info(f"Executing smart trade for {symbol}")
+        session_id = f"{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         try:
-            # Detect market regime
-            price_data = market_data.get("prices", [])
-            regime_info = await self.regime_service.detect_regime(symbol, price_data)
+            # Create trading session
+            session = {
+                'session_id': session_id,
+                'symbol': symbol,
+                'config': config,
+                'start_time': datetime.now(),
+                'status': 'active',
+                'performance': {}
+            }
 
-            # Get regime-based advice
-            regime_advice = await self.regime_service.get_regime_advice(symbol, regime_info["regime"])
+            # Start live trading if not paper trading
+            if not config.get('paper_trading', True):
+                await self.services['live'].start_trading(symbol, config)
 
-            # Get RL signal
-            rl_signal = await self.rl_service.get_rl_signal(symbol, market_data)
+            self.active_sessions[session_id] = session
+            logger.info(f"✅ Started automated trading session {session_id} for {symbol}")
 
-            # Calculate position size with risk management
-            session = await self.trading_service.get_session_status(symbol)
-            if not session.get("session"):
-                return {"error": f"No active session for {symbol}"}
-
-            capital = session["session"]["capital"]
-            risk_per_trade = session["session"]["risk_per_trade"]
-
-            # Simplified volatility calculation
-            volatility = 0.02  # 2% daily volatility assumption
-
-            position_size = await self.trading_service.calculate_position_size(
-                capital, risk_per_trade, 0.02, market_data.get("current_price", 50000.0)
-            )
-
-            # Apply regime adjustments
-            quantity = position_size["quantity"] * regime_advice["position_size_multiplier"]
-
-            # Execute trade if signal is strong enough
-            if rl_signal["confidence"] > 0.6:
-                trade_result = await self.trading_service.execute_trade(
-                    symbol, rl_signal["signal"], quantity, market_data.get("current_price", 50000.0)
-                )
-
-                # Record metrics
-                await self.monitoring_service.record_metric(
-                    "trades_executed",
-                    1.0,
-                    {"symbol": symbol, "signal": rl_signal["signal"]}
-                )
-
-                return {
-                    "decision": rl_signal["signal"],
-                    "position_size": position_size,
-                    "confidence": rl_signal["confidence"],
-                    "regime": regime_info,
-                    "trade": trade_result
-                }
-            else:
-                return {"message": "Signal confidence too low", "confidence": rl_signal["confidence"]}
+            return session
 
         except Exception as e:
-            logger.error(f"Error in smart trade execution for {symbol}: {e}")
-            await self.monitoring_service.create_alert(
-                "trade_execution_error",
-                f"Failed to execute smart trade for {symbol}: {str(e)}",
-                "error",
-                {"symbol": symbol}
+            logger.error(f"❌ Failed to start automated trading for {symbol}: {e}")
+            raise
+
+    async def execute_smart_trade(self, symbol: str, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute smart trade using AI and risk management"""
+        if not self.is_initialized:
+            raise RuntimeError("Trading Service Orchestrator not initialized")
+
+        try:
+            # Get AI signal
+            ai_signal = await self.services['ai'].get_signal(symbol, market_data)
+
+            # Apply risk management
+            risk_adjusted_signal = await self.services['live'].apply_risk_management(
+                symbol, ai_signal, market_data
             )
-            return {"error": str(e)}
+
+            # Execute trade if signal is valid
+            if risk_adjusted_signal.get('action') in ['BUY', 'SELL']:
+                trade_result = await self.services['live'].execute_trade(risk_adjusted_signal)
+                logger.info(f"✅ Smart trade executed: {trade_result}")
+                return trade_result
+            else:
+                return {'action': 'HOLD', 'reason': 'No valid signal'}
+
+        except Exception as e:
+            logger.error(f"❌ Failed to execute smart trade for {symbol}: {e}")
+            raise
 
     async def get_trading_status(self) -> Dict[str, Any]:
         """Get comprehensive trading status"""
         if not self.is_initialized:
-            return {"error": "Trading Service Orchestrator not initialized"}
+            raise RuntimeError("Trading Service Orchestrator not initialized")
 
-        # Get status from all services
-        trading_status = await self.trading_service.get_session_status("all")
-        execution_stats = await self.trading_service.get_execution_stats()
-        system_metrics = await self.monitoring_service.get_system_metrics()
-        active_alerts = await self.monitoring_service.get_alerts(acknowledged=False, limit=10)
+        try:
+            status = {
+                'orchestrator': {
+                    'initialized': self.is_initialized,
+                    'active_sessions': len(self.active_sessions)
+                },
+                'services': {},
+                'sessions': list(self.active_sessions.values())
+            }
 
-        return {
-            "active_sessions": trading_status.get("total_sessions", 0),
-            "total_pnl": trading_status.get("total_pnl", 0),
-            "risk_metrics": {
-                "current_exposure": 0.0,  # Simplified
-                "max_exposure": 0.1,  # Simplified
-                "risk_score": 0.3  # Simplified
-            },
-            "system_health": {
-                "cpu_usage": system_metrics.get("cpu_percent", 0),
-                "memory_usage": system_metrics.get("memory_percent", 0),
-                "disk_usage": system_metrics.get("disk_usage", 0),
-                "status": "healthy" if system_metrics.get("cpu_percent", 100) < 90 else "warning"
-            },
-            "execution_stats": execution_stats,
-            "active_alerts": active_alerts,
-            "timestamp": datetime.now().isoformat()
-        }
+            # Get status from each service
+            for name, service in self.services.items():
+                try:
+                    if hasattr(service, 'get_status'):
+                        status['services'][name] = await service.get_status()
+                    else:
+                        status['services'][name] = {'status': 'unknown'}
+                except Exception as e:
+                    status['services'][name] = {'status': 'error', 'error': str(e)}
+
+            return status
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get trading status: {e}")
+            raise
 
     async def stop_all_trading(self) -> Dict[str, Any]:
         """Emergency stop all trading activities"""
-        if not self.is_initialized:
-            return {"error": "Trading Service Orchestrator not initialized"}
+        logger.info("🛑 Emergency stop: Stopping all trading activities")
 
-        logger.warning("Emergency stop initiated for all trading activities")
+        try:
+            results = {}
 
-        # This would stop all sessions and cancel orders
-        # For now, just create an alert
-        await self.monitoring_service.create_alert(
-            "emergency_stop",
-            "Emergency stop initiated for all trading activities",
-            "critical"
-        )
+            # Stop all active sessions
+            for session_id, session in self.active_sessions.items():
+                try:
+                    symbol = session['symbol']
+                    await self.services['live'].stop_trading(symbol)
+                    session['status'] = 'stopped'
+                    session['end_time'] = datetime.now()
+                    results[session_id] = {'status': 'stopped'}
+                except Exception as e:
+                    results[session_id] = {'status': 'error', 'error': str(e)}
 
-        return {"message": "Emergency stop initiated", "success": True, "stopped_sessions": 0}
+            # Clear active sessions
+            self.active_sessions.clear()
 
-    async def get_performance_report(self, symbol: str = None) -> Dict[str, Any]:
+            logger.info("✅ All trading activities stopped")
+            return {'success': True, 'results': results}
+
+        except Exception as e:
+            logger.error(f"❌ Failed to stop trading: {e}")
+            raise
+
+    async def get_performance_report(self, symbol: Optional[str] = None) -> Dict[str, Any]:
         """Get performance report"""
         if not self.is_initialized:
-            return {"error": "Trading Service Orchestrator not initialized"}
+            raise RuntimeError("Trading Service Orchestrator not initialized")
 
-        # Get trading performance
-        if symbol:
-            status = await self.trading_service.get_session_status(symbol)
-            performance = {
-                "symbol": symbol,
-                "session": status.get("session", {}),
-                "total_pnl": status.get("total_pnl", 0),
-                "win_rate": status.get("win_rate", 0)
-            }
-        else:
-            # Global performance - aggregate all sessions
-            all_positions = await self.trading_service.get_positions()
-            total_pnl = sum(pos.get("unrealized_pnl", 0) for pos in all_positions)
-            total_trades = sum(sess.get("total_trades", 0) for sess in self.trading_service.trading_sessions.values())
-            winning_trades = sum(sess.get("winning_trades", 0) for sess in self.trading_service.trading_sessions.values())
+        try:
+            # Get performance from backtesting service
+            if symbol:
+                # Get specific symbol performance
+                report = await self.services['backtesting'].get_performance_report(symbol)
+            else:
+                # Get overall performance
+                report = await self.services['backtesting'].get_overall_performance()
 
-            performance = {
-                "total_return": total_pnl,
-                "sharpe_ratio": 1.5,  # Simplified
-                "max_drawdown": 0.05,  # Simplified
-                "win_rate": winning_trades / max(total_trades, 1),
-                "total_trades": total_trades,
-                "active_sessions": len(self.trading_service.trading_sessions)
-            }
+            return report
 
-        # Get system metrics
-        system_metrics = await self.monitoring_service.get_system_metrics()
-
-        return {
-            "total_return": performance.get("total_return", 0),
-            "sharpe_ratio": performance.get("sharpe_ratio", 0),
-            "max_drawdown": performance.get("max_drawdown", 0),
-            "win_rate": performance.get("win_rate", 0),
-            "total_trades": performance.get("total_trades", 0),
-            "active_sessions": performance.get("active_sessions", 0),
-            "system_metrics": system_metrics,
-            "timestamp": datetime.now().isoformat()
-        }
+        except Exception as e:
+            logger.error(f"❌ Failed to get performance report: {e}")
+            raise
 
     def get_service_status(self) -> Dict[str, Any]:
-        """Get status of all orchestrated services"""
+        """Get orchestrator service status"""
         return {
-            "orchestrator_initialized": self.is_initialized,
-            "trading_service": self.trading_service.is_initialized,
-            "rl_service": self.rl_service.is_initialized,
-            "regime_service": self.regime_service.is_initialized,
-            "monitoring_service": self.monitoring_service.is_initialized,
-            "timestamp": datetime.now().isoformat()
+            'orchestrator': {
+                'initialized': self.is_initialized,
+                'active_sessions': len(self.active_sessions),
+                'services_count': len(self.services)
+            },
+            'timestamp': datetime.now().isoformat()
         }
 
     def get_default_trading_config(self) -> Dict[str, Any]:
         """Get default trading configuration"""
         return {
-            "capital": 10000.0,
-            "risk_per_trade": 0.02,
-            "max_positions": 5,
-            "paper_trading": True,
-            "strategy": "smart_ai",
-            "rl_enabled": True,
-            "regime_detection": True,
-            "monitoring": True
+            'capital': 10000.0,
+            'risk_per_trade': 0.02,
+            'max_positions': 5,
+            'paper_trading': True,
+            'strategy': 'smart_ai',
+            'rl_enabled': True,
+            'regime_detection': True,
+            'indicators': ['ema', 'rsi', 'bb', 'atr'],
+            'timeframe': '1h'
         }
-
-
-# Simplified model classes for API compatibility
-class AutomatedTradingRequest:
-    """Automated trading request model"""
-    def __init__(self, symbol: str, config: Dict[str, Any] = None):
-        self.symbol = symbol
-        self.config = config or {}
-
-class AutomatedTradingResponse:
-    """Automated trading response model"""
-    def __init__(self, success: bool, session: Dict[str, Any] = None, error: str = None):
-        self.success = success
-        self.session = session or {}
-        self.error = error
-
-class SmartTradeRequest:
-    """Smart trade request model"""
-    def __init__(self, symbol: str, market_data: Dict[str, Any]):
-        self.symbol = symbol
-        self.market_data = market_data
-
-class SmartTradeResponse:
-    """Smart trade response model"""
-    def __init__(self, success: bool, result: Dict[str, Any] = None, error: str = None):
-        self.success = success
-        self.result = result or {}
-        self.error = error

@@ -4,8 +4,12 @@
 import os
 from typing import Dict, Any
 
-# Constants for hardcoded values
-DEFAULT_DATA_LIMIT = 200  # Default limit for data fetching
+# Additional constants needed by various modules
+LOOKBACK_DAYS = 30
+API_KEY = os.getenv('API_KEY', '')
+API_SECRET = os.getenv('API_SECRET', '')
+MAX_BACKTEST_RESULTS = 100
+DEFAULT_DATA_LIMIT = 200  # Default limit for data queries
 HISTORICAL_DATA_LIMIT = 1000  # Default limit for historical data
 MTA_DATA_LIMIT = 50  # Limit for multi-timeframe analysis data
 VOLATILITY_WINDOW = 14  # Window for volatility calculations
@@ -15,8 +19,8 @@ MAX_RETRIES_HISTORICAL = 2  # Max retries for historical data fetching
 CACHE_TTL_LIVE = 30  # Cache TTL for live data (seconds)
 CACHE_TTL_HISTORICAL = 300  # Cache TTL for historical data (seconds)
 KRAKEN_MAX_PER_REQUEST = 720  # Kraken's max candles per request for 1m timeframe
-DEFAULT_HISTORICAL_DAYS = 365  # Default historical data period in days
 JSON_INDENT = 4  # JSON output indentation
+ML_RANDOM_STATE = int(os.getenv('ML_RANDOM_STATE', '42'))  # Random state for ML reproducibility
 
 # Basic Trading Configuration
 SYMBOL = os.getenv('TRADING_SYMBOL', 'BTC/USDT')  # Trading pair

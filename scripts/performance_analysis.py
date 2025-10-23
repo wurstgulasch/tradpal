@@ -16,7 +16,7 @@ from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).parent))
 
-from services.backtesting_service.service import AsyncBacktester
+from services.trading_service.backtesting_service.service import AsyncBacktester
 
 async def run_comprehensive_backtests():
     """Run comprehensive backtests across different market periods."""

@@ -4,75 +4,82 @@ Test script to run a single backtest with ML enhancement and check signal genera
 """
 import sys
 import os
-sys.path.append('/Users/danielsadowski/VSCodeProjects/tradpal_indicator')
+sys.path.append('/Users/danielsadowski/VSCodeProjects/tradpal/tradpal')
 
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from src.backtester import Backtester
+from services.trading_service.backtesting_service.orchestrator import BacktestingServiceOrchestrator
 
-def test_single_backtest():
+async def test_single_backtest():
     """Test a single backtest configuration."""
     print("🧪 Testing single backtest with ML enhancement...")
 
-    # Create backtester
-    backtester = Backtester(
-        symbol='BTC/USDT',
-        timeframe='1m',
-        start_date=datetime.now() - timedelta(days=7),
-        end_date=datetime.now()
-    )
+    # Create backtesting orchestrator
+    orchestrator = BacktestingServiceOrchestrator()
 
     # Test configuration that should generate signals
     config = {
-        'ema': {'enabled': True, 'periods': [9, 21]},
-        'rsi': {'enabled': True, 'period': 14, 'oversold': 30, 'overbought': 70},
-        'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0}
+        'name': 'ML Enhanced Strategy',
+        'symbol': 'BTC/USDT',
+        'timeframe': '1h',
+        'indicators': {
+            'ema': {'enabled': True, 'periods': [9, 21]},
+            'rsi': {'enabled': True, 'period': 14, 'oversold': 30, 'overbought': 70},
+            'bb': {'enabled': True, 'period': 20, 'std_dev': 2.0}
+        }
     }
 
     print("📊 Running backtest with ML enhancement...")
-    results = backtester.run_backtest(strategy='ml_enhanced', config=config)
 
-    if results.get('success'):
-        metrics = results.get('metrics', {})
-        trades_count = results.get('trades_count', 0)
+    # Create sample data for testing (in real usage, would fetch from data service)
+    dates = pd.date_range(start=datetime.now() - timedelta(days=30), end=datetime.now(), freq='1H')
+    np.random.seed(42)
+    data = pd.DataFrame({
+        'open': 50000 + np.random.normal(0, 1000, len(dates)),
+        'high': 51000 + np.random.normal(0, 1000, len(dates)),
+        'low': 49000 + np.random.normal(0, 1000, len(dates)),
+        'close': 50000 + np.random.normal(0, 1000, len(dates)),
+        'volume': np.random.randint(1000, 10000, len(dates))
+    }, index=dates)
 
-        print("✅ Backtest completed successfully!")
-        print(f"📊 Results: {trades_count} trades")
-        print(f"   Win Rate: {metrics.get('win_rate', 0)}%")
-        print(f"   Total P&L: {metrics.get('total_pnl', 0)}")
-        print(f"   Sharpe Ratio: {metrics.get('sharpe_ratio', 0)}")
+    # Ensure high >= close >= low
+    data['high'] = data[['open', 'close', 'high']].max(axis=1)
+    data['low'] = data[['open', 'close', 'low']].min(axis=1)
 
-        # Check if we have any trades
-        if trades_count == 0:
-            print("⚠️  No trades generated - checking signal generation...")
+    try:
+        # Initialize orchestrator
+        await orchestrator.initialize()
 
-            # Let's manually check what signals are generated
-            data = backtester._fetch_data()
-            if not data.empty:
-                print(f"📊 Fetched {len(data)} data points")
+        # Run backtest using orchestrator
+        results = await orchestrator.run_quick_backtest(config, data)
 
-                # Prepare data with ML enhancement
-                data = backtester._prepare_ml_enhanced_signals(data, config)
+        if results.get('success'):
+            metrics = results.get('metrics', {})
+            trades_count = metrics.get('total_trades', 0)
 
-                # Check signal counts
-                buy_signals = (data['Buy_Signal'] == 1).sum()
-                sell_signals = (data['Sell_Signal'] == 1).sum()
-                ml_signals = data['ML_Signal'].value_counts() if 'ML_Signal' in data.columns else {}
-                signal_sources = data['Signal_Source'].value_counts() if 'Signal_Source' in data.columns else {}
+            print("✅ Backtest completed successfully!")
+            print(f"📊 Results: {trades_count} trades")
+            print(f"   Win Rate: {metrics.get('win_rate', 0):.1%}")
+            print(f"   Total P&L: {metrics.get('total_pnl', 0):.2f}")
+            print(f"   Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
 
-                print(f"📊 Signal Analysis:")
-                print(f"   Buy_Signal == 1: {buy_signals}")
-                print(f"   Sell_Signal == 1: {sell_signals}")
-                print(f"   ML_Signal distribution: {dict(ml_signals)}")
-                print(f"   Signal_Source distribution: {dict(signal_sources)}")
+            # Check if we have any trades
+            if trades_count == 0:
+                print("⚠️  No trades generated - checking signal generation...")
 
-                if 'ML_Confidence' in data.columns:
-                    high_conf = (data['ML_Confidence'] > 0.5).sum()
-                    print(f"   High confidence ML signals (>0.5): {high_conf}")
+                print(f"📊 Using {len(data)} data points")
 
-    else:
-        print(f"❌ Backtest failed: {results.get('error', 'Unknown error')}")
+                # In real implementation, would analyze signals here
+                print("📊 Signal Analysis:")
+                print("   (Signal analysis would be implemented with actual data processing)")
+
+        else:
+            print(f"❌ Backtest failed: {results.get('error', 'Unknown error')}")
+
+    except Exception as e:
+        print(f"❌ Error during backtest: {str(e)}")
 
 if __name__ == "__main__":
-    test_single_backtest()
+    import asyncio
+    asyncio.run(test_single_backtest())

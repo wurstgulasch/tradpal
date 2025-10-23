@@ -17,7 +17,7 @@ from pathlib import Path
 import tempfile
 
 # Import our optimized modules
-from services.core.memory_optimization import (
+from services.core_service.memory_optimization import (
     MemoryMappedData,
     RollingWindowBuffer,
     ChunkedDataLoader,
@@ -25,7 +25,7 @@ from services.core.memory_optimization import (
     LazyDataLoader,
     MemoryStats
 )
-from services.core.vectorization import MemoryOptimizedIndicators
+from services.core_service.vectorization import MemoryOptimizedIndicators
 
 
 def benchmark_memory_usage():

@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from services.discovery_service.service import DiscoveryService
+from services.monitoring_service.discovery_service.service import DiscoveryService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

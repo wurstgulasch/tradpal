@@ -20,7 +20,7 @@ open http://localhost:8501
 
 ```bash
 # Run basic backtest
-python main.py --mode backtest --profile light --start-date 2024-01-01
+python main.py --mode backtest --start-date 2024-01-01
 
 # View results in web UI or output folder
 ls output/
@@ -50,26 +50,6 @@ TradPal v3.0.1 uses a microservices architecture where each component runs as an
 - **ML Ops Service** (`services/mlops_service/`): AI model training and serving
 - **Risk Service** (`services/risk_service/`): Position sizing, drawdown control
 - **Notification Service** (`services/notification_service/`): Alerts via Telegram/Discord
-
-### Performance Profiles
-
-#### Light Profile
-```bash
-python main.py --profile light
-```
-- Basic indicators (SMA, EMA, RSI, MACD)
-- No ML/AI features
-- Minimal memory usage (~500MB)
-- Fast execution for testing
-
-#### Heavy Profile
-```bash
-python main.py --profile heavy
-```
-- All indicators and ML models
-- GPU acceleration when available
-- Maximum performance (~4GB RAM)
-- Full feature set
 
 ## ⚙️ Configuration
 
@@ -137,11 +117,13 @@ python main.py --mode backtest --symbol ETH/USDT --timeframe 4h \
 ### Advanced Backtesting
 
 ```bash
+```bash
 # Multi-symbol backtest with ML
-python main.py --mode backtest --profile heavy \
+python main.py --mode backtest \
                --symbols BTC/USDT,ETH/USDT,SOL/USDT \
                --ml-enabled --gpu \
                --start-date 2024-01-01
+```
 
 # Walk-forward analysis
 python scripts/walk_forward_analysis.py --symbol BTC/USDT \
@@ -175,8 +157,7 @@ python main.py --mode live --paper-trading true \
                --symbol BTC/USDT --capital 10000
 
 # With ML signals
-python main.py --mode live --paper-trading true \
-               --profile heavy --ml-enabled
+python main.py --mode live --paper-trading true
 ```
 
 ### Live Trading Setup
@@ -392,8 +373,8 @@ docker network ls
 # Enable memory optimization
 export MEMORY_OPTIMIZATION_ENABLED=true
 
-# Use light profile
-python main.py --profile light
+# Use memory profiling
+python -m memory_profiler main.py
 
 # Monitor memory usage
 docker stats
@@ -455,7 +436,7 @@ jupyter notebook examples/
 ### Tutorial: Complete Workflow
 
 1. **Setup**: `docker-compose up -d`
-2. **Backtest**: `python main.py --mode backtest --profile light`
+2. **Backtest**: `python main.py --mode backtest`
 3. **Optimize**: `python main.py --mode discovery --generations 50`
 4. **Paper Trade**: `python main.py --mode live --paper-trading true`
 5. **Go Live**: Configure API keys and run live trading

@@ -16,7 +16,7 @@ from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).parent))
 
-from services.backtesting_service.service import AsyncBacktester
+from services.trading_service.backtesting_service.service import AsyncBacktester
 
 def calculate_buy_hold_return(data):
     """Calculate buy & hold return for comparison."""

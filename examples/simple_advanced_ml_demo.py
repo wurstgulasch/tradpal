@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from services.mlops_service.advanced_ml_models import (
+from services.monitoring_service.mlops_service.advanced_ml_models import (
     ModelConfig, LSTMTradingModel, TransformerTradingModel,
     EnsembleTradingModel, AutoMLSelector, create_trading_model
 )
-from services.mlops_service.advanced_feature_engineering import (
+from services.monitoring_service.mlops_service.advanced_feature_engineering import (
     FeatureConfig, AdvancedFeatureEngineer, create_feature_engineer
 )
 
@@ -178,7 +178,7 @@ def demo_ml_models(features):
                     mock_val_loader = Mock()
                     mock_loaders.return_value = (mock_train_loader, mock_val_loader)
 
-                    with patch('services.core.gpu_accelerator.train_gpu_model') as mock_train:
+                    with patch('services.core_service.gpu_accelerator.train_gpu_model') as mock_train:
                         mock_train.return_value = {
                             'loss': np.random.exponential(0.1, 5).tolist(),
                             'val_loss': np.random.exponential(0.15, 5).tolist()

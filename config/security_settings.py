@@ -251,8 +251,14 @@ SECURITY_ALERTS_ENABLED = os.getenv('SECURITY_ALERTS_ENABLED', 'true').lower() =
 SECURITY_ALERT_CHANNELS = os.getenv('SECURITY_ALERT_CHANNELS', 'email,slack').split(',')  # Alert channels
 SECURITY_ALERT_SEVERITY_FILTER = os.getenv('SECURITY_ALERT_SEVERITY_FILTER', 'medium,high,critical').split(',')  # Alert severity filter
 
-# Security Dashboard Configuration
-SECURITY_DASHBOARD_ENABLED = os.getenv('SECURITY_DASHBOARD_ENABLED', 'true').lower() == 'true'  # Enable security dashboard
+# Additional constants needed by various modules
+JWT_EXPIRATION_HOURS = JWT_ACCESS_TOKEN_EXPIRE_MINUTES // 60  # Convert minutes to hours
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY', 'your-encryption-key-change-in-production')
+VAULT_ENABLED = VAULT_ENABLED
+VAULT_URL = VAULT_URL
+VAULT_TOKEN = VAULT_TOKEN
+API_RATE_LIMIT = RATE_LIMIT_REQUESTS_PER_MINUTE
+API_RATE_LIMIT_WINDOW = RATE_LIMIT_WINDOW_SECONDS
 SECURITY_DASHBOARD_REFRESH_INTERVAL = int(os.getenv('SECURITY_DASHBOARD_REFRESH_INTERVAL', '300'))  # Dashboard refresh interval
 SECURITY_DASHBOARD_METRICS_RETENTION_DAYS = int(os.getenv('SECURITY_DASHBOARD_METRICS_RETENTION_DAYS', '30'))  # Metrics retention
 

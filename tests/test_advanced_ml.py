@@ -18,15 +18,15 @@ from unittest.mock import Mock, patch
 import tempfile
 import os
 
-from services.mlops_service.advanced_ml_models import (
+from services.monitoring_service.mlops_service.advanced_ml_models import (
     ModelConfig, ModelPerformance, LSTMTradingModel, TransformerTradingModel,
     EnsembleTradingModel, AutoMLSelector, TradingModelFactory
 )
-from services.mlops_service.advanced_feature_engineering import (
+from services.monitoring_service.mlops_service.advanced_feature_engineering import (
     FeatureConfig, TechnicalIndicatorFeatures, StatisticalFeatures,
     MicrostructureFeatures, AdvancedFeatureEngineer
 )
-from services.mlops_service.reinforcement_learning import (
+from services.monitoring_service.mlops_service.reinforcement_learning import (
     RLConfig, TradingEnvironment, DQNAgent, PPOAgent, RLTrainer
 )
 
@@ -64,7 +64,7 @@ class TestAdvancedMLModels(unittest.TestCase):
             mock_val_loader = Mock()
             mock_loaders.return_value = (mock_train_loader, mock_val_loader)
 
-            with patch('services.core.gpu_accelerator.train_gpu_model') as mock_train:
+            with patch('services.core_service.gpu_accelerator.train_gpu_model') as mock_train:
                 mock_train.return_value = {'loss': [0.5, 0.3], 'val_loss': [0.6, 0.4]}
 
                 results = model.train(self.X, self.y)
@@ -334,7 +334,7 @@ class TestIntegration(unittest.TestCase):
             mock_val_loader = Mock()
             mock_loaders.return_value = (mock_train_loader, mock_val_loader)
 
-            with patch('services.core.gpu_accelerator.train_gpu_model') as mock_train:
+            with patch('services.core_service.gpu_accelerator.train_gpu_model') as mock_train:
                 mock_train.return_value = {'loss': [0.5, 0.3]}
 
                 model.train(X_train, y_train)

@@ -12,7 +12,7 @@ from datetime import datetime
 
 from services.event_system import EventSystem, Event, EventType
 from services.event_system.client import EventClient, EventSubscriberClient
-from services.core.client import CoreServiceClient
+from services.core_service.client import CoreServiceClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

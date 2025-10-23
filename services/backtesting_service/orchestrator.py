@@ -9,7 +9,7 @@ import asyncio
 from datetime import datetime
 import pandas as pd
 
-from .backtesting.service import BacktestingService
+from services.trading_service.backtesting_service.service import BacktestingService
 
 logger = logging.getLogger(__name__)
 

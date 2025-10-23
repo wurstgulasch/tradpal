@@ -8,6 +8,16 @@ from typing import Dict, Any
 ML_ENABLED = os.getenv('ML_ENABLED', 'true').lower() == 'true'  # Enable/disable ML signal enhancement
 ML_MODEL_DIR = os.getenv('ML_MODEL_DIR', 'cache/ml_models')  # Directory to store trained ML models
 ML_MODELS_DIR = ML_MODEL_DIR  # Alias for backward compatibility
+ML_MODEL_TYPE = os.getenv('ML_MODEL_TYPE', 'random_forest')  # Type of ML model to use
+ML_TRAINING_ENABLED = os.getenv('ML_TRAINING_ENABLED', 'true').lower() == 'true'  # Enable ML training
+ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'cache/ml_models/best_model.pkl')  # Path to trained model
+FEATURE_ENGINEERING_ENABLED = os.getenv('FEATURE_ENGINEERING_ENABLED', 'true').lower() == 'true'  # Enable feature engineering
+ENSEMBLE_METHOD = os.getenv('ENSEMBLE_METHOD', 'weighted_voting')  # Ensemble method
+CONFIDENCE_THRESHOLD = float(os.getenv('ML_CONFIDENCE_THRESHOLD', '0.5'))  # Minimum confidence for ML signal override
+RISK_ADJUSTMENT_ENABLED = os.getenv('RISK_ADJUSTMENT_ENABLED', 'true').lower() == 'true'  # Enable risk adjustment
+MARKET_REGIME_DETECTION_ENABLED = os.getenv('MARKET_REGIME_DETECTION_ENABLED', 'true').lower() == 'true'  # Enable market regime detection
+ADAPTIVE_LEARNING_RATE = float(os.getenv('ADAPTIVE_LEARNING_RATE', '0.01'))  # Adaptive learning rate
+MODEL_UPDATE_FREQUENCY = int(os.getenv('MODEL_UPDATE_FREQUENCY', '24'))  # Model update frequency in hours
 ML_CONFIDENCE_THRESHOLD = float(os.getenv('ML_CONFIDENCE_THRESHOLD', '0.5'))  # Minimum confidence for ML signal override
 ML_TRAINING_HORIZON = int(os.getenv('ML_TRAINING_HORIZON', '5'))  # Prediction horizon for training labels (periods ahead)
 ML_RETRAINING_INTERVAL_HOURS = int(os.getenv('ML_RETRAINING_INTERVAL_HOURS', '24'))  # How often to retrain models (hours)
@@ -79,10 +89,38 @@ ML_AUTOML_SAMPLER = os.getenv('ML_AUTOML_SAMPLER', 'tpe')  # Sampler type
 ML_AUTOML_PRUNER = os.getenv('ML_AUTOML_PRUNER', 'median')  # Pruner type
 
 # Ensemble Methods Configuration
-ML_USE_ENSEMBLE = os.getenv('ML_USE_ENSEMBLE', 'false').lower() == 'true'  # Enable ensemble predictions
-ML_ENSEMBLE_WEIGHTS = {'ml': 0.6, 'ga': 0.4}  # Weights for ensemble combination
-ML_ENSEMBLE_VOTING = os.getenv('ML_ENSEMBLE_VOTING', 'weighted')  # Voting strategy
-ML_ENSEMBLE_MIN_CONFIDENCE = float(os.getenv('ML_ENSEMBLE_MIN_CONFIDENCE', '0.7'))  # Minimum confidence for ensemble signal
+ML_USE_ENSEMBLE = os.getenv('ML_USE_ENSEMBLE', 'true').lower() == 'true'  # Enable ensemble predictions
+ML_ENSEMBLE_WEIGHTS = {'rf_optimized': 0.25, 'gb_optimized': 0.25, 'xgb_optimized': 0.2, 'lgb_optimized': 0.2, 'svm_optimized': 0.1}  # Weights for ensemble combination
+ML_ENSEMBLE_VOTING = os.getenv('ML_ENSEMBLE_VOTING', 'soft')  # Voting strategy: 'hard' or 'soft'
+ML_ENSEMBLE_MIN_CONFIDENCE = float(os.getenv('ML_ENSEMBLE_MIN_CONFIDENCE', '0.6'))  # Minimum confidence for ensemble signal
+
+# Benchmark Outperformance Configuration
+ML_BENCHMARK_OUTPERFORMANCE_ENABLED = os.getenv('ML_BENCHMARK_OUTPERFORMANCE_ENABLED', 'true').lower() == 'true'  # Enable benchmark outperformance training
+ML_BENCHMARK_METRICS = {
+    'accuracy': float(os.getenv('ML_BENCHMARK_ACCURACY', '0.55')),
+    'precision': float(os.getenv('ML_BENCHMARK_PRECISION', '0.52')),
+    'recall': float(os.getenv('ML_BENCHMARK_RECALL', '0.50')),
+    'f1_score': float(os.getenv('ML_BENCHMARK_F1', '0.51')),
+    'roc_auc': float(os.getenv('ML_BENCHMARK_ROC_AUC', '0.53'))
+}  # Benchmark metrics to outperform
+
+# Enhanced Feature Engineering Configuration
+ML_ENHANCED_FEATURES_ENABLED = os.getenv('ML_ENHANCED_FEATURES_ENABLED', 'true').lower() == 'true'  # Enable enhanced feature engineering
+ML_ENHANCED_FEATURES = [
+    # Basic technical indicators
+    'sma_20', 'sma_50', 'rsi', 'macd', 'macd_signal',
+    'bb_upper', 'bb_lower', 'bb_width', 'atr',
+    'volume_ratio', 'returns', 'momentum',
+    # Advanced technical indicators
+    'stoch_k', 'stoch_d', 'williams_r', 'cci', 'cmf', 'obv',
+    'tenkan_sen', 'kijun_sen', 'senkou_span_a', 'senkou_span_b',
+    'keltner_upper', 'keltner_lower',
+    # Market regime indicators
+    'adx', 'volatility_regime', 'trend_direction',
+    # Momentum and volatility
+    'roc', 'momentum_10', 'momentum_20',
+    'close_volatility', 'high_low_volatility', 'volume_momentum'
+]  # Enhanced features for outperformance
 
 # Advanced ML Features Configuration
 ML_ADVANCED_FEATURES_ENABLED = os.getenv('ML_ADVANCED_FEATURES_ENABLED', 'true').lower() == 'true'  # Enable advanced ML features

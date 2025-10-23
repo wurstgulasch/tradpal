@@ -20,7 +20,7 @@ import pytest
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from services.core.service import CoreService
+from services.core_service.service import CoreService
 
 
 @pytest.fixture

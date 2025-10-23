@@ -66,62 +66,62 @@ LEGACY_AVAILABLE = False  # Migration complete - legacy modules removed
 
 # Service imports (primary architecture)
 try:
-    from services.core.client import CoreServiceClient
+    from services.core_service.client import CoreServiceClient
     CORE_SERVICE_AVAILABLE = True
 except ImportError:
     CORE_SERVICE_AVAILABLE = False
 
 try:
-    from services.ml_trainer.client import MLTrainerServiceClient
+    from services.trading_service.trading_ai_service.ml_training.ml_trainer import MLTrainerServiceClient
     ML_TRAINER_SERVICE_AVAILABLE = True
 except ImportError:
     ML_TRAINER_SERVICE_AVAILABLE = False
 
 try:
-    from services.trading_bot_live.client import TradingBotLiveServiceClient
+    from services.trading_service.trading_bot_live_service.client import TradingBotLiveServiceClient
     TRADING_BOT_LIVE_SERVICE_AVAILABLE = True
 except ImportError:
     TRADING_BOT_LIVE_SERVICE_AVAILABLE = False
 
 try:
-    from services.web_ui.client import WebUIServiceClient
+    from services.ui_service.web_ui_service.client import WebUIServiceClient
     WEB_UI_SERVICE_AVAILABLE = True
 except ImportError:
     WEB_UI_SERVICE_AVAILABLE = False
 
 try:
-    from services.backtesting_service.client import BacktestingServiceClient
+    from services.trading_service.backtesting_service.client import BacktestingServiceClient
     BACKTESTING_SERVICE_AVAILABLE = True
 except ImportError:
     BACKTESTING_SERVICE_AVAILABLE = False
 
 try:
-    from services.data_service.client import DataServiceClient
+    from services.data_service.data_service.client import DataService
     DATA_SERVICE_AVAILABLE = True
 except ImportError:
     DATA_SERVICE_AVAILABLE = False
 
 try:
-    from services.discovery_service.client import DiscoveryServiceClient
+    from services.monitoring_service.discovery_service.client import DiscoveryServiceClient
     DISCOVERY_SERVICE_AVAILABLE = True
 except ImportError:
     DISCOVERY_SERVICE_AVAILABLE = False
 
 try:
-    from services.notification_service.client import NotificationServiceClient
+    from services.monitoring_service.notification_service.client import NotificationServiceClient
     NOTIFICATION_SERVICE_AVAILABLE = True
 except ImportError:
     NOTIFICATION_SERVICE_AVAILABLE = False
 
 try:
-    from services.alternative_data_service.client import AlternativeDataServiceClient
+    from services.data_service.data_service.alternative_data.client import AlternativeDataService
     ALTERNATIVE_DATA_SERVICE_AVAILABLE = True
 except ImportError:
     ALTERNATIVE_DATA_SERVICE_AVAILABLE = False
 
 # Import market regime analysis functions
 try:
-    from services.mlops_service.market_regime_analysis import (
+    from services.monitoring_service.mlops_service.market_regime_analysis import (
         detect_market_regime, analyze_multi_timeframe, get_adaptive_strategy_config, MarketRegime
     )
     MARKET_REGIME_ANALYSIS_AVAILABLE = True
@@ -178,7 +178,7 @@ class TradPalOrchestrator:
                 logger.info("✅ Backtesting service initialized with Zero Trust")
 
             if DATA_SERVICE_AVAILABLE:
-                self.services['data'] = DataServiceClient()
+                self.services['data'] = DataService()
                 await self.services['data'].initialize()
                 await self.services['data'].authenticate()
                 logger.info("✅ Data service initialized with Zero Trust")
@@ -193,7 +193,7 @@ class TradPalOrchestrator:
                 logger.info("✅ Notification service initialized")
 
             if ALTERNATIVE_DATA_SERVICE_AVAILABLE:
-                self.services['alternative_data'] = AlternativeDataServiceClient()
+                self.services['alternative_data'] = AlternativeDataService()
                 await self.services['alternative_data'].initialize()
                 logger.info("✅ Alternative Data service initialized")
 
@@ -659,13 +659,9 @@ async def main():
     parser.add_argument("--generations", type=int, default=20, help="GA generations")
     parser.add_argument("--use-walk-forward", action="store_true", default=True, help="Use walk-forward analysis")
     parser.add_argument("--model-type", default="ensemble", help="ML model type")
-    parser.add_argument("--profile", choices=["light", "heavy"], default="heavy", help="Performance profile")
     parser.add_argument("--data-source", choices=["kaggle", "ccxt", "yahoo"], default="kaggle", help="Data source for backtesting")
 
     args = parser.parse_args()
-
-    # Load profile
-    load_profile(args.profile)
 
     # Initialize orchestrator
     orchestrator = TradPalOrchestrator()
@@ -733,51 +729,6 @@ async def main():
         await orchestrator.shutdown()
 
     return 0
-
-
-def load_profile(profile_name: str) -> bool:
-    """Load environment profile"""
-    from dotenv import load_dotenv
-
-    profile_files = {
-        'light': '.env.light',
-        'heavy': '.env.heavy'
-    }
-
-    if profile_name in profile_files:
-        env_file = profile_files[profile_name]
-        if os.path.exists(env_file):
-            print(f"🔧 Loading profile: {profile_name} ({env_file})")
-            load_dotenv(env_file)
-            return True
-        else:
-            print("⚠️  Profile not found, using default .env")
-            load_dotenv()
-            return False
-    else:
-        print("⚠️  Unknown profile, using default .env")
-        load_dotenv()
-        return False
-
-
-def validate_profile_config(profile_name: str) -> bool:
-    """Validate profile configuration against requirements"""
-    from config.settings import (
-        ML_ENABLED, ADAPTIVE_OPTIMIZATION_ENABLED_LIVE,
-        MONITORING_STACK_ENABLED, PERFORMANCE_MONITORING_ENABLED
-    )
-
-    if profile_name == 'light':
-        # Light profile requirements: minimal features
-        if ML_ENABLED or ADAPTIVE_OPTIMIZATION_ENABLED_LIVE or MONITORING_STACK_ENABLED or PERFORMANCE_MONITORING_ENABLED:
-            return False
-        return True
-    elif profile_name == 'heavy':
-        # Heavy profile: no restrictions, all features allowed
-        return True
-    else:
-        # Unknown profiles are allowed (no validation)
-        return True
 
 
 if __name__ == "__main__":

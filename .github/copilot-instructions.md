@@ -3,28 +3,28 @@
 ## Overview
 **TradPal** is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
-**Current Status (October 2025):** Version 2.5.1 with partial microservices consolidation (trading_service, data_service, backtesting_service unified) and 98 organized test files with comprehensive coverage.
+**Current Status (October 2025):** Version 2.5.1 with **complete microservices consolidation** (4 core services + 10 supporting services) and 98 organized test files with comprehensive coverage.
 
 ## Project Structure (STRICTLY ENFORCE!)
-- `services/`: **Microservices Architecture** - ALL new features/service developments go here (25+ services, partial consolidation)
-  - `core/`: Core calculations (indicators, vectorization, memory optimization)
+- `services/`: **Microservices Architecture** - ALL new features/service developments go here (6 consolidated services)
+  - `core_service/`: Core calculations (indicators, vectorization, memory optimization)
+  - `trading_service/`: **Consolidated trading service** - All trading functionality in one service
+    - `trading_ai_service/`: AI-powered trading
+    - `backtesting_service/`: Historical simulation
+    - `trading_bot_live_service/`: Live execution
   - `data_service/`: Data management (CCXT, Kaggle Bitcoin datasets, Yahoo Finance, caching, HDF5)
-  - `trading_service/`: **Consolidated AI-powered trading service** (unified from multiple trading components)
-    - `orchestrator.py`: Main trading orchestrator coordinating execution, risk, RL, regime detection
-    - `execution/`: Order execution logic
-    - `risk_management/`: Risk management and position sizing
-    - `reinforcement_learning/`: RL agents for trading decisions
-    - `market_regime/`: Market regime detection
-    - `monitoring/`: Trading performance monitoring
-  - `backtesting_service/`: Historical simulation and performance analysis
-  - `discovery_service/`: ML parameter optimization and genetic algorithms
-  - `risk_service/`: Risk management and position sizing
-  - `notification_service/`: Alerts (Telegram, Discord, Email)
-  - `mlops_service/`: ML experiment tracking and model management
-  - `security_service/`: Zero-trust authentication
-  - `event_system/`: Event-driven communication via Redis Streams
-  - `api_gateway/`: Centralized service routing and authentication
-  - `[20+ additional individual services]`: Pending consolidation into unified services
+  - `infrastructure_service/`: **Consolidated infrastructure service** - All platform infrastructure
+    - `api_gateway_service/`: API routing & authentication
+    - `event_system_service/`: Event-driven communication
+    - `security_service/`: Authentication & security
+    - `falco_security_service/`: Runtime monitoring
+  - `monitoring_service/`: **Consolidated monitoring service** - All monitoring & observability
+    - `notification_service/`: Alerts & notifications
+    - `alert_forwarder_service/`: Alert processing
+    - `mlops_service/`: ML experiment tracking
+    - `discovery_service/`: Parameter optimization
+  - `ui_service/`: **Consolidated UI service** - All user interfaces
+    - `web_ui_service/`: Web interface
 - `config/`: Central configuration (modular structure)
   - `settings.py`: Main configuration file (imports from modules + legacy constants for backward compatibility)
   - `core_settings.py`: Core trading and risk management
@@ -69,16 +69,16 @@
 - Circuit breaker and health check resilience patterns
 - Modular data sources (Kaggle Bitcoin datasets, Yahoo Finance, CCXT)
 - Zero-trust security with mTLS and JWT
-- **Partial Service Consolidation**: trading_service, data_service, backtesting_service unified
+- **Complete Service Consolidation**: 14 services with modular architecture (4 core + 10 supporting)
 - **Centralized Test Suite**: 98 organized test files with comprehensive coverage
+- **Modular Service Pattern**: All services follow service.py/client.py/main.py structure
 
 🔄 **In Progress:**
-1. **Complete Service Consolidation**: Reduce 25+ services to 4 main services (core_service, data_service, backtesting_service, trading_service)
-2. **AI Outperformance**: ML models that consistently outperform benchmarks
-3. **Service Optimization**: Performance, scalability, reliability
-4. **Advanced Features**: Reinforcement learning, market regime detection, alternative data
-5. **Data Sources Expansion**: Additional datasets and real-time feeds
-6. **Enterprise Readiness**: Security, monitoring, deployment automation
+1. **AI Outperformance**: ML models that consistently outperform benchmarks
+2. **Service Optimization**: Performance, scalability, reliability
+3. **Advanced Features**: Reinforcement learning, market regime detection, alternative data
+4. **Data Sources Expansion**: Additional datasets and real-time feeds
+5. **Enterprise Readiness**: Security, monitoring, deployment automation
 
 ## Critical Developer Workflows
 
@@ -123,7 +123,12 @@ pytest tests/unit/
 pytest tests/integration/
 
 # Service-specific tests
-pytest tests/services/core/
+pytest tests/services/core_service/
+pytest tests/services/trading_ai_service/
+pytest tests/services/backtesting_service/
+pytest tests/services/data_service/
+pytest tests/services/api_gateway_service/
+pytest tests/services/notification_service/
 
 # Test with coverage
 pytest --cov=services --cov-report=html
@@ -177,8 +182,8 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 ### Configuration Hierarchy
 - **Modular config files**: `core_settings.py`, `ml_settings.py`, `service_settings.py`
 - **settings.py imports all**: Main file imports from modules + legacy constants
-- **Environment profiles**: `.env.light` (minimal), `.env.heavy` (full features)
-- **Dynamic loading**: Settings loaded based on `--profile` argument
+- **Environment profiles**: `.env` (unified configuration)
+- **Dynamic loading**: Settings loaded from unified .env configuration
 
 ### Dependency Management
 - **Central catalog**: `dependency_catalog.txt` defines approved package versions
@@ -192,10 +197,21 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 - **Publisher-subscriber**: Services publish events, others subscribe
 - **Event replay**: Historical events available for backtesting/debugging
 
-### Fitness Functions for Optimization
-- **Weighted metrics**: Sharpe (30%), Calmar (25%), P&L (30%), Profit Factor (10%), Win Rate (5%)
-- **Risk penalties**: Drawdown >15% (-10%), >20% (-30%), insufficient trades (-30%)
-- **Normalization**: Metrics scaled to 0-1 range for genetic algorithm optimization
+### Service Dependencies (Post-Consolidation)
+- **Core Service**: Independent (uses event_system for communication)
+- **Trading AI Service**: Independent (orchestrates other services)
+- **Backtesting Service**: Depends on data_service, security_service
+- **Trading Bot Live Service**: Depends on core_service, data_service
+- **Data Service**: Depends on security_service for authentication
+- **API Gateway Service**: Independent routing layer
+- **Event System Service**: Independent communication layer
+- **Security Service**: Independent authentication layer
+- **Falco Security Service**: Depends on security_service
+- **Notification Service**: Depends on security_service
+- **Alert Forwarder Service**: Depends on notification_service
+- **MLOps Service**: Depends on notification_service
+- **Discovery Service**: Depends on backtesting_service, security_service
+- **Web UI Service**: Depends on api_gateway_service, various monitoring services
 
 ## Integration Points
 
@@ -318,7 +334,7 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 
 ## Kritische Entwicklungs-Workflows
 - **Environment Setup:** `conda env create -f environment.yml && conda activate tradpal_env`
-- **Profile-basierte Ausführung:** `python main.py --profile light --mode live` (light für minimal, heavy für voll)
+- **Unified Execution:** `python main.py --mode live` (all features controlled via .env)
 - **Testing:** `pytest tests/` (Unit-Tests in `tests/unit/`, Integration in `tests/integration/`)
 - **Performance Benchmarking:** `python scripts/performance_benchmark.py`
 - **ML Training:** `python scripts/train_ml_model.py`
@@ -372,4 +388,4 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
    - Vereinfacht Erweiterung neuer Konfigurationseinstellungen
    - Migration von Legacy-Konstanten zu dynamischem System planen
 
-*Last updated: October 21, 2025*
+*Last updated: October 23, 2025*

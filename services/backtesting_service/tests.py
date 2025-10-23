@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-from services.backtesting_service.orchestrator import BacktestingServiceOrchestrator
+from services.trading_service.backtesting_service.orchestrator import BacktestingServiceOrchestrator
 
 
 @pytest.fixture
@@ -245,7 +245,7 @@ class TestBacktestingService:
     @pytest.mark.asyncio
     async def test_backtesting_service_basic(self, sample_data_sync, sample_strategy_sync):
         """Test basic backtesting functionality"""
-        from services.backtesting_service.backtesting.service import BacktestingService
+        from services.trading_service.backtesting_service.service import BacktestingService
 
         service = BacktestingService()
         await service.initialize()
@@ -262,7 +262,7 @@ class TestBacktestingService:
     @pytest.mark.asyncio
     async def test_optimization_service(self, sample_data_sync):
         """Test optimization service"""
-        from services.backtesting_service.backtesting.service import BacktestingService
+        from services.trading_service.backtesting_service.service import BacktestingService
 
         service = BacktestingService()
         await service.initialize()

@@ -12,18 +12,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-from services.mlops_service.advanced_ml_models import (
+from services.monitoring_service.mlops_service.advanced_ml_models import (
     ModelConfig, LSTMTradingModel, TransformerTradingModel,
     EnsembleTradingModel, AutoMLSelector, create_trading_model
 )
-from services.mlops_service.advanced_feature_engineering import (
+from services.monitoring_service.mlops_service.advanced_feature_engineering import (
     FeatureConfig, AdvancedFeatureEngineer, create_feature_engineer
 )
-from services.mlops_service.reinforcement_learning import (
+from services.monitoring_service.mlops_service.reinforcement_learning import (
     RLConfig, create_trading_environment, create_rl_agent, create_rl_trainer
 )
 from services.data_service.data_service import DataService
-from services.core.gpu_accelerator import get_gpu_accelerator
+from services.core_service.gpu_accelerator import get_gpu_accelerator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -198,7 +198,7 @@ def demonstrate_ml_models(features):
                     mock_val_loader = Mock()
                     mock_loaders.return_value = (mock_train_loader, mock_val_loader)
 
-                    with patch('services.core.gpu_accelerator.train_gpu_model') as mock_train:
+                    with patch('services.core_service.gpu_accelerator.train_gpu_model') as mock_train:
                         mock_train.return_value = {
                             'loss': np.random.exponential(0.1, 50).tolist(),
                             'val_loss': np.random.exponential(0.15, 50).tolist()
@@ -215,7 +215,7 @@ def demonstrate_ml_models(features):
                     mock_val_loader = Mock()
                     mock_loaders.return_value = (mock_train_loader, mock_val_loader)
 
-                    with patch('services.core.gpu_accelerator.train_gpu_model') as mock_train:
+                    with patch('services.core_service.gpu_accelerator.train_gpu_model') as mock_train:
                         mock_train.return_value = {
                             'loss': np.random.exponential(0.12, 50).tolist(),
                             'val_loss': np.random.exponential(0.18, 50).tolist()

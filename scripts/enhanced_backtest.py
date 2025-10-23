@@ -191,7 +191,7 @@ class EnhancedBacktester:
         """Calculate indicators with custom configuration."""
         try:
             # Try to import from services
-            from services.core.indicators import calculate_indicators
+            from services.core_service.indicators import calculate_indicators
             config = {
                 'ema': {'enabled': True, 'periods': [self.parameters['indicators']['ema_short'], self.parameters['indicators']['ema_long']]},
                 'rsi': {'enabled': True, 'period': self.parameters['indicators']['rsi_period'], 'oversold': self.parameters['indicators']['rsi_oversold'], 'overbought': self.parameters['indicators']['rsi_overbought']},

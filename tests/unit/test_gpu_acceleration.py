@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from services.core.gpu_accelerator import (
+from services.core_service.gpu_accelerator import (
     GPUAccelerator, NeuralNetworkGPU, GPUMatrixOperations,
     GPUFeatureEngineering, get_gpu_accelerator, is_gpu_available
 )

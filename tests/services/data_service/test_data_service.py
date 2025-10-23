@@ -12,7 +12,7 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.data_service.service import DataService
+from services.data_service.data_service.service import DataService
 
 # Setup logging
 logging.basicConfig(
@@ -46,7 +46,7 @@ async def test_data_service():
 
         # Test data fetching
         test_symbol = "BTC/USDT"
-        from services.data_service.service import DataRequest
+        from services.data_service.data_service.service import DataRequest
         from datetime import datetime, timedelta
         end_date = datetime.now()
         start_date = end_date - timedelta(hours=10)
@@ -106,16 +106,16 @@ async def test_api_endpoints():
     logger.info("🧪 Testing API endpoints...")
 
     try:
-        from services.data_service.api.main import app
+        from services.data_service.data_service.api.main import app
         from fastapi.testclient import TestClient
 
         # Create a fresh data service instance for testing
-        from services.data_service.service import DataService
+        from services.data_service.data_service.service import DataService
         test_data_service = DataService()
         await test_data_service.initialize()
 
         # Override the global data_service in the API module
-        import services.data_service.api.main as api_module
+        import services.data_service.data_service.api.main as api_module
         api_module.data_service = test_data_service
 
         client = TestClient(app)

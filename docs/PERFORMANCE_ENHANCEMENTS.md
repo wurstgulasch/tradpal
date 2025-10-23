@@ -302,13 +302,13 @@ ta-lib>=0.4.0         # Technical analysis (optional)
 
 ### System Requirements
 
-#### Minimum (Light Profile)
+#### Minimum Requirements
 - **CPU**: 2 cores
 - **RAM**: 4 GB
 - **Storage**: 2 GB
 - **GPU**: Optional
 
-#### Recommended (Heavy Profile)
+#### Recommended Requirements
 - **CPU**: 4+ cores
 - **RAM**: 16 GB
 - **Storage**: 50 GB SSD
@@ -319,9 +319,11 @@ ta-lib>=0.4.0         # Technical analysis (optional)
 ### High-Performance Backtesting
 
 ```bash
+```bash
 # GPU-accelerated backtesting with caching
-python main.py --mode backtest --profile heavy --gpu --cache \
+python main.py --mode backtest --gpu --cache \
                --start-date 2024-01-01 --data-source kaggle
+```
 
 # Parallel multi-symbol backtesting
 python scripts/run_parallel_backtest.py --symbols BTC/USDT,ETH/USDT,SOL/USDT \
@@ -368,8 +370,8 @@ MEMORY_OPTIMIZATION_ENABLED = True
 MEMORY_MAPPING_ENABLED = True
 CHUNK_SIZE = 500000  # Reduce chunk size
 
-# Use light profile
-python main.py --profile light
+# Use memory optimization
+python main.py
 ```
 
 #### High Memory Usage

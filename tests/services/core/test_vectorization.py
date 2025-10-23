@@ -14,7 +14,7 @@ import os
 # Add services to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'services'))
 
-from services.core.vectorization import (
+from services.core_service.vectorization import (
     MemoryOptimizedIndicators,
     ema_vectorized,
     rsi_vectorized

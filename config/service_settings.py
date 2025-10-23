@@ -43,8 +43,18 @@ REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', '30'))  # HTTP request timeou
 # UI Configuration
 UI_REFRESH_INTERVAL = int(os.getenv('UI_REFRESH_INTERVAL', '30'))  # UI refresh interval in seconds
 
-# Additional constants for services
-DEFAULT_SYMBOL = os.getenv('DEFAULT_SYMBOL', 'BTC/USDT')  # Default trading symbol
+# Additional constants needed by various modules
+ENABLE_MTLS = os.getenv('ENABLE_MTLS', 'true').lower() == 'true'
+MTLS_CERT_PATH = os.getenv('MTLS_CERT_PATH', 'cache/security/certs/client.crt')
+MTLS_KEY_PATH = os.getenv('MTLS_KEY_PATH', 'cache/security/certs/client.key')
+CA_CERT_PATH = os.getenv('CA_CERT_PATH', 'cache/security/ca/ca_cert.pem')
+SECURITY_SERVICE_URL = os.getenv('SECURITY_SERVICE_URL', 'http://localhost:8012')
+MTA_ENABLED = os.getenv('MTA_ENABLED', 'true').lower() == 'true'
+MTA_TIMEFRAMES = ['5m', '15m']  # Available higher timeframes
+MAX_BACKTEST_RESULTS = 100
+MONITORING_STACK_ENABLED = os.getenv('MONITORING_STACK_ENABLED', 'true').lower() == 'true'
+PERFORMANCE_MONITORING_ENABLED = os.getenv('PERFORMANCE_MONITORING_ENABLED', 'true').lower() == 'true'
+ADAPTIVE_OPTIMIZATION_ENABLED_LIVE = os.getenv('ADAPTIVE_OPTIMIZATION_ENABLED_LIVE', 'false').lower() == 'true'
 DEFAULT_TIMEFRAME = os.getenv('DEFAULT_TIMEFRAME', '1h')  # Default timeframe
 MAX_POSITIONS = int(os.getenv('MAX_POSITIONS', '5'))  # Maximum open positions per symbol
 MAX_DRAWDOWN = float(os.getenv('MAX_DRAWDOWN', '0.1'))  # Maximum drawdown before stopping (10%)

@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-from services.mlops_service.market_regime_analysis import (
+from services.monitoring_service.mlops_service.market_regime_analysis import (
     MarketRegimeDetector, MultiTimeframeAnalyzer, AdaptiveStrategyManager,
     detect_market_regime, analyze_multi_timeframe, get_adaptive_strategy_config,
     MarketRegime

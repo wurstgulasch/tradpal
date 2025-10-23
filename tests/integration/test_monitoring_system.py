@@ -15,10 +15,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from services.core.client import CoreServiceClient
-    from services.core.metrics_exporter import metrics_collector, start_metrics_exporter
-    from services.core.circuit_breaker import circuit_breaker_registry
-    from services.core.health_checks import health_check_registry
+    from services.core_service.client import CoreServiceClient
+    from services.core_service.metrics_exporter import metrics_collector, start_metrics_exporter
+    from services.core_service.circuit_breaker import circuit_breaker_registry
+    from services.core_service.health_checks import health_check_registry
 except ImportError as e:
     print(f"Import error: {e}")
     print("Some components may not be available, but basic metrics testing will continue")
@@ -85,7 +85,7 @@ async def test_prometheus_format():
     logger.info("🧪 Testing Prometheus Metrics Format...")
 
     # Generate some test metrics
-    from services.core.metrics_exporter import record_service_request
+    from services.core_service.metrics_exporter import record_service_request
 
     record_service_request("test_service", "GET", "200", 0.1)
     record_service_request("test_service", "POST", "500", 0.05)
@@ -137,8 +137,8 @@ async def simulate_monitoring_scenario():
     logger.info("🧪 Simulating Monitoring Scenario...")
 
     try:
-        from services.core.circuit_breaker import CircuitBreakerConfig, AsyncCircuitBreaker
-        from services.core.health_checks import HealthCheckConfig, ServiceHealthChecker
+        from services.core_service.circuit_breaker import CircuitBreakerConfig, AsyncCircuitBreaker
+        from services.core_service.health_checks import HealthCheckConfig, ServiceHealthChecker
 
         # Create a test circuit breaker
         cb_config = CircuitBreakerConfig(

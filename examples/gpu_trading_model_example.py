@@ -19,7 +19,7 @@ from typing import Dict, Any, List
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from services.core.gpu_accelerator import (
+from services.core_service.gpu_accelerator import (
     get_gpu_accelerator, is_gpu_available, create_gpu_lstm_model,
     create_gpu_transformer_model, train_gpu_model
 )

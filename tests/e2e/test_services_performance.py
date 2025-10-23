@@ -43,7 +43,7 @@ async def test_services():
 
         # Test Core Indicators
         print("🧮 Testing Core Indicators...")
-        from services.core.indicators import calculate_indicators
+        from services.core_service.indicators import calculate_indicators
         indicators_data = calculate_indicators(data)
         print(f"✅ Indicators: Calculated for {len(indicators_data)} data points")
 
@@ -57,7 +57,7 @@ async def test_services():
 
         # Test Backtesting Service
         print("💼 Testing Backtesting Service...")
-        from services.backtesting_service.service import AsyncBacktester
+        from services.trading_service.backtesting_service.service import AsyncBacktester
         backtester = AsyncBacktester()
         # Simple backtest with limited data
         test_data = data.head(50)  # Use first 50 points for quick test

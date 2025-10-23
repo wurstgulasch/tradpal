@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 
-from services.mlops_service.market_regime_analysis import (
+from services.monitoring_service.mlops_service.market_regime_analysis import (
     MarketRegimeDetector, MultiTimeframeAnalyzer, AdaptiveStrategyManager,
     MarketRegime, RegimeConfig, TimeframeConfig,
     detect_market_regime, analyze_multi_timeframe, get_adaptive_strategy_config

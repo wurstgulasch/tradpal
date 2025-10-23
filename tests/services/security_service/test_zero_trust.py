@@ -64,7 +64,7 @@ async def test_security_service():
     logger.info("🧪 Testing Security Service...")
 
     try:
-        from services.security_service.service import SecurityService, SecurityConfig
+        from services.infrastructure_service.security_service.service import SecurityService, SecurityConfig
 
         # Create security config
         config = SecurityConfig(
@@ -134,7 +134,7 @@ async def test_service_clients():
 
     try:
         # Test Core Service Client
-        from services.core.client import CoreServiceClient
+        from services.core_service.client import CoreServiceClient
         core_client = CoreServiceClient()
 
         # Test authentication
@@ -145,8 +145,8 @@ async def test_service_clients():
             logger.warning("⚠️  Core service client authentication failed (service may not be running)")
 
         # Test Data Service Client
-        from services.data_service.client import DataServiceClient
-        data_client = DataServiceClient()
+        from services.data_service.data_service.service import DataService
+        data_client = DataService()
 
         auth_success = await data_client.authenticate()
         if auth_success:
@@ -155,7 +155,7 @@ async def test_service_clients():
             logger.warning("⚠️  Data service client authentication failed (service may not be running)")
 
         # Test Backtesting Service Client
-        from services.backtesting_service.client import BacktestingServiceClient
+        from services.trading_service.backtesting_service.client import BacktestingServiceClient
         backtesting_client = BacktestingServiceClient()
 
         await backtesting_client.initialize()
@@ -166,7 +166,7 @@ async def test_service_clients():
             logger.warning("⚠️  Backtesting service client authentication failed (service may not be running)")
 
         # Test Discovery Service Client
-        from services.discovery_service.client import DiscoveryServiceClient
+        from services.monitoring_service.discovery_service.client import DiscoveryServiceClient
         discovery_client = DiscoveryServiceClient()
 
         auth_success = await discovery_client.authenticate()

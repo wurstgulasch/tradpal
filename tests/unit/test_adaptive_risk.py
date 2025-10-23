@@ -10,7 +10,7 @@ import os
 # Add the project root to the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.backtesting_service.service import AsyncBacktester
+from services.trading_service.backtesting_service.service import AsyncBacktester
 
 async def test_adaptive_risk_management():
     """Test the adaptive risk management system."""

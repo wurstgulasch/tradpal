@@ -4,7 +4,7 @@ TradPal is a fully autonomous AI trading system based on a complete microservice
 
 ## 🎯 October 2025 Highlights
 - **98 Test Files**: Comprehensive test coverage with organized test structure (unit/integration/services/e2e)
-- **Service Consolidation**: **Completed trading service consolidation** - ML training, RL agents, risk management, and market regime detection integrated into unified trading_service
+- **Service Consolidation**: **Completed service consolidation** - 14 services organized into 6 consolidated modular services (core, trading, data, infrastructure, monitoring, ui)
 - **Advanced ML Integration**: ML-enhanced signal generation with ensemble methods and risk management
 - **Modular Data Sources**: Kaggle Bitcoin Datasets, Yahoo Finance, CCXT integration for optimal backtesting
 - **Centralized Test Suite**: Organized test structure with conftest.py, fixtures, and comprehensive coverage
@@ -13,32 +13,25 @@ TradPal is a fully autonomous AI trading system based on a complete microservice
 
 ```
 tradpal/
-├── services/                    # Microservices Architecture (consolidated to 4 main services)
-│   ├── core/                    # Core calculations & Memory optimization
-│   ├── data_service/            # Data Management (CCXT, Kaggle, Yahoo Finance, caching, HDF5)
-│   │   └── data_sources/        # Modular data sources (Kaggle Bitcoin Datasets, Exchanges)
-│   │       ├── liquidation.py   # Liquidation data with fallback chain
-│   │       ├── volatility.py    # Volatility indicators as liquidation proxy
-│   │       ├── sentiment.py     # Sentiment analysis data source
-│   │       ├── onchain.py       # On-chain metrics data source
-│   │       └── factory.py       # Data source factory with 8+ sources
+├── services/                    # Microservices Architecture (6 consolidated services)
+│   ├── core_service/            # Core calculations (indicators, vectorization, memory optimization)
 │   ├── trading_service/         # ✅ **CONSOLIDATED** AI-powered trading service
-│   │   ├── orchestrator.py      # Main trading orchestrator
-│   │   ├── execution/           # Order execution
-│   │   ├── risk_management/     # Risk management and position sizing
-│   │   ├── reinforcement_learning/ # RL agents for trading decisions
-│   │   ├── market_regime_detection/ # Market regime detection and analysis
-│   │   ├── ml_training/         # ML model training and optimization
-│   │   └── monitoring/          # Trading monitoring
-│   ├── backtesting_service/     # Historical simulation and ML training
-│   ├── discovery_service/       # ML parameter optimization
-│   ├── notification_service/    # Alerts (Telegram, Discord, Email)
-│   ├── mlops_service/           # ML experiment tracking and model management
-│   ├── security_service/        # Zero-trust authentication
-│   ├── event_system/            # Event-Driven Architecture (Redis Streams)
-│   ├── api_gateway/             # Centralized service routing and authentication
-│   └── [15+ additional services]/ # Individual microservices (pending consolidation)
-├── config/                      # Central configuration
+│   │   ├── trading_ai_service/  # AI-powered trading
+│   │   ├── backtesting_service/ # Historical simulation
+│   │   └── trading_bot_live_service/ # Live execution
+│   ├── data_service/            # Data management (CCXT, Kaggle Bitcoin datasets, Yahoo Finance, caching, HDF5)
+│   ├── infrastructure_service/  # ✅ **CONSOLIDATED** platform infrastructure
+│   │   ├── api_gateway_service/ # API routing & authentication
+│   │   ├── event_system_service/ # Event-driven communication
+│   │   ├── security_service/     # Authentication & security
+│   │   └── falco_security_service/ # Runtime monitoring
+│   ├── monitoring_service/      # ✅ **CONSOLIDATED** monitoring & observability
+│   │   ├── notification_service/ # Alerts & notifications
+│   │   ├── alert_forwarder_service/ # Alert processing
+│   │   ├── mlops_service/        # ML experiment tracking
+│   │   └── discovery_service/    # Parameter optimization
+│   └── ui_service/              # ✅ **CONSOLIDATED** user interfaces
+│       └── web_ui_service/      # Web interface
 ├── config/                      # Central configuration
 │   ├── settings.py              # Main configuration (imports from modules)
 │   ├── core_settings.py         # Core trading and risk management
@@ -46,15 +39,12 @@ tradpal/
 │   ├── service_settings.py      # Microservices and data mesh settings
 │   ├── security_settings.py     # Security and authentication settings
 │   ├── performance_settings.py  # Performance optimization settings
-│   ├── .env                     # Environment variables
-│   ├── .env.example             # Example configuration
-│   ├── .env.light               # Light profile (without AI/ML)
-│   └── .env.heavy               # Heavy profile (full features)
+│   └── .env                     # Environment variables (unified configuration)
 ├── tests/                       # Centralized test suite (98 test files)
 │   ├── conftest.py              # Central test configuration and fixtures
 │   ├── unit/                    # Unit tests (25+ files)
 │   ├── integration/             # Integration tests (13+ files)
-│   ├── services/                # Service-specific tests
+│   ├── services/                # Service-specific tests organized by service
 │   ├── e2e/                     # End-to-end tests
 │   ├── config/                  # Configuration tests
 │   └── integrations/            # Integration setup tests
