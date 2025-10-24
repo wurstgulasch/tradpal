@@ -42,6 +42,24 @@ class EventType(Enum):
     RL_ACTION_TAKEN = "rl_action_taken"
     FEATURE_VECTOR_UPDATE = "feature_vector_update"
 
+    # Backtesting Events
+    BACKTEST_REQUEST = "backtest_request"
+    BACKTEST_COMPLETED = "backtest_completed"
+    BACKTEST_FAILED = "backtest_failed"
+    MULTI_SYMBOL_BACKTEST_REQUEST = "multi_symbol_backtest_request"
+    MULTI_SYMBOL_BACKTEST_COMPLETED = "multi_symbol_backtest_completed"
+    MULTI_SYMBOL_BACKTEST_FAILED = "multi_symbol_backtest_failed"
+    MULTI_MODEL_BACKTEST_REQUEST = "multi_model_backtest_request"
+    MULTI_MODEL_BACKTEST_COMPLETED = "multi_model_backtest_completed"
+    MULTI_MODEL_BACKTEST_FAILED = "multi_model_backtest_failed"
+    WALK_FORWARD_BACKTEST_REQUEST = "walk_forward_backtest_request"
+    WALK_FORWARD_BACKTEST_COMPLETED = "walk_forward_backtest_completed"
+    WALK_FORWARD_BACKTEST_FAILED = "walk_forward_backtest_failed"
+    STRATEGY_OPTIMIZATION_REQUEST = "strategy_optimization_request"
+    STRATEGY_OPTIMIZATION_COMPLETED = "strategy_optimization_completed"
+    STRATEGY_OPTIMIZATION_FAILED = "strategy_optimization_failed"
+    BACKTESTING_WORKER_HEARTBEAT = "backtesting_worker_heartbeat"
+
 
 @dataclass
 class Event:

@@ -8,7 +8,7 @@ from typing import Dict, Any
 DATA_SERVICE_URL = os.getenv('DATA_SERVICE_URL', 'http://localhost:8001')
 CORE_SERVICE_URL = os.getenv('CORE_SERVICE_URL', 'http://localhost:8002')
 ML_TRAINER_URL = os.getenv('ML_TRAINER_URL', 'http://localhost:8003')
-BACKTESTING_SERVICE_URL = os.getenv('BACKTESTING_SERVICE_URL', 'http://localhost:8004')
+BACKTESTING_SERVICE_URL = os.getenv('BACKTESTING_SERVICE_URL', 'http://localhost:8030')
 TRADING_BOT_LIVE_URL = os.getenv('TRADING_BOT_LIVE_URL', 'http://localhost:8005')
 RISK_SERVICE_URL = os.getenv('RISK_SERVICE_URL', 'http://localhost:8006')
 NOTIFICATION_SERVICE_URL = os.getenv('NOTIFICATION_SERVICE_URL', 'http://localhost:8007')
@@ -16,6 +16,25 @@ WEB_UI_URL = os.getenv('WEB_UI_URL', 'http://localhost:8501')
 DISCOVERY_SERVICE_URL = os.getenv('DISCOVERY_SERVICE_URL', 'http://localhost:8008')
 MLOPS_SERVICE_URL = os.getenv('MLOPS_SERVICE_URL', 'http://localhost:8009')
 OPTIMIZER_URL = os.getenv('OPTIMIZER_URL', 'http://localhost:8010')
+
+# Specialized Trading Services (New Microservices Architecture)
+ML_TRAINING_SERVICE_URL = os.getenv('ML_TRAINING_SERVICE_URL', 'http://localhost:8011')
+REINFORCEMENT_LEARNING_SERVICE_URL = os.getenv('REINFORCEMENT_LEARNING_SERVICE_URL', 'http://localhost:8012')
+MARKET_REGIME_SERVICE_URL = os.getenv('MARKET_REGIME_SERVICE_URL', 'http://localhost:8013')
+RISK_MANAGEMENT_SERVICE_URL = os.getenv('RISK_MANAGEMENT_SERVICE_URL', 'http://localhost:8014')
+TRADING_EXECUTION_SERVICE_URL = os.getenv('TRADING_EXECUTION_SERVICE_URL', 'http://localhost:8015')
+
+# Infrastructure Services (New Consolidated Infrastructure)
+API_GATEWAY_SERVICE_URL = os.getenv('API_GATEWAY_SERVICE_URL', 'http://localhost:8000')
+EVENT_SYSTEM_SERVICE_URL = os.getenv('EVENT_SYSTEM_SERVICE_URL', 'http://localhost:8011')
+CIRCUIT_BREAKER_SERVICE_URL = os.getenv('CIRCUIT_BREAKER_SERVICE_URL', 'http://localhost:8012')
+SECURITY_SERVICE_URL = os.getenv('SECURITY_SERVICE_URL', 'http://localhost:8013')
+FALCO_SECURITY_SERVICE_URL = os.getenv('FALCO_SECURITY_SERVICE_URL', 'http://localhost:8014')
+NOTIFICATION_SERVICE_URL = os.getenv('NOTIFICATION_SERVICE_URL', 'http://localhost:8015')
+ALERT_FORWARDER_SERVICE_URL = os.getenv('ALERT_FORWARDER_SERVICE_URL', 'http://localhost:8016')
+MLOPS_SERVICE_URL = os.getenv('MLOPS_SERVICE_URL', 'http://localhost:8017')
+DISCOVERY_SERVICE_URL = os.getenv('DISCOVERY_SERVICE_URL', 'http://localhost:8018')
+WEB_UI_SERVICE_URL = os.getenv('WEB_UI_SERVICE_URL', 'http://localhost:8019')
 
 # Service Feature Flags
 ENABLE_DATA_SERVICE = os.getenv('ENABLE_DATA_SERVICE', 'true').lower() == 'true'
@@ -93,6 +112,15 @@ FEATURE_STORE_ENABLED = os.getenv('FEATURE_STORE_ENABLED', 'true').lower() == 't
 FEATURE_STORE_KEY_PREFIX = os.getenv('FEATURE_STORE_KEY_PREFIX', 'features:')
 FEATURE_STORE_METADATA_PREFIX = os.getenv('FEATURE_STORE_METADATA_PREFIX', 'feature_metadata:')
 FEATURE_STORE_VERSION_PREFIX = os.getenv('FEATURE_STORE_VERSION_PREFIX', 'feature_versions:')
+
+# Redis TTL Configuration
+REDIS_TTL_INDICATORS = int(os.getenv('REDIS_TTL_INDICATORS', '3600'))  # 1 hour TTL for indicators
+REDIS_TTL_API = int(os.getenv('REDIS_TTL_API', '300'))  # 5 minutes TTL for API responses
+REDIS_MAX_CONNECTIONS = int(os.getenv('REDIS_MAX_CONNECTIONS', '20'))  # Max Redis connections
+
+# Advanced Features Configuration
+ADVANCED_SIGNAL_GENERATION_ENABLED = os.getenv('ADVANCED_SIGNAL_GENERATION_ENABLED', 'true').lower() == 'true'
+ADVANCED_SIGNAL_GENERATION_MODE = os.getenv('ADVANCED_SIGNAL_GENERATION_MODE', 'hybrid')
 
 # Data Product Registry Configuration
 DATA_PRODUCT_REGISTRY_ENABLED = os.getenv('DATA_PRODUCT_REGISTRY_ENABLED', 'true').lower() == 'true'

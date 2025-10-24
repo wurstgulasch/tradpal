@@ -291,6 +291,55 @@ DATA_SOURCE_CONFIG = {
     }
 }
 
+# Circuit Breaker Configuration
+CIRCUIT_BREAKER_FAILURE_THRESHOLD = int(os.getenv('CIRCUIT_BREAKER_FAILURE_THRESHOLD', '5'))  # Failures before opening
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT = float(os.getenv('CIRCUIT_BREAKER_RECOVERY_TIMEOUT', '60.0'))  # Seconds to wait before testing recovery
+CIRCUIT_BREAKER_SUCCESS_THRESHOLD = int(os.getenv('CIRCUIT_BREAKER_SUCCESS_THRESHOLD', '3'))  # Successes needed to close from half-open
+CIRCUIT_BREAKER_TIMEOUT = float(os.getenv('CIRCUIT_BREAKER_TIMEOUT', '30.0'))  # Request timeout in seconds
+CIRCUIT_BREAKER_MONITORING_ENABLED = os.getenv('CIRCUIT_BREAKER_MONITORING_ENABLED', 'true').lower() == 'true'
+
+# Default Circuit Breaker Configurations by Service Type
+DEFAULT_CIRCUIT_BREAKER_CONFIG = {
+    'failure_threshold': CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    'recovery_timeout': CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
+    'success_threshold': CIRCUIT_BREAKER_SUCCESS_THRESHOLD,
+    'timeout': CIRCUIT_BREAKER_TIMEOUT
+}
+
+# Service-specific Circuit Breaker Configurations
+SERVICE_CIRCUIT_BREAKER_CONFIGS = {
+    'data_service': {
+        'failure_threshold': 3,  # More sensitive for data services
+        'recovery_timeout': 30.0,
+        'success_threshold': 2,
+        'timeout': 15.0
+    },
+    'core_service': {
+        'failure_threshold': 5,
+        'recovery_timeout': 60.0,
+        'success_threshold': 3,
+        'timeout': 30.0
+    },
+    'trading_service': {
+        'failure_threshold': 3,  # Critical service, faster recovery
+        'recovery_timeout': 45.0,
+        'success_threshold': 2,
+        'timeout': 20.0
+    },
+    'ml_service': {
+        'failure_threshold': 7,  # ML services can be more tolerant
+        'recovery_timeout': 120.0,
+        'success_threshold': 5,
+        'timeout': 60.0
+    },
+    'notification_service': {
+        'failure_threshold': 10,  # Notifications can fail more before opening
+        'recovery_timeout': 300.0,
+        'success_threshold': 3,
+        'timeout': 10.0
+    }
+}
+
 # Validation functions
 def validate_timeframe(timeframe: str) -> bool:
     """

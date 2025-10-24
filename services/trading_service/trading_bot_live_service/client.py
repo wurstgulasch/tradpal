@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import aiohttp
 from aiohttp import ClientTimeout
 
-from config.settings import TRADING_BOT_LIVE_SERVICE_URL, REQUEST_TIMEOUT
+from config.service_settings import TRADING_BOT_LIVE_URL, REQUEST_TIMEOUT
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -92,7 +92,7 @@ class ChartRequest:
 class TradingBotLiveServiceClient:
     """Async client for Trading Bot Live Service."""
 
-    def __init__(self, base_url: str = TRADING_BOT_LIVE_SERVICE_URL):
+    def __init__(self, base_url: str = TRADING_BOT_LIVE_URL):
         self.base_url = base_url.rstrip('/')
         self.timeout = ClientTimeout(total=REQUEST_TIMEOUT)
 

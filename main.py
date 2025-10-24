@@ -90,10 +90,10 @@ except ImportError:
     WEB_UI_SERVICE_AVAILABLE = False
 
 try:
-    from services.trading_service.backtesting_service.client import BacktestingServiceClient
-    BACKTESTING_SERVICE_AVAILABLE = True
+    from services.trading_service.backtesting_worker import start_backtesting_worker
+    BACKTESTING_WORKER_AVAILABLE = True
 except ImportError:
-    BACKTESTING_SERVICE_AVAILABLE = False
+    BACKTESTING_WORKER_AVAILABLE = False
 
 try:
     from services.data_service.data_service.client import DataService
@@ -419,7 +419,45 @@ class TradPalOrchestrator:
         logger.info("📊 Starting Backtesting Mode with Market Regime Analysis...")
 
         try:
-            # Use backtesting service
+            # Check if we should use isolated worker mode
+            use_worker = kwargs.get('use_worker', False) or os.getenv('USE_BACKTESTING_WORKER', 'false').lower() == 'true'
+
+            if use_worker and BACKTESTING_WORKER_AVAILABLE:
+                # Use event-driven backtesting worker
+                logger.info("🔄 Using isolated backtesting worker for resource management")
+
+                # Import event system for communication
+                from services.infrastructure_service.event_system_service import EventSystem, Event, EventType, get_event_system
+
+                event_system = await get_event_system()
+
+                # Create backtest request event
+                backtest_request = Event(
+                    event_type=EventType.BACKTEST_REQUEST,
+                    source="main_orchestrator",
+                    data={
+                        "backtest_id": f"bt_{asyncio.get_event_loop().time()}",
+                        "strategy_config": {
+                            'indicators': ['ema', 'rsi', 'bb', 'atr'],
+                            'use_market_regime': MARKET_REGIME_ANALYSIS_AVAILABLE
+                        },
+                        "start_date": kwargs.get('start_date'),
+                        "end_date": kwargs.get('end_date'),
+                        "symbol": kwargs.get('symbol', SYMBOL),
+                        "timeframe": kwargs.get('timeframe', TIMEFRAME)
+                    }
+                )
+
+                # Publish request
+                await event_system.publish_event(backtest_request)
+
+                # Wait for response (simplified - in production you'd use proper async waiting)
+                logger.info("📤 Backtest request sent to worker. Results will be available via event system.")
+                return {"status": "request_sent", "message": "Backtest request sent to isolated worker"}
+
+            else:
+                # Use traditional backtesting service
+                logger.info("🔄 Using traditional backtesting service")
             if BACKTESTING_SERVICE_AVAILABLE and 'backtesting' in self.services:
                 # Get adaptive strategy config based on market regime analysis
                 adaptive_config = {}
@@ -646,7 +684,7 @@ async def main():
     parser = argparse.ArgumentParser(description="TradPal Trading System v3.0.0")
     parser.add_argument(
         "mode",
-        choices=["live", "backtest", "discovery", "ml-train", "multi-timeframe", "paper", "web-ui"],
+        choices=["live", "backtest", "discovery", "ml-train", "multi-timeframe", "paper", "web-ui", "backtesting-worker"],
         help="Operation mode"
     )
     parser.add_argument("--symbol", default=SYMBOL, help="Trading symbol")
@@ -717,8 +755,13 @@ async def main():
                 end_date=args.end_date
             )
             print(f"ML Training Results: {results}")
-        elif args.mode == "ml-train":
-            print("ML Training not yet migrated to microservices")
+        elif args.mode == "backtesting-worker":
+            if BACKTESTING_WORKER_AVAILABLE:
+                logger.info("🚀 Starting Backtesting Worker...")
+                start_backtesting_worker()
+            else:
+                logger.error("❌ Backtesting Worker not available")
+                return 1
 
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")

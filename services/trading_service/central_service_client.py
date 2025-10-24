@@ -23,48 +23,14 @@ from config.service_settings import (
     ENABLE_OPTIMIZER
 )
 
+# Circuit Breaker Service imports
+from services.infrastructure_service.circuit_breaker_service import (
+    get_http_circuit_breaker,
+    CircuitBreakerConfig,
+    SERVICE_CIRCUIT_BREAKER_CONFIGS
+)
+
 logger = logging.getLogger(__name__)
-
-
-class CircuitBreaker:
-    """Simple circuit breaker implementation"""
-
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
-        self.failure_count = 0
-        self.last_failure_time = None
-        self.state = "closed"  # closed, open, half-open
-
-    async def call(self, func, *args, **kwargs):
-        if self.state == "open":
-            if self._should_attempt_reset():
-                self.state = "half-open"
-            else:
-                raise Exception("Circuit breaker is open")
-
-        try:
-            result = await func(*args, **kwargs)
-            self._on_success()
-            return result
-        except Exception as e:
-            self._on_failure()
-            raise e
-
-    def _should_attempt_reset(self) -> bool:
-        if self.last_failure_time is None:
-            return True
-        return (datetime.now() - self.last_failure_time).seconds > self.recovery_timeout
-
-    def _on_success(self):
-        self.failure_count = 0
-        self.state = "closed"
-
-    def _on_failure(self):
-        self.failure_count += 1
-        self.last_failure_time = datetime.now()
-        if self.failure_count >= self.failure_threshold:
-            self.state = "open"
 
 
 class CentralServiceClient:
@@ -81,7 +47,7 @@ class CentralServiceClient:
 
     def __init__(self):
         self.session: Optional[aiohttp.ClientSession] = None
-        self.circuit_breakers: Dict[str, CircuitBreaker] = {}
+        self.http_breakers: Dict[str, Any] = {}  # Circuit breaker instances
         self.service_urls = {
             'data': DATA_SERVICE_URL,
             'core': CORE_SERVICE_URL,
@@ -109,9 +75,13 @@ class CentralServiceClient:
             'optimizer': ENABLE_OPTIMIZER
         }
 
-        # Initialize circuit breakers for all services
+        # Circuit breaker configurations for each service
+        self.circuit_breaker_configs = {}
         for service_name in self.service_urls.keys():
-            self.circuit_breakers[service_name] = CircuitBreaker()
+            self.circuit_breaker_configs[service_name] = SERVICE_CIRCUIT_BREAKER_CONFIGS.get(
+                service_name,
+                CircuitBreakerConfig()
+            )
 
     @asynccontextmanager
     async def session_context(self):
@@ -136,7 +106,14 @@ class CentralServiceClient:
         if not self.service_enabled.get(service_name, False):
             raise Exception(f"Service {service_name} is disabled")
 
-        circuit_breaker = self.circuit_breakers[service_name]
+        # Get or create circuit breaker for this service
+        if service_name not in self.http_breakers:
+            config = self.circuit_breaker_configs[service_name]
+            self.http_breakers[service_name] = await get_http_circuit_breaker(
+                service_name, config, self.session
+            )
+
+        circuit_breaker = self.http_breakers[service_name]
         base_url = self.service_urls[service_name]
 
         async def _request():

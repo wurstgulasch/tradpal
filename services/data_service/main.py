@@ -8,8 +8,8 @@ from typing import Dict, Any, Optional
 import asyncio
 
 # Import unified data service
-from .data_service.service import DataService
-from .data_service.api.main import app as api_app
+from .data_sources.service import DataService
+from .api.main import app as api_app
 
 logger = logging.getLogger(__name__)
 

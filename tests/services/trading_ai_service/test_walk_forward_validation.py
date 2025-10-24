@@ -17,8 +17,7 @@ from datetime import datetime, timedelta
 
 from services.trading_service.trading_ai_service.ml_training.ml_trainer import (
     MLTrainerService,
-    EnsembleTrainer,
-    EventSystem
+    EnsembleTrainer
 )
 
 
@@ -27,8 +26,7 @@ class TestWalkForwardValidation:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.event_system = EventSystem()
-        self.ml_trainer = MLTrainerService(self.event_system)
+        self.ml_trainer = MLTrainerService()
 
     def test_default_walk_forward_config(self):
         """Test default walk-forward validation configuration."""
@@ -248,7 +246,7 @@ class TestWalkForwardValidation:
             mock_fetch.return_value = sample_data
 
             # Mock event publishing
-            with patch.object(self.ml_trainer.event_system, 'publish', new_callable=AsyncMock):
+            with patch('asyncio.sleep'):  # Simple mock since event_system is not used
                 # Perform walk-forward validation
                 result = await self.ml_trainer.perform_walk_forward_validation(
                     symbol='BTCUSDT',
@@ -348,8 +346,7 @@ class TestWalkForwardIntegration:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.event_system = EventSystem()
-        self.ml_trainer = MLTrainerService(self.event_system)
+        self.ml_trainer = MLTrainerService()
 
     def test_walk_forward_window_expansion(self):
         """Test that walk-forward windows properly expand."""

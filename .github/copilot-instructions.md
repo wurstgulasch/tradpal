@@ -3,15 +3,23 @@
 ## Overview
 **TradPal** is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
-**Current Status (October 2025):** Version 2.5.1 with **complete microservices consolidation** (4 core services + 10 supporting services) and 98 organized test files with comprehensive coverage.
+**Current Status (October 2025):** Version 2.5.1 with **complete microservices consolidation** (4 core services + 14 supporting services) and 98 organized test files with comprehensive coverage. **Trading Service fully consolidated with moderate isolation pattern** - code consolidation with runtime separation for resource management.
 
 ## Project Structure (STRICTLY ENFORCE!)
-- `services/`: **Microservices Architecture** - ALL new features/service developments go here (6 consolidated services)
+- `services/`: **Microservices Architecture** - ALL new features/service developments go here (18 consolidated services)
   - `core_service/`: Core calculations (indicators, vectorization, memory optimization)
   - `trading_service/`: **Consolidated trading service** - All trading functionality in one service
-    - `trading_ai_service/`: AI-powered trading
-    - `backtesting_service/`: Historical simulation
+    - `ml_training_service/`: Specialized ML model training and ensemble methods
+    - `reinforcement_learning_service/`: Advanced RL implementation with market regime awareness
+    - `market_regime_service/`: Market regime detection and multi-timeframe analysis
+    - `risk_management_service/`: Position sizing and portfolio risk assessment
+    - `trading_execution_service/`: Order execution and portfolio management
+    - `backtesting_service/`: Historical simulation with moderate isolation
+    - `backtesting_worker.py`: Dedicated worker process for resource isolation
+    - `trading_ai_service/`: AI-powered trading orchestration
     - `trading_bot_live_service/`: Live execution
+    - `central_service_client.py`: Unified client for all microservice communication
+    - `orchestrator.py`: Coordinates trading operations across specialized services
   - `data_service/`: Data management (CCXT, Kaggle Bitcoin datasets, Yahoo Finance, caching, HDF5)
   - `infrastructure_service/`: **Consolidated infrastructure service** - All platform infrastructure
     - `api_gateway_service/`: API routing & authentication
@@ -69,9 +77,10 @@
 - Circuit breaker and health check resilience patterns
 - Modular data sources (Kaggle Bitcoin datasets, Yahoo Finance, CCXT)
 - Zero-trust security with mTLS and JWT
-- **Complete Service Consolidation**: 14 services with modular architecture (4 core + 10 supporting)
+- **Complete Service Consolidation**: 18 services with modular architecture (4 core + 14 supporting)
 - **Centralized Test Suite**: 98 organized test files with comprehensive coverage
 - **Modular Service Pattern**: All services follow service.py/client.py/main.py structure
+- **Trading Service Moderate Isolation**: Code consolidation with runtime separation for resource management
 
 🔄 **In Progress:**
 1. **AI Outperformance**: ML models that consistently outperform benchmarks
@@ -107,6 +116,9 @@ python main.py --profile light --mode live
 # Backtest with all features
 python main.py --profile heavy --mode backtest --start-date 2024-01-01 --data-source kaggle
 
+# Backtesting Worker (isolated process for resource management)
+python main.py backtesting-worker
+
 # Performance benchmark
 python scripts/performance_benchmark.py
 ```
@@ -124,8 +136,14 @@ pytest tests/integration/
 
 # Service-specific tests
 pytest tests/services/core_service/
+pytest tests/services/ml_training_service/
+pytest tests/services/reinforcement_learning_service/
+pytest tests/services/market_regime_service/
+pytest tests/services/risk_management_service/
+pytest tests/services/trading_execution_service/
 pytest tests/services/trading_ai_service/
 pytest tests/services/backtesting_service/
+pytest tests/services/trading_service/backtesting_worker/
 pytest tests/services/data_service/
 pytest tests/services/api_gateway_service/
 pytest tests/services/notification_service/
@@ -151,15 +169,132 @@ make shell-data
 
 ## Code Conventions and Patterns
 
-### Service Structure Pattern
-Each service in `services/` follows this structure:
+### Service Architecture Blueprint (Best Practices)
+
+**STRICTLY ENFORCE this blueprint for ALL new services:**
+
 ```
 services/{service_name}/
-├── __init__.py
-├── main.py              # FastAPI service entry point
-├── client.py            # Async client for service communication
-├── requirements.txt     # Service-specific dependencies
-└── README.md           # Service documentation
+├── __init__.py                    # Package initialization
+├── main.py                        # FastAPI service entry point with health checks
+├── client.py                      # Async client with circuit breaker & authentication
+├── service.py                     # Core business logic (optional, for complex services)
+├── requirements.txt               # Service-specific dependencies ONLY
+├── README.md                      # Service documentation with API endpoints
+├── tests.py                       # Unit tests for service logic
+└── test_integration.py           # Integration tests (optional)
+```
+
+**Required Implementation Patterns:**
+
+1. **Async-First Design**
+   - ALL I/O operations use `asyncio`
+   - HTTP clients use `@asynccontextmanager`
+   - Circuit breaker integration for ALL external calls
+
+2. **Zero-Trust Security**
+   - `await client.authenticate()` on service initialization
+   - mTLS certificates from `cache/security/certs/`
+   - JWT token validation for API access
+
+3. **Event-Driven Communication**
+   - Redis Streams for inter-service communication
+   - Event publishing for state changes
+   - Event subscription for reactive behavior
+
+4. **Resilience Patterns**
+   - Circuit breaker for external dependencies
+   - Health checks at `/health` endpoint
+   - Graceful shutdown handling
+
+5. **Configuration Management**
+   - Service-specific settings in `config/service_settings.py`
+   - Environment variable loading via `.env`
+   - Lazy loading to reduce memory footprint
+
+6. **Testing Standards**
+   - Unit tests in `tests/unit/`
+   - Integration tests in `tests/integration/`
+   - Async testing with `pytest-asyncio`
+
+7. **Documentation Requirements**
+   - README.md with API documentation
+   - Inline code documentation
+   - Service dependencies clearly stated
+
+**Service Client Pattern (MANDATORY):**
+```python
+class {ServiceName}Client:
+    def __init__(self):
+        self.session = None
+        self.circuit_breaker = None
+    
+    async def authenticate(self) -> None:
+        """Zero-trust authentication"""
+    
+    @asynccontextmanager
+    async def _get_session(self):
+        """Circuit breaker protected session"""
+    
+    async def {business_method}(self, **params) -> Dict[str, Any]:
+        """Business logic with error handling"""
+```
+
+**Event Integration Pattern:**
+```python
+# Publishing events
+await event_system.publish_event(Event(
+    event_type=EventType.{EVENT_TYPE},
+    source=self.service_name,
+    data={...}
+))
+
+# Subscribing to events  
+event_system.register_handler(EventType.{EVENT_TYPE}, self._handle_event)
+```
+
+### Trading Service Best Practices (Implemented Blueprint)
+
+**✅ VERIFIED: trading_service/ follows ALL patterns above**
+
+**Specialized Service Architecture:**
+- **Consolidated Codebase**: All trading logic in one service for cohesion
+- **Runtime Separation**: Moderate isolation via dedicated worker processes
+- **Event-Driven Orchestration**: Services communicate via Redis Streams
+- **Resource Management**: CPU affinity, memory limits, process prioritization
+
+**Service Dependencies (Trading Domain):**
+- **Independent Services**: ML Training, RL, Market Regime (no external deps)
+- **Orchestrated Services**: Trading AI coordinates specialized services
+- **Infrastructure Services**: Data, Security, Event System (shared resources)
+- **Moderate Isolation**: Backtesting runs isolated but shares codebase
+
+**Performance Optimization:**
+- **GPU Acceleration**: Automatic detection and optimal device selection
+- **Memory Mapping**: Large datasets use memory-mapped files
+- **Chunked Processing**: Data processed in configurable chunks
+- **Async Processing**: All operations are non-blocking
+
+**Quality Assurance:**
+- **98 Test Files**: Comprehensive coverage across all services
+- **Integration Testing**: Service interaction validation
+- **Performance Benchmarking**: Automated performance regression testing
+- **Chaos Engineering**: Resilience testing for production readiness
+
+### Service Development Templates
+
+**Available Templates:**
+- `services/service_template.py` - Complete service implementation template
+- `services/README_TEMPLATE.md` - README documentation template
+
+**Usage:**
+```bash
+# Create new service from template
+cp services/service_template.py services/new_service/main.py
+cp services/README_TEMPLATE.md services/new_service/README.md
+
+# Customize for your service requirements
+# Follow all patterns in the Service Architecture Blueprint
 ```
 
 ### Async-First Design
@@ -199,9 +334,14 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 
 ### Service Dependencies (Post-Consolidation)
 - **Core Service**: Independent (uses event_system for communication)
-- **Trading AI Service**: Independent (orchestrates other services)
-- **Backtesting Service**: Depends on data_service, security_service
-- **Trading Bot Live Service**: Depends on core_service, data_service
+- **ML Training Service**: Independent (uses data_service for training data)
+- **Reinforcement Learning Service**: Independent (uses market_regime_service for regime awareness)
+- **Market Regime Service**: Independent (uses core_service for indicators)
+- **Risk Management Service**: Independent (uses core_service for calculations)
+- **Trading Execution Service**: Depends on data_service, security_service
+- **Trading AI Service**: Orchestrates ml_training_service, reinforcement_learning_service, market_regime_service, risk_management_service, trading_execution_service
+- **Backtesting Service**: Depends on data_service, security_service, all trading services (moderate isolation via dedicated worker process)
+- **Trading Bot Live Service**: Depends on core_service, data_service, all trading services
 - **Data Service**: Depends on security_service for authentication
 - **API Gateway Service**: Independent routing layer
 - **Event System Service**: Independent communication layer
@@ -209,8 +349,8 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 - **Falco Security Service**: Depends on security_service
 - **Notification Service**: Depends on security_service
 - **Alert Forwarder Service**: Depends on notification_service
-- **MLOps Service**: Depends on notification_service
-- **Discovery Service**: Depends on backtesting_service, security_service
+- **MLOps Service**: Depends on notification_service, ml_training_service
+- **Discovery Service**: Depends on backtesting_service, security_service, all ML services
 - **Web UI Service**: Depends on api_gateway_service, various monitoring services
 
 ## Integration Points
@@ -338,7 +478,7 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 - **Testing:** `pytest tests/` (Unit-Tests in `tests/unit/`, Integration in `tests/integration/`)
 - **Performance Benchmarking:** `python scripts/performance_benchmark.py`
 - **ML Training:** `python scripts/train_ml_model.py`
-- **Backtesting:** `python main.py --mode backtest --start-date 2024-01-01`
+- **Backtesting:** `python main.py --mode backtest --start-date 2024-01-01` (or `python main.py backtesting-worker` for isolated execution)
 
 ## Projekt-spezifische Patterns
 - **Service-Client Pattern:** Jeder Service hat einen async Client mit `authenticate()` für Zero-Trust
@@ -349,6 +489,7 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
 - **GPU Acceleration:** Automatische GPU-Erkennung und optimale Device-Auswahl
 - **Data Mesh:** Domains wie `market_data`, `trading_signals` mit Governance und Quality Rules
 - **Fitness Functions:** Gewichtete Metriken (Sharpe 30%, Calmar 25%, P&L 30%) für Backtesting
+- **Moderate Isolation Pattern:** Trading Services konsolidiert aber mit separaten Worker-Prozessen für CPU-intensive Operationen
 
 ## Integration Points
 - **API Gateway:** Zentrales Service Routing (Port 8000)
@@ -388,4 +529,4 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
    - Vereinfacht Erweiterung neuer Konfigurationseinstellungen
    - Migration von Legacy-Konstanten zu dynamischem System planen
 
-*Last updated: October 23, 2025*
+*Last updated: October 24, 2025*

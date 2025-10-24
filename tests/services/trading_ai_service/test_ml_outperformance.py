@@ -17,8 +17,7 @@ from datetime import datetime, timedelta
 
 from services.trading_service.trading_ai_service.ml_training.ml_trainer import (
     MLTrainerService,
-    EnsembleTrainer,
-    EventSystem
+    EnsembleTrainer
 )
 
 
@@ -82,8 +81,7 @@ class TestMLOutperformanceTraining:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.event_system = EventSystem()
-        self.ml_trainer = MLTrainerService(self.event_system)
+        self.ml_trainer = MLTrainerService()
 
     @pytest.mark.asyncio
     async def test_train_benchmark_outperforming_model(self):
@@ -289,8 +287,7 @@ class TestBenchmarkOutperformanceIntegration:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.event_system = EventSystem()
-        self.ml_trainer = MLTrainerService(self.event_system)
+        self.ml_trainer = MLTrainerService()
         self.ensemble_trainer = EnsembleTrainer()
 
     def test_ensemble_model_selection(self):

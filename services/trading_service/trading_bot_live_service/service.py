@@ -21,10 +21,8 @@ from enum import Enum
 import pandas as pd
 import numpy as np
 
-from config.settings import (
-    DEFAULT_SYMBOL,
+from config.service_settings import (
     DEFAULT_TIMEFRAME,
-    RISK_PER_TRADE,
     MAX_POSITIONS,
     MAX_DRAWDOWN,
     ORDER_TIMEOUT,
@@ -141,7 +139,7 @@ class TradingBotLiveService:
         strategy: str,
         timeframe: str = DEFAULT_TIMEFRAME,
         capital: float = 10000.0,
-        risk_per_trade: float = RISK_PER_TRADE,
+        risk_per_trade: float = 0.02,
         max_positions: int = MAX_POSITIONS,
         enable_paper_trading: bool = True
     ) -> Dict[str, Any]:

@@ -10,11 +10,10 @@ This service provides comprehensive live trading capabilities including:
 - Paper trading mode for testing
 """
 
-from .service import TradingBotLiveService, EventSystem
+from .service import TradingBotLiveService
 from .client import TradingBotLiveServiceClient
 
 __all__ = [
     "TradingBotLiveService",
-    "EventSystem",
     "TradingBotLiveServiceClient"
 ]

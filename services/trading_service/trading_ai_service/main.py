@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import asyncio
 
-from .orchestrator import TradingServiceOrchestrator
+from orchestrator import TradingServiceOrchestrator
 
 logger = logging.getLogger(__name__)
 

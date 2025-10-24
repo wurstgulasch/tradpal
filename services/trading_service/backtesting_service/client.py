@@ -19,9 +19,9 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 
-from config.settings import (
-    BACKTESTING_SERVICE_URL, API_KEY, API_SECRET,
-    ENABLE_MTLS, MTLS_CERT_PATH, MTLS_KEY_PATH, CA_CERT_PATH
+from config.service_settings import (
+    BACKTESTING_SERVICE_URL, ENABLE_MTLS, MTLS_CERT_PATH, MTLS_KEY_PATH, CA_CERT_PATH,
+    REQUEST_TIMEOUT
 )
 
 
@@ -99,7 +99,6 @@ class BacktestingServiceClient:
         """Initialize the client"""
         if self.session is None:
             headers = {
-                'X-API-Key': API_KEY,
                 'Content-Type': 'application/json'
             }
             if self.jwt_token:

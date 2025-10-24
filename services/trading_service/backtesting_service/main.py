@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 import uvicorn
 
-from .orchestrator import BacktestingServiceOrchestrator
+from orchestrator import BacktestingServiceOrchestrator
 
 logger = logging.getLogger(__name__)
 

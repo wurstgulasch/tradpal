@@ -25,6 +25,8 @@ from config.settings import (
     SYMBOL, TIMEFRAME, EXCHANGE, CAPITAL,
     OUTPUT_FILE, ML_ENABLED, ML_CONFIDENCE_THRESHOLD
 )
+from config.service_settings import ENABLE_DATA_SERVICE
+from services.data_service.client import DataService
 # Use central service client instead of direct imports
 from services.trading_service.central_service_client import get_central_client
 
@@ -307,60 +309,6 @@ class BacktestingService:
         if self.client:
             await self.client.close()
         logger.info("BacktestingService cleanup completed")
-        (sma_20 < sma_50) &  # Downtrend
-        (rsi < 50) &  # Bearish momentum
-        (price_change_pct < -0.02)  # Strong downward momentum
-    )
-
-    # Sideways when neither bull nor bear conditions are strongly met
-    sideways_market = ~(bull_market | bear_market)
-
-    # Store regime information for adaptive risk management
-    data['Market_Regime'] = 'unknown'
-    data.loc[bull_market, 'Market_Regime'] = 'bull'
-    data.loc[bear_market, 'Market_Regime'] = 'bear'
-    data.loc[sideways_market, 'Market_Regime'] = 'sideways'
-
-    # Define regimes for signal generation
-    strong_trend = data['Trend_Strength'] > 0.03
-    bull_market_signal = data['Bull_Market'] & strong_trend
-    bear_market_signal = (~data['Bull_Market']) & strong_trend
-    sideways_market_signal = ~strong_trend
-
-    # Strategy by regime:
-
-    # 1. Bull markets: Buy and hold
-    if bull_market_signal.any():
-        # Buy at start of bull market, hold
-        bull_starts = bull_market_signal & (~bull_market_signal.shift(1).fillna(False))
-        data.loc[bull_starts, 'Buy_Signal'] = 1
-        # Sell at end of bull market
-        bull_ends = bull_market_signal & (~bull_market_signal.shift(-1).fillna(False))
-        data.loc[bull_ends, 'Sell_Signal'] = 1
-
-    # 2. Bear markets: Short and hold (Trendfolge nach unten)
-    if bear_market_signal.any():
-        # Short at start of bear market, hold
-        bear_starts = bear_market_signal & (~bear_market_signal.shift(1).fillna(False))
-        data.loc[bear_starts, 'Sell_Signal'] = 1
-        # Cover at end of bear market
-        bear_ends = bear_market_signal & (~bear_market_signal.shift(-1).fillna(False))
-        data.loc[bear_ends, 'Buy_Signal'] = 1
-
-    # 3. Sideways markets: Mean reversion
-    if sideways_market_signal.any():
-        rsi_oversold = data['RSI'] < 35
-        rsi_overbought = data['RSI'] > 65
-        bb_lower_touch = data['close'] <= data['BB_Lower'] * 0.995
-        bb_upper_touch = data['close'] >= data['BB_Upper'] * 1.005
-
-        buy_condition = sideways_market_signal & rsi_oversold & bb_lower_touch
-        sell_condition = sideways_market_signal & rsi_overbought & bb_upper_touch
-
-        data.loc[buy_condition, 'Buy_Signal'] = 1
-        data.loc[sell_condition, 'Sell_Signal'] = 1
-
-    return data
 
 def fetch_historical_data(symbol, timeframe, limit=1000, start_date=None):
     """Fallback data fetching - returns empty DataFrame."""
@@ -451,7 +399,7 @@ class BacktestingService:
 
         # Initialize data service client if available
         self.data_client = None
-        if DATA_SERVICE_AVAILABLE:
+        if ENABLE_DATA_SERVICE:
             self.data_client = DataService()
 
         # Register event handlers

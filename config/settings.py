@@ -45,10 +45,11 @@ class LazyConfig:
         from .core_settings import (
             DEFAULT_DATA_LIMIT, SYMBOL, EXCHANGE, OUTPUT_FILE, LOG_FILE,
             LOOKBACK_DAYS, API_KEY, API_SECRET, TIMEFRAME, EMA_SHORT, EMA_LONG,
-            RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD, SL_MULTIPLIER,
+            RSI_PERIOD, RSI_OVERSOLD, RSI_OVERBOUGHT, BB_PERIOD, BB_STD_DEV, ATR_PERIOD, SL_MULTIPLIER,
             TP_MULTIPLIER, LEVERAGE_BASE, LEVERAGE_MIN, LEVERAGE_MAX,
             ADX_THRESHOLD, OUTPUT_FORMAT, TIMEFRAME_PARAMS
         )
+        from .ml_settings import ML_ENABLED
         return {
             'DEFAULT_DATA_LIMIT': DEFAULT_DATA_LIMIT,
             'SYMBOL': SYMBOL,
@@ -62,6 +63,8 @@ class LazyConfig:
             'EMA_SHORT': EMA_SHORT,
             'EMA_LONG': EMA_LONG,
             'RSI_PERIOD': RSI_PERIOD,
+            'RSI_OVERSOLD': RSI_OVERSOLD,
+            'RSI_OVERBOUGHT': RSI_OVERBOUGHT,
             'BB_PERIOD': BB_PERIOD,
             'BB_STD_DEV': BB_STD_DEV,
             'ATR_PERIOD': ATR_PERIOD,
@@ -73,6 +76,7 @@ class LazyConfig:
             'ADX_THRESHOLD': ADX_THRESHOLD,
             'OUTPUT_FORMAT': OUTPUT_FORMAT,
             'TIMEFRAME_PARAMS': TIMEFRAME_PARAMS,
+            'ML_ENABLED': ML_ENABLED,
         }
 
     def _load_ml_settings(self) -> Dict[str, Any]:
@@ -211,8 +215,8 @@ def get_legacy_constant(name: str, default: Any = None) -> Any:
         'TIMEFRAME': ('core', 'TIMEFRAME'),
         'EMA_SHORT': ('core', 'EMA_SHORT'),
         'EMA_LONG': ('core', 'EMA_LONG'),
-        'RSI_PERIOD': ('core', 'RSI_PERIOD'),
-        'BB_PERIOD': ('core', 'BB_PERIOD'),
+        'RSI_OVERSOLD': ('core', 'RSI_OVERSOLD'),
+        'RSI_OVERBOUGHT': ('core', 'RSI_OVERBOUGHT'),
         'BB_STD_DEV': ('core', 'BB_STD_DEV'),
         'ATR_PERIOD': ('core', 'ATR_PERIOD'),
         'SL_MULTIPLIER': ('core', 'SL_MULTIPLIER'),
@@ -223,6 +227,7 @@ def get_legacy_constant(name: str, default: Any = None) -> Any:
         'ADX_THRESHOLD': ('core', 'ADX_THRESHOLD'),
         'OUTPUT_FORMAT': ('core', 'OUTPUT_FORMAT'),
         'CAPITAL': ('core', 'CAPITAL'),
+        'INITIAL_CAPITAL': ('core', 'CAPITAL'),
         'RISK_PER_TRADE': ('core', 'RISK_PER_TRADE'),
         'TIMEFRAME_PARAMS': ('core', 'TIMEFRAME_PARAMS'),
         'ENABLE_MTLS': ('service', 'ENABLE_MTLS'),
@@ -242,11 +247,30 @@ def get_legacy_constant(name: str, default: Any = None) -> Any:
         'GPU_ACCELERATION_ENABLED': ('performance', 'GPU_ACCELERATION_ENABLED'),
         'CACHE_ENABLED': ('performance', 'CACHE_ENABLED'),
         'ENABLE_MTLS': ('service', 'ENABLE_MTLS'),
+        'ML_ENABLED': ('ml', 'ML_ENABLED'),
+        'ML_CONFIDENCE_THRESHOLD': ('ml', 'CONFIDENCE_THRESHOLD'),
         'ML_FEATURES': ('ml', 'ML_FEATURES'),
+        'PERFORMANCE_ENABLED': ('performance', 'PERFORMANCE_MONITORING_ENABLED'),
+        'PARALLEL_PROCESSING_ENABLED': ('performance', 'PARALLEL_PROCESSING_ENABLED'),
         'ML_TARGET_HORIZON': ('ml', 'ML_TARGET_HORIZON'),
+        'VECTORIZATION_ENABLED': ('performance', 'VECTORIZATION_ENABLED'),
         'ML_TRAINING_WINDOW': ('ml', 'ML_TRAINING_WINDOW'),
+        'MEMORY_OPTIMIZATION_ENABLED': ('performance', 'MEMORY_OPTIMIZATION_ENABLED'),
         'ML_VALIDATION_SPLIT': ('ml', 'ML_VALIDATION_SPLIT'),
+        'MAX_WORKERS': ('performance', 'MAX_WORKERS'),
         'ML_RANDOM_STATE': ('ml', 'ML_RANDOM_STATE'),
+        'CHUNK_SIZE': ('performance', 'CHUNK_SIZE'),
+        'PERFORMANCE_LOG_LEVEL': ('performance', 'PERFORMANCE_LOG_LEVEL'),
+        'REDIS_ENABLED': ('performance', 'REDIS_ENABLED'),
+        'REDIS_HOST': ('performance', 'REDIS_HOST'),
+        'REDIS_PORT': ('performance', 'REDIS_PORT'),
+        'REDIS_DB': ('performance', 'REDIS_DB'),
+        'REDIS_PASSWORD': ('performance', 'REDIS_PASSWORD'),
+        'REDIS_TTL_INDICATORS': ('service', 'REDIS_TTL_INDICATORS'),
+        'REDIS_TTL_API': ('service', 'REDIS_TTL_API'),
+        'REDIS_MAX_CONNECTIONS': ('service', 'REDIS_MAX_CONNECTIONS'),
+        'ADVANCED_SIGNAL_GENERATION_ENABLED': ('service', 'ADVANCED_SIGNAL_GENERATION_ENABLED'),
+        'ADVANCED_SIGNAL_GENERATION_MODE': ('service', 'ADVANCED_SIGNAL_GENERATION_MODE'),
     }
 
     if name in legacy_mapping:
@@ -268,6 +292,8 @@ TIMEFRAME = get_legacy_constant('TIMEFRAME', '1m')
 EMA_SHORT = get_legacy_constant('EMA_SHORT', 9)
 EMA_LONG = get_legacy_constant('EMA_LONG', 21)
 RSI_PERIOD = get_legacy_constant('RSI_PERIOD', 14)
+RSI_OVERSOLD = get_legacy_constant('RSI_OVERSOLD', 30)
+RSI_OVERBOUGHT = get_legacy_constant('RSI_OVERBOUGHT', 70)
 BB_PERIOD = get_legacy_constant('BB_PERIOD', 20)
 BB_STD_DEV = get_legacy_constant('BB_STD_DEV', 2.0)
 ATR_PERIOD = get_legacy_constant('ATR_PERIOD', 14)
@@ -279,6 +305,7 @@ LEVERAGE_MAX = get_legacy_constant('LEVERAGE_MAX', 10)
 ADX_THRESHOLD = get_legacy_constant('ADX_THRESHOLD', 25)
 OUTPUT_FORMAT = get_legacy_constant('OUTPUT_FORMAT', 'json')
 CAPITAL = get_legacy_constant('CAPITAL', 10000)
+INITIAL_CAPITAL = get_legacy_constant('INITIAL_CAPITAL', 10000)
 RISK_PER_TRADE = get_legacy_constant('RISK_PER_TRADE', 0.01)
 TIMEFRAME_PARAMS = get_legacy_constant('TIMEFRAME_PARAMS', {})
 ENABLE_MTLS = get_legacy_constant('ENABLE_MTLS', True)
@@ -297,15 +324,43 @@ ML_TRAINING_ENABLED = get_legacy_constant('ML_TRAINING_ENABLED', True)
 GPU_ACCELERATION_ENABLED = get_legacy_constant('GPU_ACCELERATION_ENABLED', True)
 CACHE_ENABLED = get_legacy_constant('CACHE_ENABLED', True)
 ML_MODELS_DIR = get_legacy_constant('ML_MODELS_DIR', 'cache/ml_models')
+ML_ENABLED = get_legacy_constant('ML_ENABLED', True)
+ML_CONFIDENCE_THRESHOLD = get_legacy_constant('ML_CONFIDENCE_THRESHOLD', 0.7)
 ML_FEATURES = get_legacy_constant('ML_FEATURES', [])
+PERFORMANCE_ENABLED = get_legacy_constant('PERFORMANCE_ENABLED', True)
+PARALLEL_PROCESSING_ENABLED = get_legacy_constant('PARALLEL_PROCESSING_ENABLED', True)
 ML_TARGET_HORIZON = get_legacy_constant('ML_TARGET_HORIZON', 5)
+VECTORIZATION_ENABLED = get_legacy_constant('VECTORIZATION_ENABLED', True)
 ML_TRAINING_WINDOW = get_legacy_constant('ML_TRAINING_WINDOW', 1000)
+MEMORY_OPTIMIZATION_ENABLED = get_legacy_constant('MEMORY_OPTIMIZATION_ENABLED', True)
 ML_VALIDATION_SPLIT = get_legacy_constant('ML_VALIDATION_SPLIT', 0.2)
+MAX_WORKERS = get_legacy_constant('MAX_WORKERS', 4)
 ML_RANDOM_STATE = get_legacy_constant('ML_RANDOM_STATE', 42)
+CHUNK_SIZE = get_legacy_constant('CHUNK_SIZE', 1000)
+PERFORMANCE_LOG_LEVEL = get_legacy_constant('PERFORMANCE_LOG_LEVEL', 'INFO')
+REDIS_ENABLED = get_legacy_constant('REDIS_ENABLED', True)
+REDIS_HOST = get_legacy_constant('REDIS_HOST', 'localhost')
+REDIS_PORT = get_legacy_constant('REDIS_PORT', 6379)
+REDIS_DB = get_legacy_constant('REDIS_DB', 1)
+REDIS_PASSWORD = get_legacy_constant('REDIS_PASSWORD', '')
+REDIS_TTL_INDICATORS = get_legacy_constant('REDIS_TTL_INDICATORS', 3600)
+REDIS_TTL_API = get_legacy_constant('REDIS_TTL_API', 300)
+REDIS_MAX_CONNECTIONS = get_legacy_constant('REDIS_MAX_CONNECTIONS', 20)
+ADVANCED_SIGNAL_GENERATION_ENABLED = get_legacy_constant('ADVANCED_SIGNAL_GENERATION_ENABLED', True)
+ADVANCED_SIGNAL_GENERATION_MODE = get_legacy_constant('ADVANCED_SIGNAL_GENERATION_MODE', 'hybrid')
 ALTERNATIVE_DATA_UPDATE_INTERVAL = get_legacy_constant('ALTERNATIVE_DATA_UPDATE_INTERVAL', 300)
 SENTIMENT_DATA_SOURCES = get_legacy_constant('SENTIMENT_DATA_SOURCES', ['twitter', 'reddit', 'news'])
 ONCHAIN_DATA_SOURCES = get_legacy_constant('ONCHAIN_DATA_SOURCES', ['glassnode', 'blockchain_com'])
 ECONOMIC_DATA_SOURCES = get_legacy_constant('ECONOMIC_DATA_SOURCES', ['fred', 'bureau_labor', 'alpha_vantage'])
+
+# ML and service enablement flags
+ENABLE_ML = get_legacy_constant('ENABLE_ML', True)
+ENABLE_ML_TRAINER = get_legacy_constant('ENABLE_ML_TRAINER', True)
+ENABLE_MLOPS = get_legacy_constant('ENABLE_MLOPS', True)
+ENABLE_DISCOVERY = get_legacy_constant('ENABLE_DISCOVERY', True)
+ENABLE_BACKTEST = get_legacy_constant('ENABLE_BACKTEST', True)
+ENABLE_LIVE_TRADING = get_legacy_constant('ENABLE_LIVE_TRADING', True)
+ENABLE_NOTIFICATIONS = get_legacy_constant('ENABLE_NOTIFICATIONS', True)
 
 def get_timeframe_params(timeframe=None):
     """Get parameters for specified timeframe, fallback to current TIMEFRAME"""

@@ -15,13 +15,18 @@ from typing import Dict, Any, Optional, List
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from config.settings import (
-    CORE_SERVICE_URL, API_KEY, ENABLE_MTLS,
+from config.service_settings import (
+    CORE_SERVICE_URL, ENABLE_MTLS,
     MTLS_CERT_PATH, MTLS_KEY_PATH, CA_CERT_PATH
 )
+from config.core_settings import API_KEY
 
 # Import resilience components
-from .circuit_breaker import AsyncCircuitBreaker, CircuitBreakerConfig, SERVICE_CIRCUIT_CONFIG
+from services.infrastructure_service.circuit_breaker_service import (
+    get_http_circuit_breaker,
+    CircuitBreakerConfig,
+    SERVICE_CIRCUIT_BREAKER_CONFIGS
+)
 from .health_checks import ServiceHealthChecker, HealthCheckConfig
 from .metrics_exporter import metrics_collector, record_service_request
 
@@ -44,23 +49,31 @@ class CoreServiceClient:
         self.mtls_enabled = ENABLE_MTLS or False
         self.ssl_context: Optional[ssl.SSLContext] = None
 
-        # Resilience components
-        self.circuit_breaker = AsyncCircuitBreaker(
-            CircuitBreakerConfig(
-                name="core_service",
-                failure_threshold=3,
-                recovery_timeout=30.0,
-                success_threshold=2,
-                timeout=15.0
-            )
+        # Circuit Breaker configuration
+        self.circuit_breaker_config = SERVICE_CIRCUIT_BREAKER_CONFIGS.get(
+            'core_service',
+            CircuitBreakerConfig()
+        )
+        self.http_breaker = None
+
+        # Health checker
+        self.health_checker = ServiceHealthChecker(
+            config=HealthCheckConfig(
+                name="core_service_health",
+                check_interval=30.0,
+                timeout=5.0
+            ),
+            service_url=self.base_url,
+            service_name="core_service"
         )
         self.health_checker: Optional[ServiceHealthChecker] = None
 
+        # Circuit breaker for HTTP calls (lazy initialization)
+        self.http_breaker = None
+        self._circuit_breaker_initialized = False
+
         if self.mtls_enabled:
             self._setup_mtls()
-
-        # Initialize health checker
-        self._setup_health_checker()
 
         # Metrics collection
         self.metrics_task: Optional[asyncio.Task] = None
@@ -70,7 +83,24 @@ class CoreServiceClient:
         self.event_client: Optional[EventClient] = None
         self.events_enabled = True
 
-    def _setup_health_checker(self):
+    async def _ensure_circuit_breaker(self):
+        """Ensure circuit breaker is initialized"""
+        if self._circuit_breaker_initialized:
+            return
+
+        try:
+            from services.infrastructure_service.circuit_breaker_service import (
+                SERVICE_CIRCUIT_BREAKER_CONFIGS,
+                get_http_circuit_breaker
+            )
+            circuit_config = SERVICE_CIRCUIT_BREAKER_CONFIGS.get('core_service')
+            if circuit_config:
+                self.http_breaker = await get_http_circuit_breaker('core_service', circuit_config)
+            self._circuit_breaker_initialized = True
+        except Exception as e:
+            logger.warning(f"Failed to initialize circuit breaker: {e}")
+            self.http_breaker = None
+            self._circuit_breaker_initialized = True
         """Setup health checker for the core service"""
         self.health_checker = ServiceHealthChecker(
             config=HealthCheckConfig(
@@ -175,6 +205,9 @@ class CoreServiceClient:
             CircuitBreakerOpenException: When circuit breaker is open
             aiohttp.ClientError: For HTTP errors
         """
+        # Ensure circuit breaker is initialized
+        await self._ensure_circuit_breaker()
+
         start_time = asyncio.get_event_loop().time()
 
         async def _http_call():
@@ -185,7 +218,11 @@ class CoreServiceClient:
 
         try:
             # Use circuit breaker to protect the call
-            response = await self.circuit_breaker.call(_http_call)
+            if self.http_breaker:
+                response = await self.http_breaker.call(_http_call)
+            else:
+                # Fallback without circuit breaker
+                response = await _http_call()
 
             # Record successful request metrics
             duration = asyncio.get_event_loop().time() - start_time
@@ -222,9 +259,10 @@ class CoreServiceClient:
         """Background task to collect and update metrics"""
         while self.metrics_enabled:
             try:
-                # Update circuit breaker metrics
-                from .circuit_breaker import circuit_breaker_registry
-                metrics_collector.update_from_circuit_breaker_registry(circuit_breaker_registry)
+                # Update circuit breaker metrics from the circuit breaker service
+                if self.http_breaker:
+                    # Circuit breaker metrics are handled by the circuit breaker service
+                    pass
 
                 # Update health check metrics
                 from .health_checks import health_check_registry
@@ -259,9 +297,14 @@ class CoreServiceClient:
         health_status = {
             "service": "core_service",
             "healthy": await self.health_check(),
-            "circuit_breaker": self.circuit_breaker.get_metrics(),
             "endpoint": self.base_url
         }
+
+        # Add circuit breaker metrics if available
+        if self.http_breaker:
+            health_status["circuit_breaker"] = self.http_breaker.get_metrics()
+        elif hasattr(self, 'circuit_breaker'):
+            health_status["circuit_breaker"] = self.circuit_breaker.get_metrics()
 
         if self.health_checker and self.health_checker.last_result:
             health_status["last_health_check"] = self.health_checker.last_result.__dict__
