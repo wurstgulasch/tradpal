@@ -23,7 +23,7 @@ from enum import Enum
 
 import pandas as pd
 import numpy as np
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # Additional imports for performance optimizations
 import os
@@ -227,7 +227,8 @@ class DataRequest(BaseModel):
     use_cache: bool = Field(True, description="Whether to use cached data")
     validate_quality: bool = Field(True, description="Whether to validate data quality")
 
-    @validator('start_date', 'end_date')
+    @field_validator('start_date', 'end_date')
+    @classmethod
     def validate_dates(cls, v):
         """Validate date format."""
         try:
@@ -236,15 +237,14 @@ class DataRequest(BaseModel):
         except ValueError:
             raise ValueError(f"Invalid date format: {v}. Use ISO format (YYYY-MM-DDTHH:MM:SS)")
 
-    @validator('timeframe')
+    @field_validator('timeframe')
+    @classmethod
     def validate_timeframe(cls, v):
         """Validate timeframe format."""
         valid_timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
         if v not in valid_timeframes:
             raise ValueError(f"Invalid timeframe: {v}. Valid options: {valid_timeframes}")
         return v
-
-
 class DataResponse(BaseModel):
     """Response model for data requests."""
     success: bool

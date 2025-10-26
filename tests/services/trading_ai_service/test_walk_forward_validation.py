@@ -15,7 +15,7 @@ import pandas as pd
 from unittest.mock import AsyncMock, patch
 from datetime import datetime, timedelta
 
-from services.trading_service.trading_ai_service.ml_training.ml_trainer import (
+from services.trading_service.ml_training_service.service import (
     MLTrainerService,
     EnsembleTrainer
 )

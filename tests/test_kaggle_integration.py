@@ -10,7 +10,7 @@ import os
 import pytest
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.data_service.data_service.service import DataService
+from services.data_service.service import DataService
 from services.trading_service.backtesting_service.service import AsyncBacktester
 import pandas as pd
 

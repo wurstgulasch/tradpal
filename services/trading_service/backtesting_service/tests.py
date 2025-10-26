@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-from services.trading_service.backtesting_service.orchestrator import BacktestingServiceOrchestrator
+from services.trading_service.backtesting_service.workflow_orchestrator import BacktestingServiceOrchestrator
 
 
 @pytest.fixture

@@ -3,7 +3,8 @@
 ## Overview
 **TradPal** is a fully autonomous AI trading system based on a complete microservices architecture. The goal is consistent outperformance of Buy&Hold and traditional indicators through advanced ML models, ensemble methods, and risk management.
 
-**Current Status (October 2025):** Version 2.5.1 with **complete microservices consolidation** (4 core services + 14 supporting services) and 98 organized test files with comprehensive coverage. **Trading Service fully consolidated with moderate isolation pattern** - code consolidation with runtime separation for resource management.
+**Current Status (October 2025):
+ **complete microservices consolidation** (4 core services + 14 supporting services) and 98 organized test files with comprehensive coverage. **Trading Service fully consolidated with moderate isolation pattern** - code consolidation with runtime separation for resource management.
 
 ## Project Structure (STRICTLY ENFORCE!)
 - `services/`: **Microservices Architecture** - ALL new features/service developments go here (18 consolidated services)
@@ -55,10 +56,11 @@
 - `docs/`: Documentation
 - `main.py`: Hybrid orchestrator with service clients
 
-**CRITICAL:** Never place files in root directory! New features always in services/. Terminals always in conda environment `tradpal_env`. Documentation, README, and copilot-instructions.md always synchronized and in english (commit messages as well). 
+**CRITICAL:** Never place files in root directory! New features always in services/. Terminals always in conda environment `tradpal_env`. Documentation, README, and copilot-instructions.md always synchronized and in english (commit messages as well).
 
 ## Architecture Principles
-- **Microservices-Architecture:** Similar to a modular monolith, but each module is a separate service
+- **Modular Monolith:** Similar to a modular monolith, but each module is a separate service
+- **Microservices-Architecture:** create independent, loosely coupled services where it is reasonable to do so
 - **Event-Driven:** Redis Streams for real-time service communication
 - **API Gateway:** Centralized routing, authentication, and load balancing at port 8000
 - **Zero-Trust Security:** mTLS, OAuth/JWT, secrets management
@@ -228,14 +230,14 @@ class {ServiceName}Client:
     def __init__(self):
         self.session = None
         self.circuit_breaker = None
-    
+
     async def authenticate(self) -> None:
         """Zero-trust authentication"""
-    
+
     @asynccontextmanager
     async def _get_session(self):
         """Circuit breaker protected session"""
-    
+
     async def {business_method}(self, **params) -> Dict[str, Any]:
         """Business logic with error handling"""
 ```
@@ -249,7 +251,7 @@ await event_system.publish_event(Event(
     data={...}
 ))
 
-# Subscribing to events  
+# Subscribing to events
 event_system.register_handler(EventType.{EVENT_TYPE}, self._handle_event)
 ```
 
@@ -529,4 +531,122 @@ async def fetch_data(self, symbol: str) -> Dict[str, Any]:
    - Vereinfacht Erweiterung neuer Konfigurationseinstellungen
    - Migration von Legacy-Konstanten zu dynamischem System planen
 
-*Last updated: October 24, 2025*
+## Essential AI Agent Productivity Guide
+
+### Immediate Action Items for New AI Agents
+
+1. **Environment First**: Always run `conda activate tradpal_env` before any terminal commands
+2. **Service Location**: All new code goes in `services/`, never in root directory
+3. **Blueprint Enforcement**: Copy `services/service_template.py` for new services
+4. **Testing Required**: Every feature needs tests in `tests/` before implementation
+5. **Async Mandatory**: Use `asyncio` for all I/O operations, never blocking calls
+
+### Critical Commands (Not Obvious from File Inspection)
+
+```bash
+# Profile-based execution (controls feature set)
+python main.py --profile light --mode live      # Minimal features, fast startup
+python main.py --profile heavy --mode backtest  # All AI/ML features enabled
+
+# Isolated backtesting (resource management)
+python main.py backtesting-worker               # Dedicated process, no interference
+
+# Service health verification
+curl http://localhost:8001/health               # Data service health
+curl http://localhost:8002/health               # Core service health
+
+# Performance validation
+python scripts/performance_benchmark.py         # Memory/CPU/GPU benchmarks
+```
+
+### Architecture Understanding (Key Files to Read)
+
+**Entry Points:**
+- `main.py`: Hybrid orchestrator, profile-based execution, service initialization
+- `services/trading_service/backtesting_worker.py`: Isolated worker process pattern
+
+**Service Blueprints:**
+- `services/core_service/main.py`: FastAPI service with health checks
+- `services/core_service/client.py`: Async client with circuit breaker + mTLS
+- `services/service_template.py`: Complete service implementation template
+
+**Configuration System:**
+- `config/settings.py`: Lazy loading, modular imports, legacy compatibility
+- `dependency_catalog.txt`: Version-controlled package versions
+- `.env`: Profile-based configuration (light/heavy modes)
+
+**Testing Infrastructure:**
+- `tests/conftest.py`: Central fixtures, async test setup, sample data generators
+- `tests/unit/test_core_service.py`: Service-specific test patterns
+
+### Project-Specific Patterns (Different from Common Practices)
+
+**Service Communication:**
+```python
+# NEVER: Direct HTTP calls without circuit breaker
+response = requests.get(url)
+
+# ALWAYS: Circuit breaker protected async calls
+async with self._get_session() as session:
+    async with session.get(url) as response:
+        return await response.json()
+```
+
+**Configuration Access:**
+```python
+# NEVER: Direct imports (causes circular dependencies)
+from config.core_settings import SYMBOL
+
+# ALWAYS: Lazy loading through main settings
+from config.settings import SYMBOL
+```
+
+**Data Processing:**
+```python
+# NEVER: Load entire dataset into memory
+data = pd.read_csv('large_file.csv')
+
+# ALWAYS: Memory-mapped or chunked processing
+with MemoryMappedData('large_file.h5') as data:
+    for chunk in data.chunks(chunk_size=1000):
+        process_chunk(chunk)
+```
+
+**Service Dependencies:**
+```python
+# NEVER: Import service directly (tight coupling)
+from services.data_service import DataService
+
+# ALWAYS: Use client pattern with authentication
+client = DataServiceClient()
+await client.authenticate()
+result = await client.fetch_data(symbol)
+```
+
+### Common Pitfalls to Avoid
+
+1. **Root Directory Pollution**: Never create code files in root - always use `services/`
+2. **Synchronous I/O**: Never use `requests` - always `aiohttp` with `asyncio`
+3. **Direct Service Imports**: Never import services directly - always use clients
+4. **Unprotected HTTP Calls**: Never make HTTP requests without circuit breaker protection
+5. **Memory-Inefficient Processing**: Never load large datasets entirely - use memory mapping
+6. **Missing Authentication**: Never call services without `await client.authenticate()`
+7. **Profile Ignorance**: Never run heavy operations without checking profile settings
+
+### Quality Gates (Always Verify)
+
+**Before Committing:**
+- [ ] `pytest tests/` passes all tests
+- [ ] `make quality-check` passes (format, lint, type-check)
+- [ ] Service follows blueprint (`main.py`, `client.py`, `requirements.txt`)
+- [ ] All async I/O operations use proper patterns
+- [ ] Circuit breaker protection on all external calls
+- [ ] Zero-trust authentication implemented
+
+**Performance Validation:**
+- [ ] Memory usage < 85MB baseline for core operations
+- [ ] GPU acceleration working if available
+- [ ] No memory leaks in long-running processes
+- [ ] Backtesting worker isolation maintained
+
+*Last updated: October 25, 2025*

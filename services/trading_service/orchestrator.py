@@ -4,6 +4,7 @@ Coordinates trading operations across specialized microservices
 """
 
 import logging
+import os
 import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -330,7 +331,7 @@ class TradingServiceOrchestrator:
         if not self.is_initialized:
             raise RuntimeError("Trading Service Orchestrator not initialized")
 
-        symbol = config.get('symbol', 'BTC/USDT')
+        symbol = config.get('symbol', os.getenv('SYMBOL', 'BTC/USDT'))
         session_id = f"session_{symbol.replace('/', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         try:

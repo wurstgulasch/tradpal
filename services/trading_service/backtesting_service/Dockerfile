@@ -34,7 +34,7 @@ EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD curl -f ${DATA_SERVICE_URL}/health || exit 1
 
 # Run the service
 CMD ["python", "-m", "services.backtesting_service.api"]

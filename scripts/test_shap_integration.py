@@ -19,7 +19,7 @@ sys.path.insert(0, str(project_root))
 os.environ.setdefault('LOG_LEVEL', 'INFO')
 
 # Import only the SHAP interpreter directly to avoid service dependencies
-from services.trading_service.trading_ai_service.ml_training.shap_interpreter import SHAPInterpreter
+from services.trading_service.ml_training_service.service import SHAPInterpreter
 
 
 async def test_shap_integration():

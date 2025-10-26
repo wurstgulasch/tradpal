@@ -6,7 +6,7 @@ Test script for multi-market data sources
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from services.data_service.data_service.data_sources.factory import DataSourceFactory
+from services.data_service.data_sources.factory import DataSourceFactory
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

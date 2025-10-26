@@ -262,7 +262,7 @@ class BacktestingWorker:
             logger.info(f"Processing multi-model backtest request {backtest_id}")
 
             # Extract parameters
-            symbol = event_data.get('symbol', 'BTC/USDT')
+            symbol = event_data.get('symbol', os.getenv('SYMBOL', 'BTC/USDT'))
             timeframe = event_data.get('timeframe', '1h')
             start_date = event_data.get('start_date')
             end_date = event_data.get('end_date')
@@ -316,7 +316,7 @@ class BacktestingWorker:
             # Extract parameters
             parameter_grid = event_data.get('parameter_grid', {})
             evaluation_metric = event_data.get('evaluation_metric', 'sharpe_ratio')
-            symbol = event_data.get('symbol', 'BTC/USDT')
+            symbol = event_data.get('symbol', os.getenv('SYMBOL', 'BTC/USDT'))
             timeframe = event_data.get('timeframe', '1h')
 
             # Run walk-forward optimization

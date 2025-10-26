@@ -173,12 +173,12 @@ uvicorn services.data_service.main:app --host 0.0.0.0 --port 8001
 import httpx
 
 # Fetch BTC/USDT data
-response = await httpx.get("http://localhost:8001/api/data/fetch/BTC/USDT?timeframe=1h&limit=100")
+response = await httpx.get("${DATA_SERVICE_URL}/api/data/fetch/BTC/USDT?timeframe=1h&limit=100")
 data = response.json()
 
 # Bulk data fetching
 symbols = ["BTC/USDT", "ETH/USDT", "ADA/USDT"]
-response = await httpx.post("http://localhost:8001/api/data/bulk", json={
+response = await httpx.post("${DATA_SERVICE_URL}/api/data/bulk", json={
     "symbols": symbols,
     "timeframe": "1h",
     "limit": 50
@@ -189,15 +189,15 @@ response = await httpx.post("http://localhost:8001/api/data/bulk", json={
 
 ```python
 # Get sentiment data
-response = await httpx.get("http://localhost:8001/api/data/alternative/sentiment?symbol=BTC")
+response = await httpx.get("${DATA_SERVICE_URL}/api/data/alternative/sentiment?symbol=BTC")
 sentiment = response.json()
 
 # Get on-chain metrics
-response = await httpx.get("http://localhost:8001/api/data/alternative/onchain?symbol=BTC")
+response = await httpx.get("${DATA_SERVICE_URL}/api/data/alternative/onchain?symbol=BTC")
 onchain = response.json()
 
 # Get economic indicators
-response = await httpx.get("http://localhost:8001/api/data/alternative/economic")
+response = await httpx.get("${DATA_SERVICE_URL}/api/data/alternative/economic")
 economic = response.json()
 ```
 
@@ -205,11 +205,11 @@ economic = response.json()
 
 ```python
 # Get current market regime
-response = await httpx.get("http://localhost:8001/api/data/regime/BTC/USDT")
+response = await httpx.get("${DATA_SERVICE_URL}/api/data/regime/BTC/USDT")
 regime = response.json()
 
 # Get regime confidence
-response = await httpx.get("http://localhost:8001/api/data/regime/confidence/BTC/USDT")
+response = await httpx.get("${DATA_SERVICE_URL}/api/data/regime/confidence/BTC/USDT")
 confidence = response.json()
 ```
 
@@ -217,20 +217,20 @@ confidence = response.json()
 
 ```python
 # Process large dataset with chunking
-response = await httpx.post("http://localhost:8001/api/data/performance/chunked-processing", json={
+response = await httpx.post("${DATA_SERVICE_URL}/api/data/performance/chunked-processing", json={
     "data_source": "/path/to/large_dataset.csv",
     "processing_config": {"operation": "normalize", "chunk_size": 50000},
     "output_path": "/path/to/processed_output.csv"
 })
 
 # Create memory-mapped data storage
-response = await httpx.post("http://localhost:8001/api/data/performance/memory-map/create", json={
+response = await httpx.post("${DATA_SERVICE_URL}/api/data/performance/memory-map/create", json={
     "data": [{"timestamp": "2025-01-01", "price": 50000}, {"timestamp": "2025-01-02", "price": 51000}],
     "key": "btc_prices_2025"
 })
 
 # GPU-accelerated processing
-response = await httpx.post("http://localhost:8001/api/data/performance/gpu-processing", json={
+response = await httpx.post("${DATA_SERVICE_URL}/api/data/performance/gpu-processing", json={
     "operation": "fft",
     "data": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
 })

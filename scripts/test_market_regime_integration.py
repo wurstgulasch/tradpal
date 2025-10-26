@@ -17,8 +17,8 @@ sys.path.insert(0, project_root)
 # Set up environment
 os.environ.setdefault('PYTHONPATH', project_root)
 
-from services.trading_service.trading_ai_service.ml_training.ml_trainer import MLTrainerService
-from services.trading_service.trading_ai_service.ml_training.market_regime_detector import MarketRegimeDetector
+from services.trading_service.ml_training_service.service import MLTrainerService
+from services.trading_service.market_regime_service.service import MarketRegimeDetector
 
 
 def generate_test_data(n_samples: int = 500) -> pd.DataFrame:

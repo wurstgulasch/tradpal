@@ -102,7 +102,7 @@ class BacktestingService:
 
                 response = await self.client.get_trading_signal(
                     market_data=market_data,
-                    symbol=strategy_config.get("symbol", "BTC/USDT")
+                    symbol=strategy_config.get("symbol", SYMBOL)
                 )
 
                 signals.append({
