@@ -5,9 +5,9 @@
 # Web Framework and async
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.12.3
+pydantic==2.12.5
 pydantic-settings==2.1.0
-aiohttp==3.13.1
+aiohttp==3.13.3
 
 # HTTP Client for service communication
 httpx==0.25.2
@@ -16,7 +16,7 @@ httpx==0.25.2
 redis==5.0.1
 
 # Security
-cryptography==44.0.1
+cryptography==46.0.5
 PyJWT==2.8.1
 hvac==2.1.0
 
@@ -26,7 +26,7 @@ psutil==5.9.7
 
 # Core Calculations (inherited from original core service)
 pandas==2.1.4
-numpy==2.3.4
+numpy==2.4.2
 scipy==1.11.4
 TA-Lib==0.4.28
 

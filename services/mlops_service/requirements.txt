@@ -1,24 +1,24 @@
 # ML Ops Service Dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
+pydantic==2.12.5
 
 # Core ML
-scikit-learn==1.5.0
+scikit-learn==1.8.0
 torch==2.8.0
 torchvision==0.16.2
 optuna==3.5.0
 shap==0.44.1
 
 # Model serving
-bentoml==1.4.19
-mlflow==3.5.0rc0
-python-multipart==0.0.20
+bentoml==1.4.34
+mlflow==3.5.0
+python-multipart==0.0.22
 aiofiles==23.2.1
 
 # Data processing
 pandas==2.1.4
-numpy==1.24.3
+numpy==2.4.2
 
 # Monitoring
 prometheus-client==0.19.0
