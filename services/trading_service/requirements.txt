@@ -1,21 +1,21 @@
 # Core dependencies
 fastapi==0.100.1
 uvicorn[standard]==0.23.2
-pydantic==2.12.3
+pydantic==2.12.5
 
 # Data processing
-numpy==2.3.4
+numpy==2.4.2
 pandas==2.1.4
 
 # Async operations
-aiohttp==3.12.14
+aiohttp==3.13.3
 asyncio==3.4.3
 
 # System monitoring (optional)
 psutil==5.9.6
 
 # Logging and utilities
-python-multipart==0.0.18
+python-multipart==0.0.22
 python-dotenv==1.0.0
 
 # Event system integration
